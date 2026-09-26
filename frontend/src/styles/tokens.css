@@ -1,0 +1,48 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   RepoScope design tokens — editorial style (FILE 1: GitReverse)
+   Cream paper · white cards · solid black borders · coral-red accent ·
+   hard offset shadows. Every value sampled from the reference; no extra hues.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surfaces */
+  --bg:             #F3EEE3;   /* page background — warm cream paper        */
+  --panel:          #FFFFFF;   /* card / panel surface                      */
+  --panel-cream:    #F8F3E7;   /* cream-tinted surface (bubbles, chips)     */
+  --panel-hover:    #EFE8D8;   /* hover wash                                */
+
+  /* Borders — solid black, editorial */
+  --border:         #141414;
+  --border-width:   1.5px;
+  --border-muted:   #D9D2C0;   /* hairline dividers inside cards only       */
+
+  /* Text */
+  --text:           #141414;
+  --text-secondary: #45413A;
+  --text-muted:     #837D6E;
+
+  /* Accent — coral red */
+  --accent:         #F0503C;
+  --accent-hover:   #D8432F;
+  --accent-soft:    #FBE9E5;   /* 10%-ish wash of accent on cream           */
+
+  /* Semantic */
+  --success:        #16A34A;
+  --warning:        #D97706;
+  --danger:         #DC2626;
+
+  /* Hard offset shadow — the signature of this style */
+  --shadow:         4px 4px 0 #141414;
+  --shadow-sm:      2px 2px 0 #141414;
+  --shadow-lg:      6px 6px 0 #141414;
+  --shadow-color:   #141414;
+
+  /* Shape */
+  --radius:         8px;
+  --radius-sm:      6px;
+  --radius-lg:      12px;
+
+  /* Type */
+  --font-ui:   'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}

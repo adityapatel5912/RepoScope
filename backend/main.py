@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from byok_manager import get_user_token, set_user_token
@@ -48,9 +48,20 @@ log = logging.getLogger("reposcope")
 
 app = FastAPI(title="RepoScope API")
 
+# Allowed origins: localhost for dev, plus any Vercel deployment (preview + prod).
+# Set ALLOWED_ORIGINS env var on Render to override (comma-separated list).
+_default_origins = [
+    "http://localhost:5173",
+    "http://localhost:4173",
+]
+_env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if _env_origins:
+    _default_origins += [o.strip() for o in _env_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_default_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Request-Id"],
@@ -174,6 +185,12 @@ def _build_user_prompt(message: str, ctx: dict) -> str:
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
+
+@app.get("/")
+async def root():
+    """Root redirect — sends browsers straight to the health page."""
+    return RedirectResponse(url="/api/health")
+
 
 @app.get("/health")
 async def health_simple():

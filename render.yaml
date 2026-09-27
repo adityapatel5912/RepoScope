@@ -21,3 +21,5 @@ services:
         sync: false
       - key: CODEBASE_MEMORY_PATH
         value: codebase-memory-mcp
+      - key: ALLOWED_ORIGINS
+        sync: false

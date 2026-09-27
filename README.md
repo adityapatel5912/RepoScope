@@ -21,7 +21,7 @@ for the IBM Bob 2.0 Hackathon.
 
 ### Architecture graph
 ![Graph](docs/screenshots/graph.png)
-*Layered graph — client, backend, storage, external, compute — with legend, cluster bands, and right-angle edges.*
+*Connectivity pyramid — the repo at the top, the most-imported files in the rows below, and key functions expanded as child nodes. Layer colors: client, backend, storage, external, compute.*
 
 ### Chat with citations
 ![Chat](docs/screenshots/chat.png)
@@ -88,9 +88,11 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 
 ## ✨ Features
 
-- **Architecture Graph** — layered pastel graph (client / backend / storage /
-  external / compute), dagre layout, right-angle edges, cluster bands, legend,
-  zoom controls, PNG + SVG export
+- **Architecture Graph** — connectivity-pyramid layout (most-important files on top)
+  - Layer-colored nodes (client, backend, storage, external, compute)
+  - Directed edges showing imports and containment
+  - Click-to-highlight blast radius
+  - Export to PNG and SVG
 - **Conversational Q&A** — SSE-streamed answers with file/function/line
   citations, dark code blocks with copy buttons, voice input
 - **Code Tours** — guided step-by-step walkthroughs of any module, numbered
@@ -106,6 +108,26 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 - **Multi-key rotation** — comma-separated keys per LLM provider; 429s rotate
   automatically, providers chain OpenRouter → Groq → NVIDIA NIM
 - **Health system** — `GET /api/health` reports uptime, memory, key counts
+
+---
+
+## 📐 How the Graph Reads
+
+The graph is a **connectivity pyramid**:
+
+- **Row 0** — the repository itself
+- **Row 1** — the most-imported files (entry points)
+- **Row 2** — core modules that everything depends on
+- **Row 3** — routers, services, and state management
+- **Row 4** — components and utilities
+- **Row 5** — config, docs, tests, and demo data
+
+Ranking is computed from the import graph (incoming ×2 + outgoing), so the
+most-connected files float to the top and low-traffic files sink to the bottom.
+Each core file expands its key functions as smaller child nodes directly below
+it. Edges always flow downward — imports point from importer to imported,
+containment connects files to their functions, and the repo node fans out to
+the top row. A collision pass guarantees no two nodes ever overlap.
 
 ---
 
@@ -185,6 +207,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Features](docs/FEATURES.md)
+- [Demo Script](docs/DEMO.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
@@ -200,7 +223,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, Vite 6, TypeScript (strict), React Flow, dagre, Tailwind |
+| Frontend | React 18, Vite 6, TypeScript (strict), React Flow (custom pyramid layout), Tailwind |
 | Backend | Python 3.11, FastAPI, SSE (StreamingResponse), httpx, GitPython |
 | LLM | OpenRouter (primary) → Groq → NVIDIA NIM, multi-key rotation |
 | Code graph | AST (Python) + regex (JS/TS) via graph_builder, MCP fallback |

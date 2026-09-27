@@ -18,10 +18,10 @@ export interface LayerNodeData {
   pastStep?: boolean;
 }
 
-export const NODE_W = 220;
-export const NODE_H = 60;
-export const CHILD_W = 180;
-export const CHILD_H = 44;
+export const NODE_W = 240;
+export const NODE_H = 68;
+export const CHILD_W = 200;
+export const CHILD_H = 48;
 
 const LAYER_ICONS: Record<Layer, LucideIcon> = {
   client: Monitor,

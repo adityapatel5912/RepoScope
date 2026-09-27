@@ -4,15 +4,33 @@ Every feature, how to use it, and its limits. All screenshots live in
 [screenshots/](screenshots/).
 
 ## Architecture Graph
-- **What**: layered code graph (client / backend / storage / external /
-  compute) built from AST (Python) and regex (JS/TS) parsing. Folders,
-  files, and functions with per-layer pastel colors, legend, cluster bands,
-  right-angle edges, minimap, and zoom controls.
+- **What**: a connectivity pyramid built from AST (Python) and regex (JS/TS)
+  parsing. The repo sits at the top (row 0); files are bucketed into five
+  connectivity-ranked rows below it (most-imported first), with key functions
+  of core files expanded as smaller child nodes at half-rank. Nodes are
+  colored by architecture layer (client / backend / storage / external /
+  compute) with a legend, minimap, and zoom controls.
+- **What the pyramid means**: rows rank importance, computed from the import
+  graph — score = incoming ×2 + outgoing. Entry points float to the top;
+  config, docs, and test data sink to the bottom. Rows wider than 18 nodes
+  wrap into continuation slots.
+- **How to read edges**: every edge is directed and flows downward.
+  `imports` edges run from importer to imported; `contains` edges connect a
+  file to its functions/classes; the repo node fans out to the top row.
+  Arrowheads show direction; the node drawer lists incoming/outgoing counts.
+- **Expand/collapse function nodes**: "Group by directory" in the floating
+  toolbar toggles function/class children for core files (rows 1–2). Toggle
+  layout direction flips the pyramid (bottom-up view); Re-run layout resets
+  the camera to the repo root.
+- **How to export**: the toolbar's camera buttons export the current viewport
+  as high-res PNG or SVG. Zoom/fit first — the export captures what's on
+  screen.
 - **Use**: load a repo (demo buttons or URL) and ask any chat question — the
-  graph renders from the `context` SSE event. Toggle direction (TB/LR),
-  re-layout, group/flatten, and focus from the toolbar.
-- **Limits**: rendering is capped at 500 nodes (directories stay grouped);
-  very wide trees zoom best via the tour / focus controls rather than Fit.
+  graph renders from the `context` SSE event. Click any node for the details
+  drawer (Ask / Analyze impact / Start tour).
+- **Limits**: edge rendering is capped at 1,000 edges (imports + containment
+  win over noise); a deterministic collision pass guarantees no two nodes
+  overlap, at the cost of occasionally nudging crowded child nodes sideways.
 
 ![Graph](screenshots/graph.png)
 

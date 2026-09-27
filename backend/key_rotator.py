@@ -62,3 +62,9 @@ def is_rate_limit_error(exc: Exception) -> bool:
     """True when an exception looks like an HTTP 429 / rate-limit hit."""
     s = str(exc).lower()
     return "429" in s or "rate" in s or "quota" in s or "too many requests" in s
+
+
+def _is_eol_error(exc: Exception) -> bool:
+    """True when a model has reached end-of-life (HTTP 410 Gone)."""
+    s = str(exc).lower()
+    return "410" in s or "end of life" in s or "gone" in s or "no longer available" in s

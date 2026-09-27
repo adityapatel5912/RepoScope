@@ -33,6 +33,10 @@ backend/logs/
 # App runtime state
 data/repo_state.json
 
+# Scratch / dev images dumped at repo root
+pyramid-*.png
+scratch-*.png
+
 # OS
 .DS_Store
 Thumbs.db

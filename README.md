@@ -4,7 +4,7 @@
 
 > See your repo. Understand it. Track it.
 
-**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health)
+**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/ZJ7PMCZRXKY](https://youtu.be/ZJ7PMCZRXKY)
 
 ![License](https://img.shields.io/badge/License-MIT-yellow) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688) ![IBM%20Bob](https://img.shields.io/badge/Built%20with-IBM%20Bob%20%2B%20Z%20Code-F0503C)
 

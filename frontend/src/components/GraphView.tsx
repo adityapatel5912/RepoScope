@@ -65,6 +65,7 @@ interface RawNode {
   label: string;
   line?: number;
   file?: string;
+  size?: number;
 }
 
 function basename(p: string): string {
@@ -190,6 +191,10 @@ function buildPyramidGraph(
       kind: "file",
       layer: classify(String(n.id), String(n.label)),
       subtitle: String(n.label),
+      size: n.size,
+      symbols: (symbolsByFile.get(String(n.id)) ?? [])
+        .slice(0, 4)
+        .map((s) => s.label),
     } satisfies LayerNodeData,
   });
 
@@ -360,6 +365,14 @@ function NodeDrawer({
 
       {/* Meta */}
       <div className="space-y-1.5 mb-3">
+        {data.size != null && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-muted">Size</span>
+            <span className="font-mono text-text-primary">
+              {data.size >= 1024 ? `${(data.size / 1024).toFixed(1)} KB` : `${data.size} B`}
+            </span>
+          </div>
+        )}
         {data.line != null && (
           <div className="flex items-center justify-between text-xs">
             <span className="text-text-muted">Line</span>
@@ -381,6 +394,21 @@ function NodeDrawer({
         <div className="pt-1 text-[10px] font-mono text-text-muted break-all leading-relaxed border-t border-border-hairline">
           {node.id}
         </div>
+        {data.symbols && data.symbols.length > 0 && (
+          <div className="pt-1.5 border-t border-border-hairline">
+            <p className="label-caps !text-[10px] mb-1.5">Key symbols</p>
+            <div className="flex flex-wrap gap-1">
+              {data.symbols.map((s) => (
+                <span
+                  key={s}
+                  className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border-hairline bg-bg-panel-alt text-text-secondary"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

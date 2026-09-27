@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -44,8 +44,9 @@ const EXAMPLE_PROMPTS = [
   "How is testing set up?",
 ];
 
-// `path/to/file.ts:42` → citation chip
+// `path/to/file.ts:42` → citation chip (suppressed inside table cells)
 const CITATION_RE = /^[\w./@-]+\.[A-Za-z0-9]+(:\d+)?$/;
+const InTableContext = createContext(false);
 
 // ── Web Speech (mic) — optional capability ───────────────────────────────────
 interface SpeechRecognitionLike {
@@ -391,10 +392,11 @@ export default function ChatPanel({
                           components={{
                             code: ({ className, children, ...props }) => {
                               const isInline = !className;
+                              const inTable = useContext(InTableContext);
                               const text = String(children ?? "").replace(/\n$/, "");
                               if (isInline) {
-                                // File-path citations render as pills
-                                if (CITATION_RE.test(text)) {
+                                // Citation chips only outside table cells
+                                if (!inTable && CITATION_RE.test(text)) {
                                   return <span className="citation-chip">{text}</span>;
                                 }
                                 return <code {...props}>{children}</code>;
@@ -402,6 +404,21 @@ export default function ChatPanel({
                               return <CodeBlock className={className}>{children}</CodeBlock>;
                             },
                             pre: ({ children }) => <>{children}</>,
+                            table: ({ children }) => (
+                              <div className="md-table-wrap">
+                                <table>{children}</table>
+                              </div>
+                            ),
+                            td: ({ children }) => (
+                              <InTableContext.Provider value={true}>
+                                <td>{children}</td>
+                              </InTableContext.Provider>
+                            ),
+                            th: ({ children }) => (
+                              <InTableContext.Provider value={true}>
+                                <th>{children}</th>
+                              </InTableContext.Provider>
+                            ),
                           }}
                         >
                           {m.text}

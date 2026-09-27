@@ -1,16 +1,16 @@
 """
 runtime_config.py
 LLM provider chain with multi-key rotation:
-  1. OpenRouter  (OPENROUTER_API_KEYS / OPENROUTER_API_KEY) — primary
-  2. Groq        (GROQ_API_KEYS / GROQ_API_KEY)             — secondary
+  1. Groq        (GROQ_API_KEYS / GROQ_API_KEY)             — primary
+  2. OpenRouter  (OPENROUTER_API_KEYS / OPENROUTER_API_KEY) — secondary
   3. NVIDIA NIM  (NVIDIA_API_KEYS / NVIDIA_API_KEY)         — tertiary
 
 On a 429 / rate-limit error the next key for the same provider is tried;
 when a provider's keys are exhausted the chain falls through to the next
 provider. Base URLs and models come from env:
 
-  Base_URL_OPENROUTER, Models_OPENROUTER
   Base_URL_GROQ,       Models_GROQ
+  Base_URL_OPENROUTER, Models_OPENROUTER
   Base_URL_NVIDIA,     Models_NVIDIA
 """
 import os
@@ -49,18 +49,18 @@ def _make_client(base_url: str, api_key: str) -> OpenAI:
 def _get_providers() -> list[tuple]:
     return [
         (
-            OPENROUTER_ROTATOR,
-            lambda key: _make_client(
-                os.getenv("Base_URL_OPENROUTER", "https://openrouter.ai/api/v1"), key),
-            _first_model("Models_OPENROUTER", "google/gemma-4-31b-it:free"),
-            "OpenRouter",
-        ),
-        (
             GROQ_ROTATOR,
             lambda key: _make_client(
                 os.getenv("Base_URL_GROQ", "https://api.groq.com/openai/v1"), key),
             _first_model("Models_GROQ", "qwen/qwen3.8-27b"),
             "Groq",
+        ),
+        (
+            OPENROUTER_ROTATOR,
+            lambda key: _make_client(
+                os.getenv("Base_URL_OPENROUTER", "https://openrouter.ai/api/v1"), key),
+            _first_model("Models_OPENROUTER", "google/gemma-4-31b-it:free"),
+            "OpenRouter",
         ),
         (
             NVIDIA_ROTATOR,

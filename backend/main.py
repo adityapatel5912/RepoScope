@@ -27,6 +27,7 @@ from byok_manager import get_user_token, set_user_token
 from graph_builder import build_graph_from_repo
 from graph_utils import build_adjacency, find_node_by_label
 from impact_analyzer import compute_blast_radius, generate_impact_narrative
+from json_utils import extract_json_object, salvage_truncated_json
 from key_rotator import OPENROUTER_ROTATOR, GROQ_ROTATOR, NVIDIA_ROTATOR, GITHUB_ROTATOR
 from mcp_client import query_github
 from orchestrator import build_context
@@ -508,15 +509,9 @@ SCAFFOLD_SYSTEM_PROMPT = (
 
 
 def _extract_json_object(text: str) -> dict:
-    """Pull the first JSON object out of an LLM reply (fence-tolerant)."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError("no JSON object found in model output")
-    return json.loads(cleaned[start : end + 1])
+    """Pull the first JSON object out of an LLM reply. Delegates to
+    json_utils (fence-tolerant + trailing-comma salvage)."""
+    return extract_json_object(text)
 
 
 def _validate_scaffold(data: dict) -> dict:
@@ -708,9 +703,33 @@ async def scaffold(
         user_prompt = "\n".join(parts)
 
         raw = await asyncio.to_thread(
-            ask_llm, SCAFFOLD_SYSTEM_PROMPT, user_prompt, "", provider, 4096
+            ask_llm, SCAFFOLD_SYSTEM_PROMPT, user_prompt, "", provider, 8192
         )
-        scaffold = _validate_scaffold(_extract_json_object(raw))
+        try:
+            data = _extract_json_object(raw)
+        except (ValueError, json.JSONDecodeError) as exc:
+            # Free/reasoning models truncate mid-JSON or emit stray commas.
+            # 1) One repair round-trip with the model's own broken output.
+            log.warning("[%s] scaffold JSON invalid (%s) — repair round", req_id, exc)
+            try:
+                raw = await asyncio.to_thread(
+                    ask_llm,
+                    "You output only strictly valid JSON. No fences, no commentary, "
+                    "no trailing commas.",
+                    "The following was supposed to be a single valid JSON scaffold "
+                    "object but is malformed. Fix it and output ONLY the corrected "
+                    "JSON object.\n\n" + raw[:6000],
+                    "", provider, 8192,
+                )
+                data = _extract_json_object(raw)
+            except (ValueError, json.JSONDecodeError):
+                # 2) Deterministic salvage: close truncated strings/brackets.
+                data = salvage_truncated_json(raw)
+                if data is None:
+                    raise HTTPException(
+                        502, "Model returned an invalid scaffold twice. Try again."
+                    )
+        scaffold = _validate_scaffold(data)
         scaffold["entry_files"] = entry_files
         scaffold["top_nodes"] = top_nodes
         scaffold["ok"] = True

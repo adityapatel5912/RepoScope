@@ -85,3 +85,23 @@ def test_scaffold_requires_loaded_repo(client, monkeypatch):
     monkeypatch.setattr(main, "load_state", lambda: {"repo": None, "local_path": None})
     res = client.post("/api/scaffold")
     assert res.status_code == 400
+
+
+def test_salvage_recovers_truncated_scaffold():
+    """Reasoning models truncate mid-JSON — salvage must recover the files
+    emitted before the cut."""
+    from json_utils import salvage_truncated_json
+    truncated = (
+        '{"project_type": "react-spa", "file_tree": ["main.tsx", "App.tsx"], "files": ['
+        '{"path": "main.tsx", "content": "import { createRoot } from \'react-dom\'\n'
+    )
+    data = salvage_truncated_json(truncated)
+    assert data is not None
+    assert data["project_type"] == "react-spa"
+    assert data["files"][0]["path"] == "main.tsx"
+    assert "createRoot" in data["files"][0]["content"]
+
+
+def test_salvage_returns_none_on_garbage():
+    from json_utils import salvage_truncated_json
+    assert salvage_truncated_json("no json here at all") is None

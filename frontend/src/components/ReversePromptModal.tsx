@@ -5,15 +5,17 @@
  * Modal styling per FILE 1: white card, black border, hard offset shadow.
  */
 import { useEffect, useState } from "react";
-import { Copy, Check, Save, X } from "lucide-react";
+import { Copy, Check, Save, X, Zap } from "lucide-react";
 
 interface Props {
   open: boolean;
   prompt: string;
   onClose: () => void;
+  /** Generates + opens the starter scaffold (CodeCrafters-style). */
+  onScaffold?: () => void;
 }
 
-export default function ReversePromptModal({ open, prompt, onClose }: Props) {
+export default function ReversePromptModal({ open, prompt, onClose, onScaffold }: Props) {
   const [copied, setCopied] = useState(false);
 
   // Close on Escape
@@ -76,6 +78,12 @@ export default function ReversePromptModal({ open, prompt, onClose }: Props) {
               <Save size={12} />
               Save as .md
             </button>
+            {onScaffold && (
+              <button onClick={onScaffold} className="btn-secondary !py-1.5 !px-3 !text-xs">
+                <Zap size={12} className="text-accent-amber" />
+                Scaffold
+              </button>
+            )}
             <button
               onClick={onClose}
               aria-label="Close"

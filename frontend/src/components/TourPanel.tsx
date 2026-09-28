@@ -5,10 +5,13 @@
  * node on the graph.
  */
 import { useEffect, useRef, useState } from "react";
-import { generateTour, type Tour } from "../api/features";
+import {
+  generateTour, synthesizeSpeech, playSpeechAudio, speakBrowser, stopSpeechAudio,
+  type Tour,
+} from "../api/features";
 import { toast } from "./Toasts";
 import { SkeletonCard } from "./Skeleton";
-import { Map, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Map, X, ChevronLeft, ChevronRight, Play, Square, Volume2 } from "lucide-react";
 
 export interface TourRequest {
   topic: string;
@@ -45,6 +48,15 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
   const requestIdRef           = useRef(0);
   const [error, setError]       = useState<string | null>(null);
 
+  // ── Voice engine state ──
+  // Server TTS (OpenRouter fish-audio / deepgram flux) with browser
+  // speechSynthesis fallback. voiceOn = auto-advance playback running.
+  const [voiceOn, setVoiceOn]         = useState(false);
+  const [speaking, setSpeaking]       = useState(false);
+  const [voiceEngine, setVoiceEngine] = useState<"server" | "browser" | "none">("none");
+  const voiceEngineRef = useRef<"server" | "browser" | "none">("none");
+  const playTokenRef   = useRef(0);   // increments on stop → stale loops exit
+
   const emitState = (t: Tour, i: number) => {
     onHighlightNode?.(t.steps[i].node_id);
     onTourState?.({
@@ -63,6 +75,7 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
       return;
     }
     const reqId = ++requestIdRef.current;
+    stopPlayback();   // kill any narration from a previous tour
     setTopic(t);
     setLoading(true);
     setError(null);
@@ -85,18 +98,101 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
     }
   };
 
-  const goTo = (i: number) => {
+  const goTo = (i: number, viaUser = false) => {
     if (!tour || i < 0 || i >= tour.total_steps) return;
     setCurrentStep(i);
     emitState(tour, i);
+    // Manual navigation while narrating → restart narration at the new step
+    if (viaUser && voiceOn) void playFrom(i);
+  };
+
+  const narrationFor = (t: Tour, i: number): string => {
+    const s = t.steps[i];
+    return `Step ${i + 1} of ${t.total_steps}. Now in ${s.label}. ${s.explanation}`;
+  };
+
+  /** Speak one step: server TTS first, browser speechSynthesis as fallback. */
+  const speakOnce = async (narration: string, token: number): Promise<void> => {
+    if (voiceEngineRef.current !== "browser") {
+      try {
+        const audio = await synthesizeSpeech(narration);
+        voiceEngineRef.current = "server";
+        setVoiceEngine("server");
+        await playSpeechAudio(audio);
+        return;
+      } catch {
+        if (token !== playTokenRef.current) return;
+        voiceEngineRef.current = "browser";
+        setVoiceEngine("browser");
+      }
+    }
+    await speakBrowser(narration);
+  };
+
+  /** Auto-advance playback: narrate steps in order until stopped or done. */
+  const playFrom = async (i: number) => {
+    const t = tour;
+    if (!t || t.total_steps === 0) return;
+    const token = ++playTokenRef.current;
+    setVoiceOn(true);
+    let idx = Math.max(0, Math.min(i, t.total_steps - 1));
+    setCurrentStep(idx);
+    emitState(t, idx);   // highlight + camera pan sync with the voice
+    while (token === playTokenRef.current && idx < t.total_steps) {
+      setSpeaking(true);
+      try {
+        await speakOnce(narrationFor(t, idx), token);
+      } catch {
+        break;  // playback failed or was cancelled
+      } finally {
+        if (token === playTokenRef.current) setSpeaking(false);
+      }
+      if (token !== playTokenRef.current) break;
+      idx += 1;
+      if (idx < t.total_steps) {
+        setCurrentStep(idx);
+        emitState(t, idx);
+      }
+    }
+    if (token === playTokenRef.current) {
+      setVoiceOn(false);
+      setSpeaking(false);
+    }
+  };
+
+  const stopPlayback = () => {
+    playTokenRef.current += 1;   // invalidate any running narration loop
+    stopSpeechAudio();
+    setVoiceOn(false);
+    setSpeaking(false);
+  };
+
+  /** Speak just the current step (no auto-advance). */
+  const speakCurrent = async () => {
+    const t = tour;
+    if (!t) return;
+    const token = ++playTokenRef.current;
+    setVoiceOn(false);
+    setSpeaking(true);
+    try {
+      await speakOnce(narrationFor(t, currentStep), token);
+    } catch {
+      toast.error("Voice narration is unavailable in this browser");
+    } finally {
+      if (token === playTokenRef.current) setSpeaking(false);
+    }
   };
 
   const stop = () => {
+    stopPlayback();
     setTour(null);
     setError(null);
     onHighlightNode?.(null);
     onTourState?.(null);
   };
+
+  // Cancel any audio when the panel unmounts
+  useEffect(() => () => stopPlayback(), []);
 
   // External request (e.g. "Start tour from here" in the node drawer)
   useEffect(() => {
@@ -188,13 +284,26 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
           </div>
 
           <div className="rounded-xl bg-bg-panel-alt border border-border-subtle px-3 py-3 mb-2.5">
-            <span className={`
-              inline-block text-2xs font-semibold uppercase tracking-wider
-              px-2 py-0.5 rounded border mb-1.5
-              ${TYPE_BADGE[step.type] ?? "text-text-muted border-border-strong bg-bg-panel-alt"}
-            `}>
-              {step.type}
-            </span>
+            <div className="flex items-start justify-between gap-2">
+              <span className={`
+                inline-block text-2xs font-semibold uppercase tracking-wider
+                px-2 py-0.5 rounded border mb-1.5
+                ${TYPE_BADGE[step.type] ?? "text-text-muted border-border-strong bg-bg-panel-alt"}
+              `}>
+                {step.type}
+              </span>
+              <button
+                onClick={() => void speakCurrent()}
+                disabled={speaking}
+                title={speaking ? "Narrating…" : "Speak this step"}
+                aria-label="Speak this step"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md
+                  text-text-muted hover:text-accent-cyan hover:bg-bg-panel-hover
+                  disabled:opacity-40 transition-all duration-150"
+              >
+                <Volume2 size={12} />
+              </button>
+            </div>
             <div className="text-xs font-semibold text-text-primary leading-snug mb-0.5">
               {step.label}
             </div>
@@ -206,10 +315,10 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
             </p>
           </div>
 
-          {/* Prev / Next */}
-          <div className="flex gap-2 mb-2.5">
+          {/* Prev / Play / Next — voice-synced navigation */}
+          <div className="flex gap-2 mb-2">
             <button
-              onClick={() => goTo(currentStep - 1)}
+              onClick={() => goTo(currentStep - 1, true)}
               disabled={currentStep === 0}
               className="
                 flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs
@@ -220,8 +329,35 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
             >
               <ChevronLeft size={12} /> Prev
             </button>
+            {voiceOn ? (
+              <button
+                onClick={stopPlayback}
+                title="Stop narration"
+                aria-label="Stop narration"
+                className="
+                  flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold
+                  bg-accent-rose/15 border border-accent-rose/35 text-accent-rose
+                  hover:bg-accent-rose/25 transition-all duration-200
+                "
+              >
+                <Square size={11} /> {speaking ? "Narrating" : "Stop"}
+              </button>
+            ) : (
+              <button
+                onClick={() => void playFrom(currentStep)}
+                title="Play tour with voice narration — auto-advances with auto-pan"
+                aria-label="Play tour with voice narration"
+                className="
+                  flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold
+                  bg-accent-cyan/15 border border-accent-cyan/30 text-accent-cyan
+                  hover:bg-accent-cyan/25 transition-all duration-200
+                "
+              >
+                <Play size={11} /> Play Tour
+              </button>
+            )}
             <button
-              onClick={() => goTo(currentStep + 1)}
+              onClick={() => goTo(currentStep + 1, true)}
               disabled={currentStep === tour.total_steps - 1}
               className="
                 flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs
@@ -234,12 +370,22 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
             </button>
           </div>
 
+          {/* Voice status line */}
+          {voiceOn && (
+            <div className="text-center text-2xs text-text-muted mb-2">
+              🔊 Narrating ·{" "}
+              <span className="font-mono">
+                {voiceEngine === "server" ? "OpenRouter voice" : "browser voice"}
+              </span>
+            </div>
+          )}
+
           {/* Step dots */}
           <div className="flex justify-center gap-1.5 flex-wrap">
             {tour.steps.map((s, i) => (
               <button
                 key={s.node_id}
-                onClick={() => goTo(i)}
+                onClick={() => goTo(i, true)}
                 aria-label={`Go to step ${i + 1}`}
                 className={`
                   w-2 h-2 rounded-full transition-all duration-150
@@ -256,7 +402,9 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
       {/* ── Empty hint ── */}
       {!tour && !loading && !error && (
         <p className="mt-2 text-2xs text-text-muted leading-relaxed">
-          Get a guided walk through any part of the codebase.
+          Get a guided walk through any part of the codebase — press{" "}
+          <span className="font-semibold text-text-secondary">▶ Play Tour</span> to hear it
+          narrated (OpenRouter voice, browser speech fallback).
         </p>
       )}
     </div>

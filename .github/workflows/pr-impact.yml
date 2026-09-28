@@ -1,0 +1,70 @@
+# PR Impact Report — RepoScope PR Bot
+#
+# On every PR (opened / updated), calls the RepoScope API to compute the
+# blast radius of the changed files, then posts the report as a PR comment:
+# risk score, affected files, suggested tests, and a mermaid impact graph
+# (GitHub renders mermaid natively in comments).
+#
+# Requires: repository secret REPOSCOPE_API_URL (optional; defaults to the
+# public deployment). Uses the built-in GITHUB_TOKEN to post the comment.
+
+name: PR Impact Report
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to analyze
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-impact-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Request impact analysis from RepoScope
+        id: impact
+        env:
+          API_URL: ${{ secrets.REPOSCOPE_API_URL || 'https://reposope.onrender.com/api/impact/pr' }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          http_code=$(curl -sS -o impact-response.json -w "%{http_code}" \
+            -X POST "$API_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"repo_url\": \"https://github.com/${REPO}\", \"pr_number\": ${PR}}") || {
+              echo "::warning::RepoScope API unreachable — skipping impact report"
+              exit 0
+            }
+          if [ "$http_code" != "200" ]; then
+            echo "::warning::RepoScope API returned HTTP ${http_code} — skipping impact report"
+            cat impact-response.json || true
+            exit 0
+          fi
+          jq -r '.comment // empty' impact-response.json > impact-comment.md
+          if [ ! -s impact-comment.md ]; then
+            echo "::warning::RepoScope returned an empty comment — skipping"
+            exit 0
+          fi
+          echo "risk_level=$(jq -r '.risk_level' impact-response.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Post report as PR comment
+        if: steps.impact.outputs.risk_level != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+        run: |
+          gh pr comment "$PR" --repo "${{ github.repository }}" \
+            --body-file impact-comment.md

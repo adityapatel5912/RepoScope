@@ -99,3 +99,88 @@ Every feature, how to use it, and its limits. All screenshots live in
   provider (OpenRouter → Groq → NVIDIA NIM). `GET /api/health` reports
   uptime, memory, and configured key counts.
 - **Use**: set keys in `.env`; watch the status bar's "Backend: ok" dot.
+
+---
+
+# NEW in 3.0
+
+## PR Bot (Impact Report as a GitHub Comment)
+- **What**: computes the blast radius of every file changed in a pull request
+  (reverse-BFS over the code graph) and renders a GitHub-ready markdown
+  comment: risk score /10, affected-files table with direct/transitive impact
+  counts, suggested tests, and a mermaid impact graph (GitHub renders mermaid
+  natively in PR comments).
+- **Use (UI)**: Impact panel → PR Bot → enter PR number → **Generate PR
+  Comment Preview** → Copy comment → paste into the PR. Export the graph as
+  PNG (toolbar) to attach the highlighted blast radius.
+- **Use (CI)**: copy [.github/workflows/pr-impact.yml](../.github/workflows/pr-impact.yml)
+  into your repo — it calls `POST /api/impact/pr` on every PR and posts the
+  report automatically (needs `pull-requests: write`).
+- **API**: `POST /api/impact/pr` `{repo_url, pr_number, github_token?,
+  post_comment?}` → `{risk_score, risk_level, affected_files, comment, …}`.
+- **Limits**: analyzes the first 25 changed files; files not present in the
+  graph (new files, assets) are reported but not traversed.
+
+## Student Onboarding Mode
+- **What**: ranks every file by the pyramid score (incoming ×2 + outgoing)
+  into Rows 1–5 and builds a 3-level curriculum: **Level 1** = Row 1 entry
+  points, **Level 2** = Rows 2–3 core modules, **Level 3** = Rows 4–5 utils &
+  leaves. Each file gets an LLM-written "why it matters" note; each level has
+  a 3-question checkpoint quiz (click-to-answer with explanations). The
+  low-traffic Rows 4–5 also seed **3 Good First Issues** (title, file,
+  description, first step).
+- **Use**: toggle **Student** in the top bar → the Student Path card appears
+  in the sidebar. Quiz out a level (or hit "Mark level complete") — progress
+  persists per-repo in localStorage.
+- **API**: `POST /api/onboard` `{repo_url?}` → `{levels[3], good_first_issues[3]}`.
+- **Limits**: LLM-backed; on provider failure each level falls back to
+  heuristic notes and template issues so the path is always usable.
+
+## Voice Code Tours
+- **What**: narrated tours — the Code Tour panel gains **▶ Play Tour**, which
+  speaks each step ("Step 2 of 7. Now in auth_router. This handles…"),
+  auto-advances to the next stop, and keeps the graph camera + highlight
+  synced with the audio. Server voice: OpenRouter TTS chain
+  (`fish-audio/s2.1-pro-free:free` → `deepgram/flux-tts:free`, key rotation
+  preserved, `Models_TTS` env override). Fallback: browser `speechSynthesis`.
+- **Use**: Code Tour → generate a tour → **▶ Play Tour**. Prev/Next/dots
+  restart narration at the chosen step; 🔊 speaks just the current step;
+  ⏹ stops.
+- **API**: `POST /api/tts` `{text}` → `{audio_base64, format, model}`.
+- **Limits**: narration ≤ 1,200 chars per request; if both server TTS and
+  browser speech are unavailable the panel shows an error toast.
+
+## Security Scan (Breaking Change + Secret + CVE)
+- **What**: deterministic (no-LLM) scan of the loaded clone + optional PR
+  patch + last 20 commit messages. Flags:
+  - **SECRET** — GitHub/AWS/OpenRouter/Groq/NVIDIA/OpenAI/Anthropic/Google/
+    Slack keys, private-key blocks, generic `api_key = "…"` assignments
+    (placeholders excluded), committed `.env` files, and `process.env`
+    usage in diffs. Details are redacted.
+  - **BREAKING** — function signature changes in patches, removed functions,
+    major version bumps in `package.json`, conventional-commit `BREAKING` /
+    `!:` markers.
+  - **CVE** — dependency pins below known-vulnerable ranges (curated map:
+    requests, urllib3, lodash, axios, flask, django, jinja2, minimist, …).
+  Every suggestion carries remediation guidance with a Nord Security /
+  NordPass reference.
+- **Use**: sidebar → **Tracking | Security** tabs → Security → **Run Security
+  Scan**. Flags sort worst-severity first with colored badges.
+- **API**: `POST /api/security/scan` `{repo_url?, pr_number?}` →
+  `{flags, total_flags, summary, scanned}`.
+
+## Reverse Prompt → Scaffold
+- **What**: extends the Reverse Build Prompt with a CodeCrafters-style
+  starter scaffold. The LLM sees only shallow context — README excerpt
+  (4,000 chars), depth-1 file tree, graph layers + most-imported Row 1 nodes,
+  and the first 100 lines of at most 2 entry files (never the full codebase)
+  — and returns `{project_type, file_tree, files[{path, content, purpose}]}`
+  with 6–12 boilerplate files (<50 lines each, TODOs included) and a
+  Stage 1/2/3 README stub.
+- **Use**: graph toolbar → **Scaffold** (or **Build Prompt** → ⚡ Scaffold) →
+  browse the scaffold tree, preview files, **Download ZIP** (jszip, includes
+  a `SCAFFOLD.md` manifest) or **Open in StackBlitz** (form-POST project).
+- **API**: `POST /api/scaffold` → validated scaffold JSON (paths sanitized,
+  contents capped at 80 lines/file).
+- **Limits**: StackBlitz runs JS/TS templates best; Python scaffolds open as
+  editable files.

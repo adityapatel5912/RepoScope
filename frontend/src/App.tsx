@@ -25,6 +25,7 @@ interface RepoInfo {
 }
 
 const LAYOUT_KEY = "reposcope-layout";
+const STUDENT_MODE_KEY = "reposcope-student-mode";
 
 interface PersistedLayout {
   sidebarCollapsed?: boolean;
@@ -38,6 +39,14 @@ function loadSavedLayout(): PersistedLayout {
     return raw ? (JSON.parse(raw) as PersistedLayout) : {};
   } catch {
     return {};
+  }
+}
+
+function loadStudentMode(): boolean {
+  try {
+    return localStorage.getItem(STUDENT_MODE_KEY) === "1";
+  } catch {
+    return false;
   }
 }
 
@@ -81,6 +90,7 @@ export default function App() {
   const [lastEvent,   setLastEvent]   = useState("");
   const [debugMode,   setDebugMode]   = useState(false);
   const [prefill,     setPrefill]     = useState<string | undefined>(undefined);
+  const [studentMode, setStudentMode] = useState(loadStudentMode);
 
   // Tour + impact graph highlighting
   const [highlightNode, setHighlightNode]       = useState<string | null>(null);
@@ -204,6 +214,11 @@ export default function App() {
         onModeChange={setMode}
         debugMode={debugMode}
         onDebugToggle={() => setDebugMode((v) => !v)}
+        studentMode={studentMode}
+        onStudentModeToggle={() => setStudentMode((v) => {
+          try { localStorage.setItem(STUDENT_MODE_KEY, v ? "0" : "1"); } catch { /* ignore */ }
+          return !v;
+        })}
         onShowShortcuts={() => setShowShortcuts(true)}
         loader={loader}
         onClearRepo={clearRepo}
@@ -246,6 +261,7 @@ export default function App() {
               contextInfo={contextInfo}
               rawNodes={rawNodes}
               loader={loader}
+              studentMode={studentMode}
               onHighlightNode={setHighlightNode}
               onHighlightImpact={(t, d, tr) => {
                 setImpactTarget(t);

@@ -19,8 +19,9 @@ import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
 import EmptyState from "./EmptyState";
 import GraphControls from "./GraphControls";
 import ReversePromptModal from "./ReversePromptModal";
+import ScaffoldModal from "./ScaffoldModal";
 import { exportGraphPng, exportGraphSvg } from "../utils/graphExport";
-import { generateReversePrompt } from "../api/features";
+import { generateReversePrompt, generateScaffold, type Scaffold } from "../api/features";
 import { toast } from "./Toasts";
 import { log } from "../utils/logger";
 import "reactflow/dist/style.css";
@@ -668,6 +669,8 @@ function GraphInner({
   const [exporting, setExporting]        = useState(false);
   const [promptBusy, setPromptBusy]      = useState(false);
   const [reversePrompt, setReversePrompt] = useState<string | null>(null);
+  const [scaffoldBusy, setScaffoldBusy]  = useState(false);
+  const [scaffold, setScaffold]          = useState<Scaffold | null>(null);
   const { fitView, setCenter }           = useReactFlow();
   const containerRef                     = useRef<HTMLDivElement>(null);
   const exportIdRef                      = useRef(0);
@@ -873,6 +876,26 @@ function GraphInner({
     }
   }, [promptBusy]);
 
+  // ── Scaffold (CodeCrafters-style starter) ──────────────────────────────────
+  const runScaffold = useCallback(async () => {
+    if (scaffoldBusy) return;
+    const id = ++exportIdRef.current;
+    setScaffoldBusy(true);
+    try {
+      const data = await generateScaffold();
+      if (id !== exportIdRef.current) return;
+      setReversePrompt(null);      // close the prompt modal if it was open
+      setScaffold(data);
+      toast.success(`Scaffold ready — ${data.files.length} files`);
+    } catch (e: unknown) {
+      if (id !== exportIdRef.current) return;
+      const msg = e instanceof Error ? e.message : "Failed to generate scaffold";
+      toast.error(msg);
+    } finally {
+      if (id === exportIdRef.current) setScaffoldBusy(false);
+    }
+  }, [scaffoldBusy]);
+
   const minimapColor = useMemo(() => {
     return (n: Node) => {
       const d = n.data as LayerNodeData;
@@ -990,11 +1013,13 @@ function GraphInner({
         onExportPng={() => void runExport("png")}
         onExportSvg={() => void runExport("svg")}
         onReversePrompt={() => void runReversePrompt()}
+        onScaffold={() => void runScaffold()}
         direction={invert ? "LR" : "TB"}
         grouped={expandFuncs}
         legendShown={legendShown}
         exporting={exporting}
         promptBusy={promptBusy}
+        scaffoldBusy={scaffoldBusy}
       />
 
       {/* Reverse Build Prompt modal */}
@@ -1002,6 +1027,14 @@ function GraphInner({
         open={reversePrompt != null}
         prompt={reversePrompt ?? ""}
         onClose={() => setReversePrompt(null)}
+        onScaffold={() => void runScaffold()}
+      />
+
+      {/* Scaffold modal */}
+      <ScaffoldModal
+        open={scaffold != null}
+        scaffold={scaffold}
+        onClose={() => setScaffold(null)}
       />
 
       {/* Node drawer */}

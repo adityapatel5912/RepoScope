@@ -91,7 +91,7 @@ def compute_blast_radius(graph: dict, target_id: str,
     }
 
 
-def generate_impact_narrative(impact: dict) -> str:
+def generate_impact_narrative(impact: dict, provider: dict | None = None) -> str:
     """LLM-written 3-4 sentence explanation of what could break."""
     prompt = (
         f"A developer wants to change: {impact['target'].get('label')} "
@@ -110,6 +110,7 @@ def generate_impact_narrative(impact: dict) -> str:
             "You are a code impact analyst. Be concise and practical.",
             prompt,
             graph_context=json.dumps(impact)[:3000],
+            provider=provider,
         )
     except Exception as exc:
         log.warning("Impact narrative failed: %s", exc)

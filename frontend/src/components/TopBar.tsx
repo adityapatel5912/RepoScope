@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
@@ -15,6 +15,7 @@ interface Props {
   onShowShortcuts?: () => void;
   loader: RepoLoader;
   onClearRepo: () => void;
+  onToggleSidebar?: () => void;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -25,7 +26,7 @@ const MODES: { id: Mode; label: string }[] = [
 
 export default function TopBar({
   repo, mode, onModeChange, debugMode, onDebugToggle, onShowShortcuts,
-  loader, onClearRepo,
+  loader, onClearRepo, onToggleSidebar,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipEditing, setChipEditing]   = useState(false);
@@ -46,19 +47,29 @@ export default function TopBar({
   return (
     <header
       className="
-        relative z-50 flex items-center gap-3 px-4
-        h-14 shrink-0
-        bg-bg-panel border-b-[1.5px] border-border-subtle
+        relative z-50 flex items-center justify-between gap-1.5 sm:gap-3 px-2 sm:px-4
+        h-12 sm:h-14 shrink-0
+        bg-bg-panel border-b-[1.5px] border-border-subtle overflow-x-hidden
       "
     >
       {/* ── Left: logo mark + wordmark + subtitle ── */}
-      <div className="flex items-center gap-2.5 mr-1 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            aria-label="Toggle sidebar"
+            title="Toggle sidebar"
+            className="btn-ghost w-7 h-7 sm:w-8 sm:h-8 !p-0 items-center justify-center lg:hidden flex shrink-0"
+          >
+            <Menu size={16} />
+          </button>
+        )}
         <div
-          className="w-6 h-6 shrink-0 bg-accent-cyan border-[1.5px] border-border-subtle rounded-md"
+          className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 bg-accent-cyan border-[1.5px] border-border-subtle rounded-md"
           aria-hidden="true"
         />
         <div className="flex flex-col leading-none">
-          <span className="text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">
+          <span className="hidden min-[480px]:block text-[13px] sm:text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">
             RepoScope
           </span>
           <span className="hidden md:block text-[10px] font-semibold tracking-[0.15em] text-text-muted uppercase mt-0.5">
@@ -68,7 +79,7 @@ export default function TopBar({
       </div>
 
       {/* ── Center: Load Repo input ⇄ repo chip ── */}
-      <div className="flex-1 flex justify-center min-w-0">
+      <div className="flex-1 flex justify-center min-w-0 max-w-xs sm:max-w-sm px-1">
         {showInput ? (
           <div className="relative w-full max-w-[340px]">
             <div className="flex items-center gap-1.5">
@@ -149,7 +160,7 @@ export default function TopBar({
               aria-selected={mode === id}
               onClick={() => onModeChange(id)}
               className={clsx(
-                "px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
+                "px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
                 mode === id
                   ? "bg-accent-cyan text-white shadow-sm"
                   : "bg-bg-panel text-text-primary hover:bg-bg-panel-alt"

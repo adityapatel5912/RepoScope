@@ -80,8 +80,27 @@ function getSpeechCtor(): SpeechCtor | null {
 function CodeBlock({ className, children }: { className?: string; children?: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className ?? "");
-  const lang = match?.[1] ?? "";
+  let lang = (match?.[1] ?? "").toLowerCase();
   const code = String(children ?? "").replace(/\n$/, "");
+
+  // Normalize shell/bash aliases so syntax highlighting works
+  if (["sh", "shell", "zsh", "terminal", "console"].includes(lang)) {
+    lang = "bash";
+  } else if (["cmd", "ps1", "pwsh"].includes(lang)) {
+    lang = "powershell";
+  }
+
+  // If no language was specified, auto-detect bash commands or multiline
+  if (!lang) {
+    if (
+      code.includes("\n") ||
+      /^(\$|\b(npm|npx|yarn|pnpm|pip|python|python3|cd|git|curl|uvicorn|cat|node|docker|mkdir|ls|cp|mv|chmod|export)\b)/m.test(code)
+    ) {
+      lang = "bash";
+    } else {
+      lang = "text";
+    }
+  }
 
   const copy = () => {
     navigator.clipboard.writeText(code).then(() => {
@@ -90,37 +109,45 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
     });
   };
 
-  if (!match) return <code>{children}</code>;
-
   return (
-    <div className="relative group my-2 rounded-lg overflow-hidden border-[1.5px] border-border-subtle">
+    <div className="code-block-wrapper relative group my-2.5 rounded-lg overflow-hidden border-[1.5px] border-[#2E2A24] bg-[#1E1B16] shadow-sm">
       <div className="flex items-center justify-between px-3 py-1.5 bg-[#141210] border-b border-[#2E2A24]">
-        <span className="text-[10px] font-mono text-[#B8B2A6] uppercase tracking-wider">{lang}</span>
+        <span className="text-[10px] font-mono text-[#D4CEBF] font-semibold uppercase tracking-wider">{lang}</span>
         <button
           onClick={copy}
           aria-label="Copy code"
-          className="flex items-center gap-1 text-[10px] font-medium text-[#B8B2A6] hover:text-white transition-colors"
+          className="flex items-center gap-1 text-[10px] font-medium text-[#D4CEBF] hover:text-white transition-colors"
         >
-          {copied ? <Check size={10} /> : <Copy size={10} />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+          <span className={copied ? "text-emerald-400 font-semibold" : ""}>{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>
-      <SyntaxHighlighter
-        style={oneDark}
-        language={lang}
-        PreTag="div"
-        customStyle={{
-          margin: 0,
-          padding: "12px 16px",
-          background: "#1E1B16",
-          fontSize: "12px",
-          fontFamily: '"JetBrains Mono", monospace',
-          lineHeight: "1.6",
-        }}
-        codeTagProps={{ style: { fontFamily: '"JetBrains Mono", monospace', background: "transparent" } }}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <div className="code-block-content overflow-x-auto">
+        <SyntaxHighlighter
+          style={oneDark}
+          language={lang === "text" ? undefined : lang}
+          PreTag="div"
+          customStyle={{
+            margin: 0,
+            padding: "12px 16px",
+            background: "#1E1B16",
+            fontSize: "12px",
+            fontFamily: '"JetBrains Mono", monospace',
+            lineHeight: "1.6",
+            color: "#F5F1E8",
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily: '"JetBrains Mono", monospace',
+              background: "transparent",
+              color: "#F5F1E8",
+              whiteSpace: "pre",
+            },
+          }}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
     </div>
   );
 }
@@ -401,8 +428,9 @@ export default function ChatPanel({
                           remarkPlugins={[remarkGfm]}
                           components={{
                             code: ({ className, children, ...props }) => {
-                              // fenced code block → CodeBlock; inline → InlineCode
-                              if (className) return <CodeBlock className={className}>{children}</CodeBlock>;
+                              // fenced code block or multiline code → CodeBlock; inline single-line → InlineCode
+                              const isBlock = Boolean(className) || String(children ?? "").includes("\n");
+                              if (isBlock) return <CodeBlock className={className}>{children}</CodeBlock>;
                               return <InlineCode className={className} {...props}>{children}</InlineCode>;
                             },
                             pre: ({ children }) => <>{children}</>,

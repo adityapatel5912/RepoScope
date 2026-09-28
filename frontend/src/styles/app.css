@@ -313,6 +313,46 @@
   animation: dashdraw 0.5s linear infinite;
 }
 
+.react-flow__edge.highlighted .react-flow__edge-path {
+  stroke: #10B981 !important;
+  stroke-width: 2.5 !important;
+  opacity: 1 !important;
+}
+
+/* ── React Flow Custom Handles (A1) ──────────────────────────────────────── */
+.rs-handle {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rs-handle.react-flow__handle-top {
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.rs-handle.react-flow__handle-bottom {
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ── Repo Node Halo (A10) ────────────────────────────────────────────────── */
+.repo-halo {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    rgba(16, 185, 129, 0.12) 0%,
+    rgba(16, 185, 129, 0) 70%);
+  pointer-events: none;
+}
+
 @keyframes dashdraw {
   from { stroke-dashoffset: 10; }
 }
@@ -367,7 +407,7 @@
 .md-body li::marker { color: var(--accent); }
 
 /* Inline code — cream chip, black border (citation pills included) */
-.md-body code {
+.md-body code:not(.code-block-content code) {
   font-family: var(--font-mono);
   background: var(--panel-cream);
   border: 1px solid var(--border);
@@ -375,24 +415,34 @@
   border-radius: 4px;
   font-size: 0.78rem;
   color: var(--text);
-  white-space: nowrap;
+  white-space: break-spaces;
+  word-break: break-word;
 }
 
-/* Fenced code blocks — dark bg, white mono text */
+/* Fenced code blocks & SyntaxHighlighter inside md-body (FILE 2) */
+.md-body .code-block-wrapper {
+  background: #1E1B16;
+}
+
+.md-body .code-block-content code,
+.md-body pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: #F5F1E8 !important;
+  white-space: pre !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  line-height: 1.6 !important;
+}
+
 .md-body pre {
   background: #1E1B16;
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-sm);
   margin: 0.6rem 0;
   overflow: hidden;
-}
-
-.md-body pre code {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #F5F1E8;
-  white-space: pre;
 }
 
 .md-body blockquote {

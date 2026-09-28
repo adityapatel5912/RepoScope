@@ -6,15 +6,16 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
-  getNodesBounds,
   type Node,
   type Edge,
   type NodeTypes,
   MarkerType,
+  ConnectionLineType,
 } from "reactflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon } from "lucide-react";
-import LayerNode, { NODE_W, NODE_H, CHILD_W, type LayerNodeData } from "./graph/LayerNode";import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
+import LayerNode, { NODE_W, NODE_H, CHILD_W, RANK_CONFIGS, type LayerNodeData } from "./graph/LayerNode";
+import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
 import EmptyState from "./EmptyState";
 import GraphControls from "./GraphControls";
 import ReversePromptModal from "./ReversePromptModal";
@@ -32,32 +33,52 @@ export interface TourGraphState {
   total: number;
 }
 
+// ── Rank Label Node (A8) ───────────────────────────────────────────────────
+function RankLabelNode({ data }: { data: { rank: number; label: string } }) {
+  return (
+    <div className="pointer-events-none select-none text-right pr-4 whitespace-nowrap">
+      <div className="text-[11px] font-bold uppercase text-[#94A3B8] tracking-[0.08em]">
+        Rank {data.rank}
+      </div>
+      <div className="text-[10px] uppercase font-semibold text-[#94A3B8]/90 tracking-[0.08em]">
+        {data.label}
+      </div>
+    </div>
+  );
+}
+
 // ── Node type registrations (all types render through LayerNode) ────────────
 const nodeTypes: NodeTypes = {
-  root:     LayerNode,
-  folder:   LayerNode,
-  file:     LayerNode,
-  function: LayerNode,
-  class:    LayerNode,
-  import:   LayerNode,
-  commit:   LayerNode,
-  repo:     LayerNode,
+  root:      LayerNode,
+  folder:    LayerNode,
+  file:      LayerNode,
+  function:  LayerNode,
+  class:     LayerNode,
+  import:    LayerNode,
+  commit:    LayerNode,
+  repo:      LayerNode,
+  rankLabel: RankLabelNode,
 };
 
-// ── Canvas palette (FILE 3: lavender-white + faint dotted grid) ─────────────
-const CANVAS_BG    = "#ECE9F5";
-const DOT_COLOR    = "#CDC6E0";
-const EDGE_COLOR   = "#57534E";
+// ── Canvas palette (A10: #FAF8FF container, #D9D2C0 dots) ───────────────────
+const CANVAS_BG  = "#FAF8FF";
+const DOT_COLOR  = "#D9D2C0";
 
-// ── Pyramid layout constants (no dagre — deterministic manual layout) ───────
-// Pitches sized so adjacent nodes keep a positive gutter even before the
-// collision pass (NODE_GAP_X − NODE_W, CHILD_GAP_X − CHILD_W > 0).
-const NODE_GAP_X   = 300;           // horizontal pitch between file nodes
-const RANK_GAP_Y   = 220;           // vertical pitch between rank slots
-const CHILD_GAP_X  = 220;           // pitch between expanded function children
-const CHILD_DY     = RANK_GAP_Y / 2; // child row at half-rank — clear of both neighbours
-const MAX_PER_ROW  = 18;            // wrap ranks wider than this into continuation slots
-const MIN_CLEAR_X  = 24;            // minimum gutter enforced by the collision pass
+// ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
+const RANK_Y          = 280;
+const SIBLING_X       = 280;
+const SIBLING_X_TIGHT = 220;
+const MAX_ROW_WIDTH   = 6000;
+const MIN_CLEAR_X     = 24;
+
+const RANK_TITLES: Record<number, string> = {
+  1: "Backbone files",
+  2: "Core modules",
+  3: "Routers and services",
+  4: "UI components",
+  5: "Config",
+  6: "Docs and data",
+};
 
 interface RawNode {
   id: string;
@@ -73,7 +94,7 @@ function basename(p: string): string {
   return parts[parts.length - 1] || p;
 }
 
-// ── Connectivity scoring (Section 3): incoming ×2 + outgoing ────────────────
+// ── Connectivity scoring: incoming ×2 + outgoing ────────────────────────────
 function scoreNode(nodeId: string, importEdges: Array<{ source: string; target: string }>): number {
   let incoming = 0;
   let outgoing = 0;
@@ -84,7 +105,7 @@ function scoreNode(nodeId: string, importEdges: Array<{ source: string; target: 
   return incoming * 2 + outgoing;
 }
 
-// Path-based fallback when a file has no import edges at all.
+// Path-based fallback when a file has no import edges at all
 function fallbackScore(path: string): number {
   const id = path.toLowerCase();
   if (/(^|\/)(main|app)\.(py|tsx)$|(^|\/)(db|types)\.(py|ts)$/.test(id)) return 100;
@@ -99,29 +120,58 @@ function fallbackScore(path: string): number {
   return 25;
 }
 
+function categorizeFile(label: string): number {
+  const lower = label.toLowerCase();
+  if (
+    /\.(md|txt|csv|tsv|jsonl|rst)$/i.test(lower) ||
+    /(^|\/)(docs?|fixtures|mock|data|demo_data|examples?)\//i.test(lower)
+  ) {
+    return 6; // Docs and data
+  }
+  if (
+    /(config|setup|\.env|package\.json|tsconfig|vite\.config|docker|requirements|cargo\.toml|go\.mod|webpack|eslint|\.ya?ml|\.toml|\.ini)$/i.test(lower) ||
+    /(^|\/)(config|docker)\//i.test(lower)
+  ) {
+    return 5; // Config
+  }
+  if (
+    /(^|\/)(components?|pages?|views?|screens?|ui|styles?|frontend|client)\//i.test(lower) ||
+    /\.(tsx|jsx|vue|svelte|css|scss|html)$/i.test(lower)
+  ) {
+    return 4; // UI components
+  }
+  if (
+    /(^|\/)(routers?|routes?|services?|handlers?|controllers?|api|endpoints?)\//i.test(lower)
+  ) {
+    return 3; // Routers and services
+  }
+  return 2; // Core candidate
+}
+
 /**
- * Pyramid layout (Section 6): repo at the top, files bucketed into five
- * connectivity-ranked rows (widest at the bottom), key functions expanded as
- * smaller child nodes directly under their parent file. No dagre.
+ * Pyramid layout (A1-A8):
+ * - Repo root at top (Rank 0)
+ * - Files bucketed into Ranks 1..6
+ * - 280px vertical spacing, horizontal centering
+ * - Max row width 6000px (wraps to sub-rows with 40px gap)
+ * - Edges with sourceHandle 'out' and targetHandle 'in'
+ * - Filtered strictly to parent-child only (t === s + 1)
  */
 function buildPyramidGraph(
   raw: unknown[],
   rawEdges: unknown[],
   repoTitle: string,
-  expandFuncs: boolean,
-  invert: boolean,
+  _expandFuncs: boolean,
+  _invert: boolean,
 ): { nodes: Node[]; edges: Edge[] } {
   const rn = raw as RawNode[];
   if (rn.length === 0) return { nodes: [], edges: [] };
 
   const fileNodes = rn.filter((n) => n.type === "file");
-  const symbolNodes = rn.filter((n) => n.type === "function" || n.type === "class");
-  // Real backend edges (imports/calls) — drive ranking AND rendering.
   const edgeList = (rawEdges as Array<{ source: string; target: string; type?: string }>)
     .filter((e) => typeof e?.source === "string" && typeof e?.target === "string");
   const importEdges = edgeList.filter((e) => e.type === "imports" || e.type === "calls");
 
-  // Dev-only EDGE DIAG plumbing check (stripped from production builds).
   log(
     `[EDGE DIAG] nodes: ${rn.length} · edges in: ${edgeList.length} · ` +
     `matching IDs: ${edgeList.filter((e) =>
@@ -129,169 +179,326 @@ function buildPyramidGraph(
     ).length}`,
   );
 
-  // Symbols grouped by parent file id
-  const symbolsByFile = new Map<string, RawNode[]>();
-  for (const s of symbolNodes) {
-    const parent = s.file ? `file:${s.file}` : "";
-    if (!parent) continue;
-    const list = symbolsByFile.get(parent) ?? [];
-    list.push(s);
-    symbolsByFile.set(parent, list);
-  }
-
-  // Score + sort files: connectivity desc, then alphabetical
+  // Score and sort files
   const scored = fileNodes
-    .map((n) => ({ node: n, score: scoreNode(n.id, importEdges) || fallbackScore(String(n.label)) }))
+    .map((n) => ({
+      node: n,
+      score: scoreNode(n.id, importEdges) || fallbackScore(String(n.label)),
+      category: categorizeFile(String(n.label)),
+    }))
     .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.node.id.localeCompare(b.node.id)));
 
-  // Five buckets (rank 1..5) — rank 0 is the repo node
-  const total = scored.length;
-  const r1 = Math.min(6, Math.ceil(total * 0.05));
-  const r2 = Math.min(12, Math.ceil(total * 0.10));
-  const r3 = Math.min(20, Math.ceil(total * 0.15));
-  const r4 = Math.min(30, Math.ceil(total * 0.20));
-  const buckets: Array<typeof scored> = [
-    scored.slice(0, r1),
-    scored.slice(r1, r1 + r2),
-    scored.slice(r1 + r2, r1 + r2 + r3),
-    scored.slice(r1 + r2 + r3, r1 + r2 + r3 + r4),
-    scored.slice(r1 + r2 + r3 + r4),
-  ].filter((b) => b.length > 0);
+  // Partition into Ranks 1..6
+  const rankBuckets = new Map<number, Array<{ node: RawNode; score: number; category: number }>>();
+  for (let r = 1; r <= 6; r++) rankBuckets.set(r, []);
 
-  // Wrap each bucket into slots of ≤ MAX_PER_ROW so no row gets absurdly wide
-  const slots: Array<typeof scored> = [];
-  for (const bucket of buckets) {
-    for (let i = 0; i < bucket.length; i += MAX_PER_ROW) {
-      slots.push(bucket.slice(i, i + MAX_PER_ROW));
+  const backboneCandidates: Array<{ node: RawNode; score: number; category: number }> = [];
+  scored.forEach((item) => {
+    if (item.category === 6) {
+      rankBuckets.get(6)!.push(item);
+    } else if (item.category === 5) {
+      rankBuckets.get(5)!.push(item);
+    } else {
+      backboneCandidates.push(item);
     }
-  }
-  if (invert) slots.reverse();
+  });
 
-  const widest = Math.max(...slots.map((s) => s.length), 1);
-  const centerX = (widest * NODE_GAP_X) / 2;
+  // Top up to 6 files by connectivity/importance become Rank 1 (Backbone files)
+  const topBackboneCount = Math.min(6, Math.max(1, Math.min(backboneCandidates.length, 6)));
+  const topBackbones = backboneCandidates.slice(0, topBackboneCount);
+  const remaining = backboneCandidates.slice(topBackboneCount);
+
+  rankBuckets.get(1)!.push(...topBackbones);
+
+  remaining.forEach((item) => {
+    if (item.category === 4) {
+      rankBuckets.get(4)!.push(item);
+    } else if (item.category === 3) {
+      rankBuckets.get(3)!.push(item);
+    } else {
+      rankBuckets.get(2)!.push(item);
+    }
+  });
 
   const out: Node[] = [];
   const placedIds = new Set<string>();
 
-  // Rank 0 — repo node, always at the very top
+  // Rank 0 — repo node (320x80)
+  const repoCfg = RANK_CONFIGS[0];
   out.push({
     id: "repo:root",
     type: "root",
-    position: { x: centerX - NODE_W / 2, y: 0 },
-    data: { label: repoTitle, kind: "root", layer: classify("repo:root", repoTitle) } satisfies LayerNodeData,
+    position: { x: 0, y: 0 },
+    width: repoCfg.width,
+    height: repoCfg.height,
+    data: {
+      label: repoTitle,
+      kind: "root",
+      layer: classify("repo:root", repoTitle),
+      rank: 0,
+      fullPath: repoTitle,
+    } satisfies LayerNodeData,
   });
   placedIds.add("repo:root");
 
-  const mkFile = (n: RawNode): Node => ({
-    id: String(n.id),
-    type: "file",
-    position: { x: 0, y: 0 },
-    data: {
-      label: basename(String(n.label)),
-      kind: "file",
-      layer: classify(String(n.id), String(n.label)),
-      subtitle: String(n.label),
-      size: n.size,
-      symbols: (symbolsByFile.get(String(n.id)) ?? [])
-        .slice(0, 4)
-        .map((s) => s.label),
-    } satisfies LayerNodeData,
-  });
+  // Ranks 1..6 — file nodes
+  for (let r = 1; r <= 6; r++) {
+    const items = rankBuckets.get(r) || [];
+    if (items.length === 0) continue;
 
-  // Ranks 1..5 — file rows, expanding key symbols under core modules
-  slots.forEach((slot, slotIdx) => {
-    const rowY = (slotIdx + 1) * RANK_GAP_Y;
-    const rowWidth = slot.length * NODE_GAP_X;
-    const startX = centerX - rowWidth / 2 + NODE_GAP_X / 2;
+    const cfg = RANK_CONFIGS[r] ?? RANK_CONFIGS[2];
+    const pitch = Math.max(cfg.width + MIN_CLEAR_X, items.length > 12 ? SIBLING_X_TIGHT : SIBLING_X);
+    const totalRowWidth = (items.length - 1) * pitch;
 
-    slot.forEach((item, i) => {
-      const x = startX + i * NODE_GAP_X;
-      const node = mkFile(item.node);
-      node.position = { x, y: rowY };
-      out.push(node);
-      placedIds.add(node.id);
+    if (totalRowWidth > MAX_ROW_WIDTH) {
+      // Wrap into sub-rows with a 40px vertical gap between node edges (A6)
+      const maxPerRow = Math.max(1, Math.floor(MAX_ROW_WIDTH / pitch));
+      const subRowCount = Math.ceil(items.length / maxPerRow);
+      const rowStepY = cfg.height + 40;
+      const startBaseY = r * RANK_Y - ((subRowCount - 1) * rowStepY) / 2;
 
-      // Expand key functions of core modules (ranks 1–2) as child nodes
-      const isCore = slotIdx < 2 || (invert && slotIdx >= slots.length - 2);
-      if (expandFuncs && isCore) {
-        const children = (symbolsByFile.get(item.node.id) ?? [])
-          .slice()
-          .sort((a, b) => a.label.localeCompare(b.label))
-          .slice(0, 4);
-        const childStartX = x - ((children.length - 1) * CHILD_GAP_X) / 2;
-        children.forEach((child, ci) => {
-          const isClass = child.type === "class";
-          out.push({
-            id: String(child.id),
-            type: child.type,
-            position: { x: childStartX + ci * CHILD_GAP_X, y: rowY + CHILD_DY },
+      for (let sIdx = 0; sIdx < subRowCount; sIdx++) {
+        const subItems = items.slice(sIdx * maxPerRow, (sIdx + 1) * maxPerRow);
+        const subWidth = (subItems.length - 1) * pitch;
+        const subStartX = -subWidth / 2;
+        const subY = startBaseY + sIdx * rowStepY;
+
+        subItems.forEach((item, i) => {
+          const x = subStartX + i * pitch;
+          const y = subY;
+          const node: Node = {
+            id: String(item.node.id),
+            type: "file",
+            position: { x, y },
+            width: cfg.width,
+            height: cfg.height,
             data: {
-              label: String(child.label),
-              kind: isClass ? "class" : "function",
-              layer: classify(String(child.id), String(child.label)),
-              child: true,
+              label: basename(String(item.node.label)),
+              kind: "file",
+              layer: classify(String(item.node.id), String(item.node.label)),
+              subtitle: String(item.node.label),
+              fullPath: String(item.node.label),
+              size: item.node.size,
+              rank: r,
             } satisfies LayerNodeData,
-          });
-          placedIds.add(String(child.id));
+          };
+          out.push(node);
+          placedIds.add(node.id);
         });
       }
-    });
-  });
-
-  // Keep only real edges whose endpoints were placed
-  const validEdges = edgeList.filter(
-    (e) => placedIds.has(e.source) && placedIds.has(e.target) && e.source !== e.target,
-  );
-
-  // Synthesized containment edges: repo root → first visual row. The backend
-  // graph deliberately carries no structural dir/repo edges (they would pollute
-  // the impact analyzer's reverse-BFS), so the layout adds rank-0 connectivity
-  // at render time.
-  for (const item of slots[0] ?? []) {
-    const target = String(item.node.id);
-    if (placedIds.has(target)) {
-      validEdges.push({ source: "repo:root", target, type: "groups" });
+    } else {
+      const startX = -totalRowWidth / 2;
+      items.forEach((item, i) => {
+        const x = startX + i * pitch;
+        const y = r * RANK_Y;
+        const node: Node = {
+          id: String(item.node.id),
+          type: "file",
+          position: { x, y },
+          width: cfg.width,
+          height: cfg.height,
+          data: {
+            label: basename(String(item.node.label)),
+            kind: "file",
+            layer: classify(String(item.node.id), String(item.node.label)),
+            subtitle: String(item.node.label),
+            fullPath: String(item.node.label),
+            size: item.node.size,
+            rank: r,
+          } satisfies LayerNodeData,
+        };
+        out.push(node);
+        placedIds.add(node.id);
+      });
     }
   }
 
-  const edges: Edge[] = validEdges.slice(0, 1000).map((e, i) => ({
-    id: `e${i}`,
-    source: e.source,
-    target: e.target,
+  // Centering pyramid horizontally (A6)
+  const xs = out.map((n) => n.position.x);
+  if (xs.length > 0) {
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const offsetX = -(minX + maxX) / 2;
+    out.forEach((n) => {
+      n.position.x += offsetX;
+    });
+  }
+
+  // Add Rank Labels on left edge of the canvas (A8)
+  const centeredXs = out.map((n) => n.position.x);
+  const leftEdgeX = Math.min(...centeredXs) - 180;
+  for (let r = 1; r <= 6; r++) {
+    if ((rankBuckets.get(r) || []).length > 0) {
+      out.push({
+        id: `rank-label-${r}`,
+        type: "rankLabel",
+        position: { x: leftEdgeX, y: r * RANK_Y + 16 },
+        width: 140,
+        height: 50,
+        data: { rank: r, label: RANK_TITLES[r] },
+        selectable: false,
+        draggable: false,
+        focusable: false,
+      });
+    }
+  }
+
+  // Synthesize containment edges: repo root → rank 1
+  const validEdges: Array<{ source: string; target: string; type?: string }> = [];
+  const rank1Nodes = rankBuckets.get(1) || [];
+  for (const item of rank1Nodes) {
+    validEdges.push({ source: "repo:root", target: String(item.node.id), type: "groups" });
+  }
+
+  // Real edges from imports/calls
+  for (const e of edgeList) {
+    if (placedIds.has(e.source) && placedIds.has(e.target) && e.source !== e.target) {
+      validEdges.push(e);
+    }
+  }
+
+  // Ensure every node in rank r (r >= 2) has a connection from rank r - 1
+  const nodesByRank = new Map<number, Node[]>();
+  out.forEach((n) => {
+    if (n.type !== "rankLabel") {
+      const r = (n.data as LayerNodeData)?.rank ?? 0;
+      const list = nodesByRank.get(r) || [];
+      list.push(n);
+      nodesByRank.set(r, list);
+    }
+  });
+
+  const rankOfId: Record<string, number> = {};
+  out.forEach((n) => {
+    rankOfId[n.id] = (n.data as LayerNodeData)?.rank ?? 0;
+  });
+
+  const hasParentFromPrevRank = new Set<string>();
+  validEdges.forEach((e) => {
+    const s = rankOfId[e.source] ?? 0;
+    const t = rankOfId[e.target] ?? 0;
+    if (t === s + 1) {
+      hasParentFromPrevRank.add(e.target);
+    }
+  });
+
+  for (let r = 2; r <= 6; r++) {
+    const currentNodes = nodesByRank.get(r) || [];
+    const prevNodes = nodesByRank.get(r - 1) || [];
+    if (prevNodes.length === 0) continue;
+
+    for (const node of currentNodes) {
+      if (!hasParentFromPrevRank.has(node.id)) {
+        let closest = prevNodes[0];
+        let minDist = Math.abs(node.position.x - closest.position.x);
+        for (let i = 1; i < prevNodes.length; i++) {
+          const d = Math.abs(node.position.x - prevNodes[i].position.x);
+          if (d < minDist) {
+            minDist = d;
+            closest = prevNodes[i];
+          }
+        }
+        validEdges.push({ source: closest.id, target: node.id, type: "flow" });
+        hasParentFromPrevRank.add(node.id);
+      }
+    }
+  }
+
+  // A2 — FIX EDGE DEFINITIONS
+  const styledEdges = validEdges.map((e, i) => ({
+    ...e,
+    id: `e-${e.source}--${e.target}-${i}`,
+    sourceHandle: "out",
+    targetHandle: "in",
     type: "smoothstep",
-    data: { type: e.type },
-    pathOptions: { borderRadius: 10 },
-    style: { stroke: EDGE_COLOR, strokeWidth: 1.5 },
-    markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: EDGE_COLOR },
+    style: {
+      stroke: "#94A3B8",
+      strokeWidth: 1.5,
+      opacity: 0.7,
+    },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 14,
+      height: 14,
+      color: "#94A3B8",
+    },
+    pathOptions: {
+      borderRadius: 12,
+      offset: 20,
+    },
   }));
 
-  return { nodes: fixOverlaps(out), edges };
+  // A3 — FILTER EDGES TO PARENT-CHILD ONLY
+  const rankMap: Record<string, number> = {};
+  out.forEach((n) => {
+    rankMap[n.id] = (n.data as LayerNodeData)?.rank ?? 0;
+  });
+  const visibleEdges = styledEdges.filter((e) => {
+    const s = rankMap[e.source] ?? 0;
+    const t = rankMap[e.target] ?? 0;
+    return t === s + 1;
+  });
+
+  return { nodes: fixOverlaps(out), edges: visibleEdges };
 }
 
 /**
  * Collision pass (Section 2): sweep every row left→right and enforce a minimum
  * center-to-center gutter so no two nodes can overlap. Uses real node widths
- * (file vs. child cards), so the result is deterministic — a hashed-grid nudge
- * can miss pairs that land in different cells.
+ * (from RANK_CONFIGS), so the result is deterministic.
  */
 function fixOverlaps(nodes: Node[]): Node[] {
-  const widthOf = (n: Node) => ((n.data as LayerNodeData).child ? CHILD_W : NODE_W);
-  const byRow = new Map<number, Node[]>();
-  for (const n of nodes) {
-    const row = byRow.get(n.position.y);
-    if (row) row.push(n);
-    else byRow.set(n.position.y, [n]);
-  }
-  for (const row of byRow.values()) {
-    row.sort((a, b) => a.position.x - b.position.x);
-    for (let i = 1; i < row.length; i++) {
-      const prev = row[i - 1];
-      const minDist = (widthOf(prev) + widthOf(row[i])) / 2 + MIN_CLEAR_X;
-      if (row[i].position.x - prev.position.x < minDist) {
-        row[i].position = { ...row[i].position, x: prev.position.x + minDist };
+  const widthOf = (n: Node) => {
+    if ((n.data as LayerNodeData)?.child) return CHILD_W;
+    const r = (n.data as LayerNodeData)?.rank;
+    return r != null ? (RANK_CONFIGS[r]?.width ?? NODE_W) : (n.width ?? NODE_W);
+  };
+  const heightOf = (n: Node) => {
+    const r = (n.data as LayerNodeData)?.rank;
+    return r != null ? (RANK_CONFIGS[r]?.height ?? NODE_H) : (n.height ?? NODE_H);
+  };
+
+  const workNodes = nodes.filter((n) => n.type !== "rankLabel");
+  const MIN_GAP_X = 24;
+
+  // Multiple passes to resolve any 2D bounding-box collisions
+  for (let pass = 0; pass < 6; pass++) {
+    let hadCollision = false;
+    workNodes.sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+
+    for (let i = 0; i < workNodes.length; i++) {
+      for (let j = i + 1; j < workNodes.length; j++) {
+        const a = workNodes[i];
+        const b = workNodes[j];
+
+        const aW = widthOf(a);
+        const aH = heightOf(a);
+        const bW = widthOf(b);
+        const bH = heightOf(b);
+
+        const aRight = a.position.x + aW;
+        const bRight = b.position.x + bW;
+        const aBottom = a.position.y + aH;
+        const bBottom = b.position.y + bH;
+
+        // Check if bounding boxes overlap
+        const xOverlap = Math.min(aRight, bRight) - Math.max(a.position.x, b.position.x);
+        const yOverlap = Math.min(aBottom, bBottom) - Math.max(a.position.y, b.position.y);
+
+        if (xOverlap > 0 && yOverlap > 0) {
+          hadCollision = true;
+          // Shift whichever node is further to the right by xOverlap + MIN_GAP_X
+          if (b.position.x >= a.position.x) {
+            b.position = { ...b.position, x: aRight + MIN_GAP_X };
+          } else {
+            a.position = { ...a.position, x: bRight + MIN_GAP_X };
+          }
+        }
       }
     }
+    if (!hadCollision) break;
   }
+
   return nodes;
 }
 
@@ -454,6 +661,7 @@ function GraphInner({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selected, setSelected]          = useState<Node | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [expandFuncs, setExpandFuncs]    = useState(true);
   const [invert, setInvert]              = useState(false);
   const [legendShown, setLegendShown]    = useState(true);
@@ -463,27 +671,55 @@ function GraphInner({
   const { fitView, setCenter }           = useReactFlow();
   const containerRef                     = useRef<HTMLDivElement>(null);
   const exportIdRef                      = useRef(0);
-  // Camera plumbing: setCenter can fire before ReactFlow finishes init, so
-  // the requested camera is stashed and flushed from onInit if needed.
-  const rfInstanceRef                    = useRef<unknown>(null);
-  const pendingCameraRef                 = useRef<{ x: number; y: number; zoom: number } | null>(null);
 
-  const applyCamera = useCallback((x: number, y: number, zoom: number, duration = 600) => {
-    pendingCameraRef.current = { x, y, zoom };
-    if (rfInstanceRef.current) {
-      setCenter(x, y, { zoom, duration });
-      pendingCameraRef.current = null;
+  // Hover path highlighting (A9):
+  // When a user hovers any node, walk parent chain up to repo node and highlight all edges
+  const highlightedEdgeIds = useMemo(() => {
+    if (!hoveredNodeId) return new Set<string>();
+    const chain = new Set<string>();
+    const inEdges = new Map<string, Array<{ id: string; source: string }>>();
+    edges.forEach((e) => {
+      const list = inEdges.get(e.target) || [];
+      list.push({ id: e.id, source: e.source });
+      inEdges.set(e.target, list);
+    });
+
+    const queue = [hoveredNodeId];
+    const visited = new Set<string>([hoveredNodeId]);
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      const parents = inEdges.get(curr) || [];
+      for (const p of parents) {
+        chain.add(p.id);
+        if (!visited.has(p.source)) {
+          visited.add(p.source);
+          queue.push(p.source);
+        }
+      }
     }
-  }, [setCenter]);
+    return chain;
+  }, [hoveredNodeId, edges]);
+
+  const renderedEdges = useMemo(() => {
+    return edges.map((e) => {
+      const isHighlighted = highlightedEdgeIds.has(e.id);
+      return {
+        ...e,
+        className: isHighlighted ? "highlighted" : "",
+        style: isHighlighted
+          ? { stroke: "#10B981", strokeWidth: 2.5, opacity: 1 }
+          : e.style,
+        markerEnd: isHighlighted
+          ? { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#10B981" }
+          : e.markerEnd,
+      };
+    });
+  }, [edges, highlightedEdgeIds]);
 
   // Keep a live ref of nodes for resize handling (non-reactive reads)
   const nodesRef = useRef<Node[]>([]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
-  // Re-fit the view when the container resizes (panel drag / collapse) —
-  // but ONLY when the graph still fits at a readable zoom. Huge graphs
-  // would zoom out to a thin horizontal strip, destroying the user's
-  // camera; in that case we leave the viewport exactly where it is.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -493,17 +729,7 @@ function GraphInner({
       timer = window.setTimeout(() => {
         const ns = nodesRef.current;
         if (ns.length === 0) return;
-        const bounds = getNodesBounds(ns);
-        const pad = 1.4; // 0.2 padding each side ⇒ ~1.4× content box
-        const fitZoom = Math.min(
-          el.clientWidth / (bounds.width * pad),
-          el.clientHeight / (bounds.height * pad),
-          0.9,
-        );
-        // Below ~0.3 the graph becomes unreadable — keep the camera instead.
-        if (fitZoom >= 0.3) {
-          fitView({ padding: 0.2, maxZoom: 0.9, duration: 300 });
-        }
+        fitView({ padding: 0.15, minZoom: 0.3, maxZoom: 0.9, duration: 300 });
       }, 150);
     });
     ro.observe(el);
@@ -522,16 +748,9 @@ function GraphInner({
     setEdges(pe);
     setSelected(null);
     setTimeout(() => {
-      // Center on the repo root at a readable zoom — the full pyramid is
-      // wider than the viewport; "Fit view" shows the whole shape.
-      const root = pyramid.find((n) => n.id === "repo:root");
-      if (root) {
-        applyCamera(root.position.x + NODE_W / 2, root.position.y + NODE_H / 2 + 140, 0.85);
-      } else {
-        fitView({ padding: 0.2, duration: 600 });
-      }
+      fitView({ padding: 0.15, minZoom: 0.3, maxZoom: 0.9, duration: 400 });
     }, 50);
-  }, [fitView, setNodes, setEdges, setCenter, applyCamera]);
+  }, [fitView, setNodes, setEdges]);
 
   useEffect(() => {
     buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
@@ -581,7 +800,7 @@ function GraphInner({
   useEffect(() => {
     setNodes((nds) =>
       nds.map((n) => {
-        if (n.type === "cluster") return n;
+        if (n.type === "cluster" || n.type === "rankLabel") return n;
         const d = n.data as LayerNodeData;
         let impactState: LayerNodeData["impactState"] | undefined;
         if (impactTarget && n.id === impactTarget)       impactState = "target";
@@ -719,26 +938,25 @@ function GraphInner({
 
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={renderedEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         onPaneClick={() => setSelected(null)}
-        onInit={(instance) => {
-          rfInstanceRef.current = instance;
-          const pending = pendingCameraRef.current;
-          if (pending) {
-            setCenter(pending.x, pending.y, { zoom: pending.zoom, duration: 400 });
-            pendingCameraRef.current = null;
-          }
+        onNodeMouseEnter={(_, node) => {
+          if (node.type !== "rankLabel") setHoveredNodeId(node.id);
         }}
-        // No `fitView` prop: the camera is owned by buildGraph (root-centered
-        // at readable zoom) + manual controls. The internal init-fit would
-        // collapse the pyramid into a strip.
-        minZoom={0.1}
+        onNodeMouseLeave={() => setHoveredNodeId(null)}
+        fitView
+        fitViewOptions={{ padding: 0.15, minZoom: 0.3, maxZoom: 0.9 }}
+        minZoom={0.2}
         maxZoom={2}
-        defaultEdgeOptions={{ type: "smoothstep" }}
+        connectionLineType={ConnectionLineType.SmoothStep}
+        defaultEdgeOptions={{
+          type: "smoothstep",
+          ...({ sourceHandle: "out", targetHandle: "in" } as object),
+        }}
         nodesDraggable={true}
         nodesConnectable={false}
         elementsSelectable={true}
@@ -747,15 +965,15 @@ function GraphInner({
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={22}
-          size={1.3}
+          gap={28}
+          size={1}
           color={DOT_COLOR}
         />
         <MiniMap
           position="bottom-right"
           style={{ width: 200, height: 140 }}
           nodeColor={minimapColor}
-          maskColor="rgba(236,233,245,0.8)"
+          maskColor="rgba(250, 248, 255, 0.8)"
           nodeStrokeWidth={0}
           pannable
           zoomable

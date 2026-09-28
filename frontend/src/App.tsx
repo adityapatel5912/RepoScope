@@ -96,7 +96,9 @@ export default function App() {
 
   // ── Shell layout state (persisted) ──
   const saved = useRef<PersistedLayout>(loadSavedLayout());
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(saved.current.sidebarCollapsed ?? false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    saved.current.sidebarCollapsed ?? (typeof window !== "undefined" ? window.innerWidth < 1024 : false)
+  );
   const [chatCollapsed, setChatCollapsed]       = useState(saved.current.chatCollapsed ?? false);
   const [chatHeightPct, setChatHeightPct]       = useState(saved.current.chatHeightPct ?? 40);
   const mainRef = useRef<HTMLElement>(null);
@@ -205,6 +207,13 @@ export default function App() {
         onShowShortcuts={() => setShowShortcuts(true)}
         loader={loader}
         onClearRepo={clearRepo}
+        onToggleSidebar={() => {
+          setSidebarCollapsed((v) => {
+            const next = !v;
+            persistLayout({ sidebarCollapsed: next });
+            return next;
+          });
+        }}
       />
 
       {/* ── Body: two-column grid — fixed sidebar + main stack ── */}
@@ -248,6 +257,7 @@ export default function App() {
               onTourState={setTourState}
               onShowShortcuts={() => setShowShortcuts(true)}
               onToggleDebug={() => setDebugMode((v) => !v)}
+              onClose={() => { setSidebarCollapsed(true); persistLayout({ sidebarCollapsed: true }); }}
             />
           </aside>
         )}

@@ -7,8 +7,9 @@ import TrackingPanel from "./TrackingPanel";
 import CommitPanel from "./CommitPanel";
 import TourPanel, { type TourRequest, type TourState } from "./TourPanel";
 import ImpactPanel, { type ImpactRequest } from "./ImpactPanel";
+import AIKeyPanel from "./AIKeyPanel";
 import { toast } from "./Toasts";
-import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play } from "lucide-react";
+import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
 interface RepoInfo {
   owner: string;
@@ -33,6 +34,7 @@ interface Props {
   onTourState?: (state: TourState | null) => void;
   onShowShortcuts?: () => void;
   onToggleDebug?: () => void;
+  onClose?: () => void;
 }
 
 // Sidebar card shell — white panel, black border, label-caps header
@@ -58,7 +60,7 @@ function Card({
 export default function LeftPanel({
   onLoaded, repoInfo, trackingData, contextInfo, rawNodes = [], loader,
   onHighlightNode, onHighlightImpact, tourRequest, impactRequest, onTourState,
-  onShowShortcuts, onToggleDebug,
+  onShowShortcuts, onToggleDebug, onClose,
 }: Props) {
   const [byokToken, setByokToken]   = useState("");
   const [byokSaved, setByokSaved]   = useState(false);
@@ -124,6 +126,19 @@ export default function LeftPanel({
 
   return (
     <div className="w-full h-full overflow-y-auto p-4 flex flex-col gap-4 [&>*]:shrink-0">
+      {onClose && (
+        <div className="lg:hidden flex items-center justify-between pb-2 border-b border-border-hairline">
+          <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Explorer Sidebar</span>
+          <button
+            onClick={onClose}
+            aria-label="Close sidebar"
+            className="btn-ghost w-7 h-7 !p-0 items-center justify-center flex"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
       {/* ── Card 1 · REPOSITORY ── */}
       <Card title="Repository">
         {repoInfo ? (
@@ -217,6 +232,9 @@ export default function LeftPanel({
           How to create a PAT →
         </a>
       </Card>
+
+      {/* ── AI Provider (BYOK) ── */}
+      <AIKeyPanel />
 
       {/* ── Card 4 · COMMIT ── */}
       <CommitPanel disabled={!byokSaved} />

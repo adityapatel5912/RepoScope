@@ -92,13 +92,22 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 
 ## ✨ Features
 
-- **Architecture Graph** — connectivity-pyramid layout (most-important files on top)
-  - Layer-colored nodes (client, backend, storage, external, compute)
-  - Directed edges showing imports and containment
-  - Click-to-highlight blast radius
+- **Architecture Graph (Visual Overhaul)** — deterministic 6-tier connectivity pyramid
+  - Ranks 0..6 size hierarchy (320×80 repo node down to 160×40 docs nodes)
+  - Explicit top-to-bottom handle routing (`out` at bottom → `in` at top)
+  - Strict parent-to-child edge filtering (`t === s + 1`)
+  - Canvas rank labels on the left edge with editorial typography
+  - Lineage hover path highlighting in emerald green (`#10B981`)
+  - `#FAF8FF` warm canvas with `#D9D2C0` dot grid and repo radial halo
+  - Guaranteed 2D collision resolution pass with zero node overlaps
   - Export to PNG and SVG
-- **Conversational Q&A** — SSE-streamed answers with file/function/line
-  citations, dark code blocks with copy buttons, voice input
+- **Conversational Q&A & Code Rendering** — SSE-streamed answers with file/function/line
+  citations, rich Markdown tables, lists, and high-contrast dark code blocks
+  (`#F5F1E8` text on `#1E1B16` charcoal) with bash command auto-detection, copy buttons, and voice input
+- **AI Provider BYOK** — Bring Your Own Key support for Groq, NVIDIA NIM, OpenAI, Anthropic,
+  and Custom OpenAI-compatible endpoints; saved exclusively in `sessionStorage` (cleared on tab close)
+- **Responsive Workspace** — Adaptive across desktop (1440px), tablet (1024px, 768px), and mobile (375px)
+  with mobile drawer overlay, top bar toggle, and flexible layout
 - **Code Tours** — guided step-by-step walkthroughs of any module, numbered
   badges on the graph, progress bar, auto-pan camera
 - **What-If Impact Analysis** — blast radius (direct + transitive) with
@@ -108,7 +117,7 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 - **Reverse Build Prompt** — one click turns any repo into an agent-ready
   "Build me a…" prompt (copy or save as .md)
 - **File Tree** — GitIngest-style tree, search filter, single-file download
-- **BYOK** — GitHub PAT for private repos; memory-only storage
+- **GitHub PAT BYOK** — GitHub PAT for private repos; memory-only storage
 - **Multi-key rotation** — comma-separated keys per LLM provider; 429s rotate
   automatically, providers chain OpenRouter → Groq → NVIDIA NIM
 - **Health system** — `GET /api/health` reports uptime, memory, key counts
@@ -117,21 +126,21 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 
 ## 📐 How the Graph Reads
 
-The graph is a **connectivity pyramid**:
+The graph is a deterministic **connectivity pyramid** with 6 rank tiers:
 
-- **Row 0** — the repository itself
-- **Row 1** — the most-imported files (entry points)
-- **Row 2** — core modules that everything depends on
-- **Row 3** — routers, services, and state management
-- **Row 4** — components and utilities
-- **Row 5** — config, docs, tests, and demo data
+- **Rank 0 (320×80)** — The repository root node with an emerald radial glow (`.repo-halo`)
+- **Rank 1 (260×64)** — Backbone files (top entry points by import connectivity)
+- **Rank 2 (240×56)** — Core modules and foundational logic
+- **Rank 3 (220×52)** — Routers, services, and state management
+- **Rank 4 (200×48)** — UI components and view layers
+- **Rank 5 (180×44)** — Configuration files, build configs, and environment specs
+- **Rank 6 (160×40)** — Documentation, tests, demo datasets, and static assets
 
-Ranking is computed from the import graph (incoming ×2 + outgoing), so the
-most-connected files float to the top and low-traffic files sink to the bottom.
-Each core file expands its key functions as smaller child nodes directly below
-it. Edges always flow downward — imports point from importer to imported,
-containment connects files to their functions, and the repo node fans out to
-the top row. A collision pass guarantees no two nodes ever overlap.
+### Layout & Connection Rules
+- **Explicit Handle Routing**: All edges emerge strictly from the bottom handle (`out`) of the parent and enter the top handle (`in`) of the child.
+- **Parent-to-Child Edge Filtering**: Edges only render between adjacent tiers (`targetRank === sourceRank + 1`), eliminating horizontal criss-crossing.
+- **Lineage Hover Highlighting**: Hovering over any node dynamically traces its complete ancestor chain up to the repository node in `#10B981` emerald.
+- **Zero-Overlap Collision Pass**: Rows wider than 6000px automatically wrap into sub-rows separated by a 40px vertical gap, followed by a 2D bounding-box collision sweep that enforces a minimum 24px horizontal clearance.
 
 ---
 

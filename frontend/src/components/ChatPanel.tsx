@@ -405,9 +405,11 @@ export default function ChatPanel({
               </>
             ) : (
               <div className="flex gap-2.5 max-w-[90%] min-w-0">
-                {/* Avatar mark */}
-                <span
-                  className="w-6 h-6 rounded-md bg-accent-cyan border border-border-subtle shrink-0 mt-5"
+                {/* Avatar mark — RepoScope logo icon */}
+                <img
+                  src="/icon.png"
+                  alt=""
+                  className="w-6 h-6 rounded-md object-cover border border-border-subtle shrink-0 mt-5"
                   aria-hidden="true"
                 />
                 <div className="relative group min-w-0 flex-1">

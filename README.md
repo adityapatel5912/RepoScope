@@ -17,29 +17,51 @@ for the IBM Bob 2.0 Hackathon.
 
 ## 📸 Screenshots
 
+All screenshots are captured at **1600×900 (16:9)** and live in [`docs/screenshots/`](docs/screenshots/).
+
 ### Full workspace
 ![RepoScope hero](docs/screenshots/hero.png)
-*File tree, layered architecture graph, cited chat answers, and stats in one view.*
+*File tree, layered architecture graph, cited chat answers, and stats in one view — custom RepoScope icon in the top bar.*
 
 ### Architecture graph
 ![Graph](docs/screenshots/graph.png)
-*Connectivity pyramid — the repo at the top, the most-imported files in the rows below, and key functions expanded as child nodes. Layer colors: client, backend, storage, external, compute.*
+*Connectivity pyramid — the repo at the top, the most-imported files in the rows below. Layer colors: client, backend, storage, external, compute.*
 
 ### Chat with citations
 ![Chat](docs/screenshots/chat.png)
-*Ask anything — every answer cites files, functions, and line numbers pulled from the real code graph.*
+*Ask anything — every answer cites files, functions, and line numbers pulled from the real code graph, with Next-steps guidance.*
 
-### Code tours
+### Code tours + voice narration
 ![Tour](docs/screenshots/tour.png)
-*Guided walkthroughs step through any module — the graph pans to each stop with numbered badges and a progress bar.*
+*Guided walkthroughs step through any module — the graph pans to each stop with numbered badges. Press **▶ Play Tour** to hear it narrated (OpenRouter TTS, browser speech fallback).*
 
 ### Impact analysis
 ![Impact](docs/screenshots/impact.png)
 *See the blast radius of a change before you make it — target, direct, transitive, and unaffected states on the graph.*
 
+### PR Bot — impact report on every pull request
+![PR Bot](docs/screenshots/prbot.png)
+*One click renders a GitHub-ready comment: risk score, affected files, suggested tests, and a mermaid impact graph. The included GitHub Action posts it automatically.*
+
+### Student Mode — pyramid-ranked learning path
+![Student Mode](docs/screenshots/student.png)
+*Toggle **Student** in the top bar: a 3-level curriculum (entry points → core → utils) with per-file "why it matters" notes, checkpoint quizzes, and Good First Issues from the low-traffic rows.*
+
+### Security Scan — secrets, breaking changes, CVEs
+![Security Scan](docs/screenshots/security.png)
+*The Tracking card gains a Security tab: committed API keys (redacted), leaked `.env` files, breaking signature changes, and vulnerable dependency pins — with Nord Security–backed remediation tips.*
+
+### Scaffold — CodeCrafters-style starter
+![Scaffold](docs/screenshots/scaffold.png)
+*From the graph toolbar: a Stage 1/2/3 starter scaffold with boilerplate + TODOs. Download as ZIP or open in StackBlitz — never the full codebase.*
+
 ### Tracking
 ![Tracking](docs/screenshots/tracking.png)
 *Commits, PRs, issues, and releases — checked on demand, grouped by change type.*
+
+### One-click demo repos
+![Demo repos](docs/screenshots/demo-repos.png)
+*Click either button in the sidebar to load a real repository instantly.*
 
 ---
 

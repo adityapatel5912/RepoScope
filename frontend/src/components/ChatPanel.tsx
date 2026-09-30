@@ -185,19 +185,19 @@ function CopyBtn({ text }: { text: string }) {
 // ── Empty state (FILE 2): centered heading + TRY ASKING + 2×3 prompt grid ──
 function EmptyChat({ repoName, onPick }: { repoName: string; onPick: (p: string) => void }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-5 overflow-y-auto">
-      <div className="text-center max-w-lg">
-        <h2 className="h2 text-text-primary">
-          Ask anything about <span className="text-accent-cyan">{repoName}</span>
+    <div className="flex-1 w-full flex flex-col items-center justify-start my-auto px-4 sm:px-6 py-3 sm:py-6 gap-3 sm:gap-4 overflow-y-auto">
+      <div className="text-center max-w-lg shrink-0">
+        <h2 className="text-base sm:text-lg font-bold text-text-primary">
+          Ask anything about <span className="text-accent-cyan truncate inline-block max-w-[200px] align-bottom" title={repoName}>{repoName}</span>
         </h2>
-        <p className="text-sm text-text-muted mt-2">
+        <p className="text-xs text-text-muted mt-1 leading-relaxed">
           Architecture, implementation, setup, and file-level questions all work here.
         </p>
       </div>
 
-      <div className="w-full max-w-xl">
-        <p className="label-caps text-center mb-3">Try asking</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="w-full max-w-xl shrink-0">
+        <p className="label-caps text-center mb-2 !text-[10px]">Try asking</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
           {EXAMPLE_PROMPTS.map((p) => (
             <button
               key={p}
@@ -205,7 +205,7 @@ function EmptyChat({ repoName, onPick }: { repoName: string; onPick: (p: string)
               className="
                 text-left text-xs font-medium text-text-secondary leading-snug
                 bg-bg-panel border-[1.5px] border-border-subtle rounded-lg shadow-sm
-                px-3.5 py-3
+                px-3 py-2 sm:px-3.5 sm:py-2.5
                 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none
                 active:translate-x-[2px] active:translate-y-[2px]
                 transition-all duration-100
@@ -396,15 +396,15 @@ export default function ChatPanel({
                   <User size={12} className="text-text-muted" />
                 </span>
                 <div className="
-                  order-1 max-w-[80%] px-4 py-2.5
+                  order-1 max-w-[85%] sm:max-w-[80%] px-4 py-2.5
                   bg-bg-panel border-[1.5px] border-border-subtle shadow-sm rounded-lg
-                  text-sm text-text-primary whitespace-pre-wrap
+                  text-sm text-text-primary whitespace-pre-wrap break-words
                 ">
                   {m.text}
                 </div>
               </>
             ) : (
-              <div className="flex gap-2.5 max-w-[90%] min-w-0">
+              <div className="flex gap-2.5 max-w-[95%] sm:max-w-[90%] min-w-0">
                 {/* Avatar mark — RepoScope logo icon */}
                 <img
                   src="/icon.png"
@@ -423,6 +423,7 @@ export default function ChatPanel({
                   <div className="
                     px-4 py-3 bg-bg-panel-alt
                     border-[1.5px] border-border-subtle shadow-sm rounded-lg
+                    break-words overflow-hidden
                   ">
                     {m.text ? (
                       <div className="md-body">

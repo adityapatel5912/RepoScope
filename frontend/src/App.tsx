@@ -249,7 +249,7 @@ export default function App() {
         ) : (
           <aside
             className="
-              w-[300px] shrink-0 overflow-y-auto
+              w-[300px] max-w-[85vw] shrink-0 overflow-y-auto overflow-x-hidden
               bg-bg-panel border-r-[1.5px] border-border-subtle
               max-lg:absolute max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:shadow-lg
             "

@@ -203,11 +203,11 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
   const step = tour?.steps[currentStep];
 
   return (
-    <div className="card p-4 flex flex-col gap-3">
+    <div className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <h3 className="label-caps flex items-center gap-1.5">
-          <Map size={12} className="text-accent-cyan" />
+      <div className="flex items-center justify-between min-w-0">
+        <h3 className="label-caps flex items-center gap-1.5 truncate">
+          <Map size={12} className="text-accent-cyan shrink-0" />
           Code Tour
         </h3>
         {tour && (
@@ -304,10 +304,16 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
                 <Volume2 size={12} />
               </button>
             </div>
-            <div className="text-xs font-semibold text-text-primary leading-snug mb-0.5">
+            <div
+              className="text-xs font-semibold text-text-primary leading-snug mb-0.5 break-words line-clamp-2"
+              title={step.label}
+            >
               {step.label}
             </div>
-            <div className="font-mono text-2xs text-text-muted break-all mb-1.5">
+            <div
+              className="font-mono text-2xs text-text-muted break-all mb-1.5"
+              title={`${step.file}${step.line > 0 ? `:${step.line}` : ""}`}
+            >
               {step.file}{step.line > 0 && `:${step.line}`}
             </div>
             <p className="text-xs text-text-muted leading-relaxed m-0">

@@ -148,7 +148,7 @@ export default function ScaffoldModal({ open, scaffold, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-3 shrink-0 gap-2">
+        <div className="flex items-center justify-between mb-3 shrink-0 gap-2 flex-wrap">
           <div className="min-w-0">
             <h2 className="h3 flex items-center gap-2">
               <Zap size={16} className="text-accent-amber" />
@@ -161,7 +161,7 @@ export default function ScaffoldModal({ open, scaffold, onClose }: Props) {
               CodeCrafters-style starter — boilerplate + TODOs, rebuild it yourself
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button onClick={() => void downloadZip()} disabled={zipping} className="btn-primary !py-1.5 !px-3 !text-xs">
               <Download size={12} />
               {zipping ? "Zipping…" : "Download ZIP"}
@@ -173,7 +173,7 @@ export default function ScaffoldModal({ open, scaffold, onClose }: Props) {
             <button
               onClick={onClose}
               aria-label="Close"
-              className="btn-ghost w-8 h-8 !p-0 items-center justify-center"
+              className="btn-ghost w-8 h-8 !p-0 items-center justify-center shrink-0"
             >
               <X size={15} />
             </button>
@@ -181,8 +181,8 @@ export default function ScaffoldModal({ open, scaffold, onClose }: Props) {
         </div>
 
         {/* Body: tree | preview */}
-        <div className="flex-1 min-h-0 flex gap-4">
-          <div className="w-64 shrink-0 overflow-y-auto card-flat p-3">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row gap-4">
+          <div className="w-full md:w-64 shrink-0 max-h-48 md:max-h-none overflow-y-auto card-flat p-3">
             <FileTree
               rawNodes={rawNodes}
               embedded

@@ -105,9 +105,10 @@ function Row({
       <>
         <button
           onClick={() => onToggleDir(node.path)}
-          className="w-full flex items-center gap-1 text-left group hover:bg-bg-panel-alt rounded-sm"
+          className="w-full min-w-0 flex items-center gap-1 text-left group hover:bg-bg-panel-alt rounded-sm overflow-hidden"
           style={{ paddingLeft: 0 }}
           aria-expanded={isOpen}
+          title={node.path}
         >
           <span className="font-mono text-[10.5px] text-border-strong shrink-0 select-none">
             {prefix}{tee}
@@ -115,7 +116,7 @@ function Row({
           <span className="shrink-0 text-text-muted">
             {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
           </span>
-          <span className="font-mono text-[11px] font-semibold text-text-primary truncate group-hover:text-accent-hover">
+          <span className="font-mono text-[11px] font-semibold text-text-primary truncate min-w-0 group-hover:text-accent-hover">
             {node.name}/
           </span>
         </button>
@@ -148,7 +149,7 @@ function Row({
         {prefix}{tee}
       </span>
       <FileCode2 size={11} className={`shrink-0 ${isSelected ? "text-accent-cyan" : "text-text-muted"}`} />
-      <span className={`font-mono text-[11px] truncate flex-1 ${isSelected ? "text-accent-cyan font-semibold" : "text-text-secondary"}`} title={node.path}>
+      <span className={`font-mono text-[11px] truncate min-w-0 flex-1 ${isSelected ? "text-accent-cyan font-semibold" : "text-text-secondary"}`} title={node.path}>
         {node.name}
       </span>
       {!hideDownload && (
@@ -171,7 +172,7 @@ function Row({
     return (
       <button
         onClick={() => onSelectFile(node.path)}
-        className={`w-full flex items-center gap-1 text-left rounded-sm transition-colors
+        className={`w-full min-w-0 flex items-center gap-1 text-left rounded-sm transition-colors overflow-hidden
           ${isSelected ? "bg-accent-cyan/10" : "hover:bg-bg-panel-alt"}`}
       >
         {fileRow}
@@ -180,7 +181,7 @@ function Row({
   }
 
   return (
-    <div className="w-full flex items-center gap-1 group hover:bg-bg-panel-alt rounded-sm">
+    <div className="w-full min-w-0 flex items-center gap-1 group hover:bg-bg-panel-alt rounded-sm overflow-hidden">
       {fileRow}
     </div>
   );
@@ -276,7 +277,7 @@ export default function FileTree({
         />
       </div>
 
-      <div className="overflow-y-auto max-h-64 -mx-1 px-1">
+      <div className="overflow-y-auto overflow-x-hidden max-h-64 -mx-1 px-1">
         {files.length === 0 ? (
           <p className="text-[11px] text-text-muted leading-relaxed">
             Load a repository to browse its files.
@@ -308,7 +309,7 @@ export default function FileTree({
   if (embedded) return <div className="flex flex-col gap-2 min-h-0">{body}</div>;
 
   return (
-    <section className="card p-4 flex flex-col gap-2">
+    <section className="card p-4 flex flex-col gap-2 overflow-hidden min-w-0">
       {body}
     </section>
   );

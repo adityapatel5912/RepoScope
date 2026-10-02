@@ -59,6 +59,42 @@ function InlineCode({ className, children, ...props }: React.HTMLAttributes<HTML
   return <code className={className} {...props}>{children}</code>;
 }
 
+/**
+ * Normalizes malformed markdown tables from LLM responses:
+ * 1. Restores newlines where table rows were joined together with `| |`.
+ * 2. Inserts missing GFM delimiter rows (`| :--- | :--- |`) if the model omitted them.
+ */
+function normalizeMarkdownTables(md: string): string {
+  if (!md || !md.includes("|")) return md;
+  const text = md.replace(/\|\s*\|/g, "|\n|");
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let inTable = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    out.push(line);
+
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
+      if (!inTable) {
+        inTable = true;
+        if (nextLine.startsWith("|") && !nextLine.includes("---")) {
+          const cols = trimmed.split("|").filter((_, idx, arr) => idx > 0 && idx < arr.length - 1).length;
+          if (cols > 0) {
+            out.push("|" + Array(cols).fill(" :--- ").join("|") + "|");
+          }
+        }
+      }
+    } else {
+      inTable = false;
+    }
+  }
+
+  return out.join("\n");
+}
+
 // ── Web Speech (mic) — optional capability ───────────────────────────────────
 interface SpeechRecognitionLike {
   lang: string;
@@ -460,7 +496,7 @@ export default function ChatPanel({
                             ),
                           }}
                         >
-                          {m.text}
+                          {normalizeMarkdownTables(m.text)}
                         </ReactMarkdown>
                       </div>
                     ) : busy && i === msgs.length - 1 ? (

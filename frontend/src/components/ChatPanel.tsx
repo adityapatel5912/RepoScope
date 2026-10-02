@@ -47,6 +47,7 @@ const EXAMPLE_PROMPTS = [
 // `path/to/file.ts:42` → citation chip (suppressed inside table cells)
 const CITATION_RE = /^[\w./@-]+\.[A-Za-z0-9]+(:\d+)?$/;
 const InTableContext = createContext(false);
+const PreContext = createContext(false);
 
 // Proper named component so useContext hook is valid
 function InlineCode({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) {
@@ -431,12 +432,17 @@ export default function ChatPanel({
                           remarkPlugins={[remarkGfm]}
                           components={{
                             code: ({ className, children, ...props }) => {
-                              // fenced code block or multiline code → CodeBlock; inline single-line → InlineCode
-                              const isBlock = Boolean(className) || String(children ?? "").includes("\n");
+                              // fenced code block, pre container, or multiline code → CodeBlock; inline single-line → InlineCode
+                              const inPre = useContext(PreContext);
+                              const isBlock = inPre || Boolean(className) || String(children ?? "").includes("\n");
                               if (isBlock) return <CodeBlock className={className}>{children}</CodeBlock>;
                               return <InlineCode className={className} {...props}>{children}</InlineCode>;
                             },
-                            pre: ({ children }) => <>{children}</>,
+                            pre: ({ children }) => (
+                              <PreContext.Provider value={true}>
+                                {children}
+                              </PreContext.Provider>
+                            ),
                             table: ({ children }) => (
                               <div className="md-table-wrap">
                                 <table>{children}</table>

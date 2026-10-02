@@ -459,6 +459,26 @@
   margin: 0.6rem 0;
   border-radius: 6px;
   border: 1px solid var(--border-muted);
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-muted) var(--panel-cream);
+}
+
+.md-table-wrap::-webkit-scrollbar {
+  height: 5px;
+  display: block;
+}
+.md-table-wrap::-webkit-scrollbar-track {
+  background: var(--panel-cream);
+  border-radius: 3px;
+}
+.md-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border-muted);
+  border-radius: 3px;
+}
+.md-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .md-body table {
@@ -472,10 +492,18 @@
 
 .md-body th, .md-body td {
   border: 1px solid var(--border-muted);
-  padding: 0.4rem 0.65rem;
+  padding: 0.45rem 0.7rem;
   text-align: left;
   vertical-align: top;
   word-break: break-word;
+}
+
+.md-body tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.md-body tbody tr:hover {
+  background: rgba(240, 80, 60, 0.04);
 }
 
 .md-body th {
@@ -484,8 +512,9 @@
   color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   white-space: nowrap;
+  border-bottom: 2px solid var(--border-muted);
 }
 
 /* Code inside table cells — plain mono, no chip styling */

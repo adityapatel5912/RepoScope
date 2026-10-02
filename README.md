@@ -4,7 +4,7 @@
 
 > See your repo. Understand it. Track it.
 
-**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/W82roIETJJ8](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF) · **📊 Pitch Deck:** [RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)
+**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/h1Fh6I6Yxac](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-) · **📊 Pitch Deck:** [RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)
 
 ![License](https://img.shields.io/badge/License-MIT-yellow) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688) ![IBM%20Bob](https://img.shields.io/badge/Built%20with-IBM%20Bob%20%2B%20Z%20Code-F0503C)
 
@@ -67,7 +67,7 @@ All screenshots are captured at **1600×900 (16:9)** and live in [`docs/screensh
 
 ## 🎬 Demo
 
-**[🎬 Demo Video](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)** · **[📊 Pitch Deck](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** ([PDF](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf))
+**[🎬 Demo Video](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-)** · **[📊 Pitch Deck](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** ([PDF](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf))
 
 [![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)
 
@@ -89,7 +89,7 @@ PAT in the sidebar (BYOK — stored in memory only, never written to disk).
 
 - 📊 **[RepoScope — Pitch Deck v3.0.pdf](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf)** — 10 slides (PDF)
 - 🎞️ **[RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** — editable presentation (PPTX)
-- 🎬 **[Demo Video](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)** — full walkthrough video
+- 🎬 **[Demo Video](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-)** — full walkthrough video
 - 🖼️ **[Thumbnail.png](./Thumbnail.png)** — video thumbnail
 
 [![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)

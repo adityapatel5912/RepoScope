@@ -295,6 +295,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Features](docs/FEATURES.md)
+- [v2.0 Roadmap & Plan](docs/ROADMAP_V2.md)
 - [Demo Script](docs/DEMO.md)
 - [Development](docs/DEVELOPMENT.md)
 - [Deployment](docs/DEPLOYMENT.md)

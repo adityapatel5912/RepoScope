@@ -88,29 +88,48 @@ failure you cannot distinguish from a product bug is worse than no gate.
 | J06 | The analysis endpoints serve the graph intelligence (hubs, cycles, unreachable) | ✅ implemented |
 | J07 | The churn heatmap overlay renders, and the layer legend stays readable | ✅ implemented |
 | J08 | The architecture cluster view renders | ✅ implemented |
-| J09 | Ask a question → SSE streams an answer with citation pills | ⬜ Sprint 3 |
-| J10 | Impact analysis → risk score and rings render | ⬜ Sprint 3 |
-| J11 | Code tour → steps render and advance | ⬜ Sprint 3 |
-| J12 | PR bot → markdown comment preview renders | ⬜ Sprint 3 |
-| J13 | Export PNG + SVG → downloads produced, non-zero size | ⬜ Sprint 3 |
-| J14 | File tree → filter narrows the list | ⬜ Sprint 3 |
-| J15 | BYOK → provider set, status bar reflects it | ⬜ Sprint 3 |
-| J16 | Student mode → 3 levels and quizzes render | ⬜ Sprint 3 |
-| J17 | Security scan → flags render, severity ordered | ⬜ Sprint 3 |
-| J18 | **Local mode** — `reposcope run .` boots, graph renders, file edit updates the graph **without reload** | ⬜ Sprint 3 |
-| J19 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ⬜ Sprint 4 |
-| J20 | **IDE deep link** — node click produces the exact expected URI per editor | ⬜ Sprint 4 |
-| J21 | **Call edges** — graph renders `calls` edges after the parser rewrite | ⬜ Sprint 3 |
-| J22 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ⬜ Sprint 3 |
-| J23 | **Churn heatmap** — hotspot rings distinct from the layer fill | ✅ implemented |
-| J24 | **Cycles** — cycle list matches the API result | ⬜ Sprint 3 |
-| J25 | **Repo map** — budgeted map renders, token reduction % shown | ⬜ Sprint 3 |
+| J09 | Ask a question → SSE streams an answer with citation pills | ⬜ Sprint 4 |
+| J10 | Impact analysis → risk score and rings render | ⬜ Sprint 4 |
+| J11 | Code tour → steps render and advance | ⬜ Sprint 4 |
+| J12 | PR bot → markdown comment preview renders | ⬜ Sprint 4 |
+| J13 | Export PNG + SVG → downloads produced, non-zero size | ⬜ Sprint 4 |
+| J14 | File tree → filter narrows the list | ⬜ Sprint 4 |
+| J15 | BYOK → provider set, status bar reflects it | ⬜ Sprint 4 |
+| J16 | Student mode → 3 levels and quizzes render | ⬜ Sprint 4 |
+| J17 | Security scan → flags render, severity ordered | ⬜ Sprint 4 |
+| J18 | **Local mode** — the LOCAL MODE badge shows, a file edit updates the graph **without a page reload** | ✅ implemented |
+| J19 | **Repo map** — the budgeted map renders and the token reduction % is shown | ✅ implemented |
+| J20 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ✅ backend-tested, ⬜ browser journey |
+| J21 | **IDE deep link** — node click produces the exact expected URI per editor | ⬜ Sprint 4 |
+| J22 | **Call edges** — graph renders `calls` edges after the parser rewrite | ⬜ Sprint 4 |
+| J23 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ⬜ Sprint 4 |
+| J24 | **Churn heatmap** — hotspot rings distinct from the layer fill | ✅ implemented |
+| J25 | **Cycles** — cycle list matches the API result | ⬜ Sprint 4 |
 | J26 | **PR boundary violation** — flagged in the PR comment | ⬜ Sprint 6 |
 | J27 | **SARIF** — valid against the 2.1.0 schema | ⬜ Sprint 6 |
 | J28 | **50k-file traversal** — latency budget met | ⬜ Sprint 7 |
 
-The ✅ journeys are the Sprint 0 foundation. The rest fill in as their
-sprints land.
+**11 journeys pass**, 0 console errors, 0 unexpected HTTP failures.
+
+Two of them are new in Sprint 3:
+
+- **J18 (local mode)** — loads a **writable copy** of a fixture, asserts the LOCAL MODE
+  badge is visible, edits a file, and asserts the graph's node count rises **without a page
+  reload**. The "without a reload" part is proved with a marker written onto `window`: a
+  reload would wipe it. It also checks the backend's own graph really contains the new
+  symbol — the browser is verified against the source, not against itself.
+
+  The copy matters. Editing the committed fixture would corrupt it for every later run,
+  and the failure would look like a product bug.
+
+- **J19 (repo map)** — asserts the reduction percentage is a real number, and that the
+  API's own answer agrees with the panel: the map is inside its token budget, the baseline
+  is non-zero, and the map names files, symbols and layers.
+
+> **One assertion in J18 was rewritten after it failed for the WRONG reason.** It originally
+> counted the ReactFlow nodes in the DOM. ReactFlow only renders what is in the viewport,
+> so adding a symbol reflows the pyramid and changes which nodes are on screen — the count
+> went *down*. The graph's own node count is the honest signal.
 
 ## The role of each MCP server
 
@@ -129,6 +148,9 @@ non-deterministic and non-reproducible — the opposite of QA.
 
 | Severity | Defect | Status |
 |---|---|---|
+| **P1** | **The analysis endpoints and the UI could describe DIFFERENT codebases.** Two sources for "the current graph" — the live session and the orchestrator's cache — and a request could read one from each. The repo-map panel showed a map for one repository beside a "full repository" figure for another. | ✅ Fixed — one function, `orchestrator.current_graph()`, returns the graph and the root it describes. Guarded by `backend/tests/test_graph_source.py` |
+| **P1** | **The QA gate could test YESTERDAY'S BUILD.** `start_backend()` reused any server already listening on :8010. The backend IS the thing under test, so a QA run against someone else's server tested an hour-old build — and could be green while the code on disk was broken. | ✅ Fixed — the harness now takes its ports from whatever was there and always starts its own servers |
+| **P1** | **The QA run wrote to the developer's real state file**, and the stale state made the QA server resume a session over the developer's own repository. | ✅ Fixed — in QA mode the state lives in the temp directory, and the server never resumes a session |
 | **P1** | **Loading a second repository kept serving the first one's graph.** The orchestrator's graph cache was never invalidated when the active repo changed, so the analysis endpoints and the UI described a codebase that was no longer loaded. | ✅ Fixed — `orchestrator.clear_graph_cache()` |
 | **P2** | **Duplicate node ids.** Four `__init__` methods in one file all produced the id `func:<rel>:__init__`. Duplicate ids break React list keys in the graph renderer and corrupt the graph store. Found by the vendored real-world fixture. | ✅ Fixed — colliding names now get a deterministic `@{lineno}` suffix |
 | **P2** | **Root node painted under the sticky header.** `fitView` clamped its zoom at 0.3, could not fit a tall pyramid, and centred the overflow. The top 24px was under the TopBar (`z-50`): the root node was clipped and unclickable. | ✅ Fixed — the fit-view floor now matches the `minZoom` prop (0.2). Guarded by journey J05. |

@@ -95,10 +95,82 @@ def wait_for(url: str, timeout: int = BOOT_TIMEOUT, label: str = "") -> bool:
     return False
 
 
+def pids_on_port(port: int) -> list[int]:
+    """The PIDs of the processes listening on a TCP port."""
+    try:
+        import psutil
+    except ImportError:
+        return []
+
+    pids: list[int] = []
+    try:
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.laddr and getattr(conn.laddr, "port", None) == port and conn.pid:
+                pids.append(int(conn.pid))
+    except Exception:  # noqa: BLE001 - needs elevation on some systems
+        # Fall back to netstat, which does not.
+        try:
+            output = subprocess.run(
+                ["netstat", "-ano"], capture_output=True, text=True, timeout=20
+            ).stdout
+            for line in output.splitlines():
+                if f":{port}" in line and "LISTENING" in line.upper():
+                    parts = line.split()
+                    if parts and parts[-1].isdigit():
+                        pids.append(int(parts[-1]))
+        except Exception:  # noqa: BLE001
+            return []
+    return sorted(set(pids))
+
+
+def free_port(port: int) -> None:
+    """
+    Make sure a port is free, taking it from whatever is holding it.
+
+    **This is the difference between a gate and a decoration.** The
+    harness used to reuse any server it found on :8010. That sounds
+    convenient and is actually dangerous: the backend IS the thing under
+    test, so a QA run against a server somebody started an hour ago
+    tests an hour-old build. It can be green while the code on disk is
+    broken — and the failure then shows up as "the suite passed but the
+    feature is broken", which is the worst possible outcome.
+
+    So the harness always starts its own servers, and takes the ports
+    from whatever was there. :8010 and :5183 belong to the harness.
+    """
+    if not port_is_open(port):
+        return
+
+    pids = pids_on_port(port)
+    if not pids:
+        log(
+            f"  port :{port} is in use but its owner could not be found — "
+            "close it and re-run",
+            Colours.YELLOW,
+        )
+        return
+
+    log(f"  port :{port} is in use — stopping the process that owns it", Colours.YELLOW)
+    for pid in pids:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True, timeout=30,
+            )
+        else:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except Exception:  # noqa: BLE001
+                pass
+
+    for _ in range(20):
+        if not port_is_open(port):
+            return
+        time.sleep(0.25)
+
+
 def start_backend() -> subprocess.Popen | None:
-    if port_is_open(BACKEND_PORT):
-        log(f"  backend already running on :{BACKEND_PORT}", Colours.DIM)
-        return None
+    free_port(BACKEND_PORT)
     env = dict(os.environ)
     env["REPOSCOPE_QA"] = "1"
     env["PYTHONPATH"] = str(BACKEND_DIR)
@@ -115,9 +187,7 @@ def start_backend() -> subprocess.Popen | None:
 
 
 def start_frontend() -> subprocess.Popen | None:
-    if port_is_open(FRONTEND_PORT):
-        log(f"  frontend already running on :{FRONTEND_PORT}", Colours.DIM)
-        return None
+    free_port(FRONTEND_PORT)
     npm = "npm.cmd" if os.name == "nt" else "npm"
     env = dict(os.environ)
     # The Vite dev server proxies /api to :8000 by default. Point it at the

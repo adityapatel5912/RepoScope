@@ -2175,13 +2175,9 @@ noise, so the actual architecture was invisible.
 
 ## 27. Sprint 3 — local mode, incremental indexing, and the repo map
 
-**Status: BACKEND COMPLETE · FRONTEND AND QA OUTSTANDING.** The backend of Sprint 3 is
-committed and verified. The frontend surface (the LOCAL MODE badge, the live-update
-subscription, the repo-map panel) and the two new QA journeys (J12, J19) are **not done**.
-Sprint 3 is **not closed** — the demo checkpoint for it ("`reposcope run .` on a local repo;
-graph updates live on edit") has not been run end to end in a browser.
-
-This section is the handover. Everything below was built and measured; nothing below is a plan.
+**Status: COMPLETE.** Shipped 2026-10-21. The backend, the frontend surface, and the two
+new QA journeys are all in, and the demo checkpoint — `reposcope run .` on a local
+repository, with the graph updating live on edit — has been run in a real browser.
 
 ### 27.1 What was built
 
@@ -2200,6 +2196,10 @@ This section is the handover. Everything below was built and measured; nothing b
 | SQLite graph store (stdlib `sqlite3`) | `backend/graph_store.py` | 6.1 |
 | A working MCP server (stdio + Streamable HTTP) | `backend/mcp_server/` | 3 (partial) |
 | The benchmark runner | `benchmarks/run.py` | 8.1 |
+| The LOCAL MODE badge | `frontend/src/components/TopBar.tsx` | 2.2 |
+| The live-update subscription | `frontend/src/api/local.ts`, `frontend/src/App.tsx` | 2.2 |
+| The context-savings panel | `frontend/src/components/RepoMapPanel.tsx` | 8.1 |
+| QA journeys J12 and J19 | `frontend/tests/e2e/journeys.spec.ts` | — |
 
 ### 27.2 The design decision that makes the rest work
 
@@ -2276,25 +2276,72 @@ known limitation, not a mystery.
 | **P2** | **The summary reported the pre-dedupe edge count.** `54 nodes, 156 edges` where the graph had 125 edges. The golden test caught it. | **Fixed** |
 | **P2** | **The grammar-free fallback produced a different graph from tree-sitter.** The fallback resolved imports eagerly, per alias; tree-sitter resolved them lazily, per statement. The two paths disagreed for the same repository. | **Fixed** — the fallback now emits the same unresolved-import shape and is resolved by the same code |
 | **P3** | `@app.on_event("startup")` is deprecated in FastAPI. | **Fixed** — replaced with a `lifespan` context manager |
+| **P3** | The graph screenshot script waited for `networkidle`, which never fires in local mode — the app holds an open SSE stream. | **Fixed** — it waits for `load` and then for the graph itself |
+| **P1** | **The analysis endpoints and the UI could describe DIFFERENT codebases.** There were two sources for "the current graph" — the live session and the orchestrator's cache — and a request could read one from each. The repo-map panel showed a map built from the live session's graph (7.9k tokens, the RepoScope repository) beside a "full repository" figure measured against the state file's root (1.3k tokens, a nine-file fixture). Both numbers were true; the claim they supported was nonsense. | **Fixed** — one function, `orchestrator.current_graph()`, returns the graph AND the root it describes. Guarded by `backend/tests/test_graph_source.py` |
+| **P1** | **The QA run wrote to the developer's real state file.** `data/repo_state.json` was shared, so the QA harness left behind whatever fixture it loaded last — and, worse, the state said `is_local: true` with the developer's own repository, so the QA backend RESUMED that session at start-up and answered questions about a codebase the journeys knew nothing about. | **Fixed** — in QA mode the state lives in the temp directory, and the server never resumes a session |
+| **P1** | **The incremental index DELETED the edited file from the graph.** `apply()` removed the changed file's nodes and never re-added them, so the graph SHRANK on every edit — 24 nodes to 22, with a dangling `imports` edge pointing at a node that no longer existed. The watcher published it, the SSE stream delivered it, the browser rendered it, and every unit test passed. The graph was simply wrong. | **Fixed** — and guarded by `backend/tests/test_incremental.py`, which asserts that an incremental update produces **the same graph a full rebuild would** after every kind of change |
+| **P1** | **Call edges to a file that sorts later were silently dropped.** The indexer resolved calls as each file was added, so `Card.tsx` calling `formatName` could not resolve until `format.ts` had been added. The full rebuild does two passes; the indexer did not. | **Fixed** — `index()` now resolves calls in a second pass, like the full rebuild |
+| **P1** | **The QA gate could test YESTERDAY'S BUILD.** `start_backend()` reused any server already listening on :8010. The backend IS the thing under test, so a QA run against someone else's server tested an hour-old build — and could be green while the code on disk was broken. | **Fixed** — the harness now takes its ports from whatever was there and always starts its own servers |
+| **P2** | **The watcher re-indexed on its own log file.** Every API request writes a log line, the watcher fired, and the index was rebuilt — a 300 ms re-index per request, for a file the user did not write. | **Fixed** — the watcher ignores RepoScope's own output |
+| **P2** | **`reposcope run .` reported 63,585 files for a 384-file repository.** The file counter excluded only `.git`, so it counted `node_modules`. The indexer and the counter disagreed because they used different skip lists. | **Fixed** — one shared `SKIP_DIRS`, in the lowest-level module both import |
+| **P2** | **Loading a second repository left `is_local` set**, so the UI kept showing the LOCAL MODE badge over a GitHub clone, and the live-update stream stayed open over a snapshot that never changes. | **Fixed** — `load_repo` clears the flag; a stale live session is detached when the root changes |
+| **P2** | **`/` served the health JSON, not the app.** `reposcope run .` mounts the built frontend, but the root route always redirected to `/api/health`. | **Fixed** — the root serves `index.html` when `REPOSCOPE_STATIC_DIR` is set |
 
-### 27.6 What is NOT done — the Sprint 3 remainder
+### 27.6 The demo checkpoint, run
 
-1. **The frontend.** No LOCAL MODE badge, no live-update subscription, no repo-map panel.
-   The backend pushes `context` events on `GET /api/local/events` and the frontend's existing
-   `handleContext` already knows how to render one — so the work is a small `EventSource`
-   subscription, not a new rendering path.
-2. **QA journeys J12 and J19.** The QA router already supports
-   `POST /api/qa/load-fixture?copy=true&watch=true`, which loads a **writable copy** of a
-   fixture and starts the watcher — so J12 can edit a file and assert the graph updates
-   without touching a committed fixture.
-3. **`reposcope run .` has never been run in a browser.** The CLI serves the API and mounts
-   `frontend/dist` when it exists, but the built frontend has not been exercised through it.
-4. **The MCP server is only partly done.** All four tools work and the stdio handshake
-   succeeds, but the server has no test suite, no `reposcope://` resources, and the HTTP
-   transport has not been exercised. Sprint 4 completes it.
-5. **Betweenness is still computed eagerly** — see §27.4.
+`reposcope run .` on the RepoScope repository itself, in a real browser:
 
-### 27.7 Notes for the next agent
+```
+RepoScope - local mode
+  repository : D:\Aditya\Hackathon Projects\RepoScope
+  files      : 384
+  serving on : http://127.0.0.1:4100
+  frontend   : D:\Aditya\Hackathon Projects\RepoScope\frontend\dist
+  watching   : on (the graph updates as you edit)
+  nothing from this repository leaves your machine.
+```
+
+The graph rendered as an **architecture density map** — six rank bands, colour by layer,
+1,365 nodes and 1,951 edges — with **zero console errors**.
+
+The live update, measured on that repository:
+
+| Action | Result |
+|---|---|
+| 5 API requests | **0** re-indexes (the log-file fix) |
+| Adding `scratch_live_probe.py` | 1 re-index, 199 ms, 1,363 nodes |
+| Deleting it | back to 1,361 nodes |
+
+The 199 ms is the betweenness cost of §27.4, not the re-parse.
+
+### 27.7 The QA journeys
+
+| Journey | What it asserts |
+|---|---|
+| **J12** | The LOCAL MODE badge is visible; editing a file in a **writable copy** of a fixture raises the graph's node count **without a page reload** (proved with a marker on `window`); the backend's own graph really contains the new symbol; zero console errors |
+| **J19** | The Agent-context panel renders, the reduction percentage is a real number, and the API's own answer agrees with it: the map is within its token budget, the baseline is non-zero, and the map names files, symbols and layers |
+
+J12 uses a COPY of the fixture on purpose. Editing the committed fixture would corrupt it
+for every later run, and the failure would look like a product bug.
+
+One assertion in J12 was rewritten after it failed for the wrong reason: it originally
+counted the ReactFlow nodes in the DOM. ReactFlow only renders what is in the viewport, so
+adding a symbol REFLOWS the pyramid and changes which nodes are on screen — the count went
+*down*. The graph's own node count is the honest signal, and the Repository card shows it.
+
+### 27.8 What is NOT done — carried into Sprint 4
+
+1. **Betweenness is still computed eagerly** — see §27.4. It is the one thing that makes
+   the live update feel slow on a repository of more than a few hundred files.
+2. **The MCP server has no `reposcope://` resources** and the Streamable HTTP transport has
+   not been exercised. Sprint 4 completes it.
+3. **The frontend has no way to OPEN a local folder.** The CLI does it; the browser cannot
+   hand the server a path it does not know. `POST /api/local/load` exists, so the UI only
+   needs a field for it.
+4. **The `.reposcope.yml` loader is not surfaced in the UI** beyond the rules endpoint.
+5. **Visual-regression baselines (`toHaveScreenshot()`) are still not wired up.**
+
+### 27.9 Notes for the next agent
 
 - **The MCP server is a client of the GraphStore, not a second parser.** `load_index()` in
   `backend/mcp_server/server.py` reads `.reposcope/graph.json` and builds it only if it is
@@ -2303,8 +2350,11 @@ known limitation, not a mystery.
   it; a new event name would mean a new frontend path.
 - **The `EventBus` keeps only the latest payload per subscriber.** A graph is a snapshot,
   not a stream of deltas.
-- **`.reposcope/` is gitignored** and skipped by the parser.
-- **`main.py` is 1,023 lines** — the 1,200 cap still holds.
+- **`.reposcope/` is gitignored** and skipped by the parser. The skip list lives in
+  `backend/parse_cache.py` — one copy, imported by both the indexer and the file counter.
+- **`main.py` is 1,047 lines** — the 1,200 cap still holds.
+- **The QA harness takes its ports.** If something else is on :8010 or :5183, the harness
+  stops it. That is deliberate: a gate that tests unknown code is worse than no gate.
 
 
 

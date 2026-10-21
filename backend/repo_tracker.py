@@ -4,10 +4,23 @@ Manages local state for the currently-loaded repo.
 Persists to data/repo_state.json so state survives restarts.
 """
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 STATE = Path(__file__).parent.parent / "data" / "repo_state.json"
+
+if os.getenv("REPOSCOPE_QA") == "1":
+    # A QA run must not touch the developer's real state.
+    #
+    # It used to: the QA harness loaded fixture repositories into
+    # `data/repo_state.json`, overwriting whatever the developer had
+    # loaded — and, worse, the state said `is_local: true` with the
+    # developer's own repository, so the QA backend RESUMED that
+    # session at start-up and answered questions about a codebase the
+    # journeys knew nothing about.
+    STATE = Path(tempfile.gettempdir()) / "reposcope-qa" / "repo_state.json"
 
 _EMPTY_STATE: dict = {
     "repo": None,

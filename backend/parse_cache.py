@@ -63,6 +63,22 @@ DEFAULT_MAX_ENTRIES = 20_000
 #: Read files in chunks so a 200 MB binary does not have to fit in memory.
 _CHUNK = 64 * 1024
 
+#: Directories the indexer never descends into.
+#:
+#: This list lives here, in the lowest-level module both the indexer and
+#: the repository loader import, so the two can never disagree. When
+#: they DID disagree — the loader counting `node_modules` and the
+#: indexer skipping it — `reposcope run .` reported 63,585 files for a
+#: repository with 244 of them.
+SKIP_DIRS = frozenset({
+    "node_modules", ".git", "dist", "build", "__pycache__",
+    ".venv", "venv", ".mypy_cache", ".pytest_cache",
+    # RepoScope's own index lives here. Without this the graph would
+    # index its own cache and the graph store, and every re-index would
+    # see a "changed" file.
+    ".reposcope",
+})
+
 
 def hash_bytes(data: bytes) -> str:
     """The SHA-256 of a byte string."""

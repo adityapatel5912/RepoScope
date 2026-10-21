@@ -12,6 +12,7 @@ import type { TourGraphState } from "./components/GraphView";
 import { FolderTree, MessageSquare, ChevronDown } from "lucide-react";
 import { getGraph, getStatus } from "./api/client";
 import type { ContextPayload } from "./api/client";
+import { streamLocalEvents } from "./api/local";
 
 type Mode = "understanding" | "tracking" | "incident";
 
@@ -91,6 +92,16 @@ export default function App() {
   const [debugMode,   setDebugMode]   = useState(false);
   const [prefill,     setPrefill]     = useState<string | undefined>(undefined);
   const [studentMode, setStudentMode] = useState(loadStudentMode);
+  /**
+   * True when the loaded repository is a local directory.
+   *
+   * It drives the LOCAL MODE badge and the live-update subscription. Both
+   * are local-mode-only: a repository cloned from GitHub is a snapshot in
+   * a temp directory, and there is nothing to watch.
+   */
+  const [isLocal, setIsLocal] = useState(false);
+  /** A short label for the last live-graph update, shown in the status bar. */
+  const [liveUpdate, setLiveUpdate] = useState<string | null>(null);
 
   // Tour + impact graph highlighting
   const [highlightNode, setHighlightNode]       = useState<string | null>(null);
@@ -174,6 +185,10 @@ export default function App() {
             readme_length: readme.length || undefined,
           });
         }
+        // `is_local` is set by `load_local_repo` — the CLI's path. It is
+        // what tells the UI to show the privacy badge and to subscribe to
+        // the live-graph stream.
+        setIsLocal(Boolean(status?.is_local));
         if (graph?.nodes?.length) {
           setRawNodes(graph.nodes);
           setRawEdges(graph.edges ?? []);
@@ -252,6 +267,66 @@ export default function App() {
     setContextInfo(ctx);
   }, []);
 
+  // ── Live graph (local mode) ───────────────────────────────────────────────
+  //
+  // The backend watches the repository and pushes a fresh `context` event
+  // whenever it re-indexes. The payload has the SAME shape as the chat
+  // stream's `context` event, so the existing handler renders it — there
+  // is no second rendering path, which is why the live graph needed no
+  // changes to the graph components.
+  //
+  // The stream is only opened in local mode. A repository cloned from
+  // GitHub is a snapshot; there is nothing to watch.
+  useEffect(() => {
+    if (!isLocal) return;
+
+    const controller = new AbortController();
+    let closed = false;
+
+    void streamLocalEvents(
+      {
+        onContext: (live) => {
+          if (closed) return;
+          setRawNodes(live.nodes ?? []);
+          setRawEdges(live.edges ?? []);
+          // The counts must move with the graph. The Repository card
+          // shows the node and edge counts, and a live update that left
+          // them stale would tell the user the graph had not changed —
+          // while the canvas silently showed a different one.
+          setRepoInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  node_count: live.node_count ?? prev.node_count,
+                  edge_count: live.edge_count ?? prev.edge_count,
+                }
+              : prev,
+          );
+          const changed = live.changed?.length ?? 0;
+          const removed = live.removed?.length ?? 0;
+          setLiveUpdate(
+            `live: ${changed} changed${removed ? `, ${removed} removed` : ""}` +
+              (live.duration_ms ? ` in ${live.duration_ms.toFixed(0)} ms` : ""),
+          );
+        },
+        onReady: () => {
+          if (!closed) setLiveUpdate("watching for changes");
+        },
+        onError: (message) => {
+          if (!closed) setLiveUpdate(message);
+        },
+      },
+      controller.signal,
+    ).then(() => {
+      if (!closed) setLiveUpdate("live updates stopped");
+    });
+
+    return () => {
+      closed = true;
+      controller.abort();
+    };
+  }, [isLocal]);
+
   return (
     <div className="relative flex flex-col h-screen overflow-hidden bg-bg-base">
       <Toasts />
@@ -271,6 +346,7 @@ export default function App() {
         onShowShortcuts={() => setShowShortcuts(true)}
         loader={loader}
         onClearRepo={clearRepo}
+        isLocal={isLocal}
         onToggleSidebar={() => {
           setSidebarCollapsed((v) => {
             const next = !v;
@@ -423,6 +499,7 @@ export default function App() {
         repoInfo={repoInfo}
         lastEvent={lastEvent}
         tokenCount={tokenCount}
+        liveUpdate={liveUpdate}
       />
 
       {/* Keyboard shortcuts cheat sheet */}

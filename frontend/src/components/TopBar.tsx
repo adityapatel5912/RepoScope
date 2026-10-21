@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
@@ -18,6 +18,15 @@ interface Props {
   loader: RepoLoader;
   onClearRepo: () => void;
   onToggleSidebar?: () => void;
+  /**
+   * True when the loaded repository is a local directory.
+   *
+   * Local mode is a PRIVACY promise, so it is stated on screen rather
+   * than buried in a settings page: nothing from this repository has
+   * left the machine. A user who is about to paste a private codebase
+   * into a chat needs to see that at a glance.
+   */
+  isLocal?: boolean;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -28,7 +37,7 @@ const MODES: { id: Mode; label: string }[] = [
 
 export default function TopBar({
   repo, mode, onModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
-  onShowShortcuts, loader, onClearRepo, onToggleSidebar,
+  onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipEditing, setChipEditing]   = useState(false);
@@ -152,6 +161,27 @@ export default function TopBar({
           </button>
         )}
       </div>
+
+      {/* ── LOCAL MODE badge ──
+          The privacy promise, stated where the user can see it before
+          they paste anything private into a chat. */}
+      {isLocal && (
+        <div className="shrink-0">
+          <span
+            data-testid="local-mode-badge"
+            title="Local mode — this repository is analysed on your machine. Nothing from it has been uploaded, and no GitHub request is made."
+            className="
+              flex items-center gap-1 px-2 py-1 rounded-full
+              bg-accent-emerald/10 border-[1.5px] border-accent-emerald/40
+              text-[10px] font-bold uppercase tracking-wider text-accent-emerald
+              whitespace-nowrap
+            "
+          >
+            <ShieldCheck size={11} />
+            <span className="hidden sm:inline">Local mode</span>
+          </span>
+        </div>
+      )}
 
       {/* ── Right: mode pills + icon buttons ── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">

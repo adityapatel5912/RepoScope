@@ -212,6 +212,38 @@ First Issue generator mines its beginner-friendly contributions.
 
 ## 🚀 Quick Start
 
+### The fast way — point it at a folder, nothing leaves your machine
+
+```bash
+pip install reposcope
+
+cd /path/to/your/repo
+reposcope run .
+```
+
+That is the whole thing. No GitHub account, no personal access token, no push, no
+upload — the repository is parsed on your machine and the map is served on
+`http://127.0.0.1:4100`. **Edit a file and the graph updates on its own.**
+
+```
+RepoScope - local mode
+  repository : /path/to/your/repo
+  files      : 384
+  serving on : http://127.0.0.1:4100
+  watching   : on (the graph updates as you edit)
+  nothing from this repository leaves your machine.
+```
+
+Other commands:
+
+```bash
+reposcope index .              # write the index, no server
+reposcope index . --format sqlite
+reposcope mcp .                # serve the graph over MCP (stdio)
+```
+
+### The full stack
+
 ```bash
 # 1. Clone
 git clone https://github.com/adityapatel5912/RepoScope.git
@@ -232,6 +264,35 @@ npm run dev
 
 # 5. Open http://localhost:5173 and click a demo repo
 ```
+
+---
+
+## 📉 What RepoScope saves an agent
+
+An agent that wants to understand a repository normally reads the whole thing. RepoScope
+already has the answer — it has parsed every file, resolved every symbol, and computed a
+PageRank over the dependency graph — so it can hand the agent a map instead.
+
+**Measured, not claimed.** The numbers below come from `benchmarks/run.py` over 14
+repositories (4 local fixtures and 10 public ones); the raw output is committed under
+`benchmarks/results/`.
+
+| Repository | Files | Nodes | Full context | RepoScope map | Reduction |
+|---|---:|---:|---:|---:|---:|
+| `psf/black` | 544 | 3,753 | 2,006,931 | 7,926 | **99.6%** |
+| `Textualize/rich` | 582 | 2,649 | 2,971,154 | 7,920 | **99.7%** |
+| `psf/requests` | 159 | 937 | 2,632,160 | 3,989 | **99.8%** |
+| `pallets/click` | 207 | 2,256 | 537,806 | 7,840 | **98.5%** |
+| `encode/httpx` | 154 | 1,365 | 348,904 | 5,192 | **98.5%** |
+
+Reproduce them yourself:
+
+```bash
+python benchmarks/run.py
+```
+
+The map is ranked by the same PageRank score the pyramid uses, so the files that matter
+come first, and the token budget drops the least useful files first.
 
 ---
 

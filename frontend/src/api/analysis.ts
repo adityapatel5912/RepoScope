@@ -138,6 +138,56 @@ export async function getHubs(limit = 15): Promise<HubsResponse> {
   return _json(await _fetchWithTimeout(`${BASE}/api/analysis/hubs?limit=${limit}`));
 }
 
+// ── Repo map ────────────────────────────────────────────────────────────────
+
+/**
+ * One file in the repo map.
+ *
+ * The map is the graph rendered for a reader that is not looking at a
+ * canvas: the files that matter, the symbols they define, and the layer
+ * each one belongs to.
+ */
+export interface RepoMapEntry {
+  path: string;
+  layer: string;
+  score: number;
+  symbols: string[];
+  tokens: number;
+}
+
+export interface RepoMapResponse {
+  available: boolean;
+  reason: string;
+  /** The plain-text map — the form that goes into a prompt. */
+  text: string;
+  header: string;
+  entries: RepoMapEntry[];
+  /** The cost of the map. */
+  tokens: number;
+  budget_tokens: number;
+  files_included: number;
+  files_total: number;
+  budget_exhausted: boolean;
+  /** What the whole repository would cost an agent to read. */
+  full_context_tokens: number;
+  /** The difference, as a percentage. */
+  reduction_pct: number;
+  baseline: {
+    tokens: number;
+    files_measured: number;
+    files_total: number;
+    truncated: boolean;
+    bytes_measured: number;
+  };
+  root: string | null;
+}
+
+export async function getRepoMap(budget = 8000): Promise<RepoMapResponse> {
+  return _json(
+    await _fetchWithTimeout(`${BASE}/api/analysis/repo-map?budget=${budget}`),
+  );
+}
+
 // ── Heatmap scale ───────────────────────────────────────────────────────────
 
 /**

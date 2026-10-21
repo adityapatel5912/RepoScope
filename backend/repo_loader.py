@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 
 from repo_tracker import load_state, save_state
+from parse_cache import SKIP_DIRS
 
 log = logging.getLogger("reposcope.repo_loader")
 
@@ -131,11 +132,19 @@ def load_repo(url: str, user_token: str | None = None) -> dict:
     s["local_path"] = str(dest)
     s["readme"] = readme
     s["file_count"] = file_count
+    # A repository cloned from GitHub is NOT local mode. The flag has to be
+    # cleared explicitly: the state file persists between loads, so
+    # without this a local repository loaded earlier would leave the UI
+    # showing the LOCAL MODE badge over a GitHub clone — and the
+    # live-update stream would stay open over a snapshot that never
+    # changes.
+    s["is_local"] = False
     save_state(s)
 
     # The active repository changed — the cached graph now describes a
     # different codebase.
     clear_graph_cache()
+    _detach_stale_session(str(dest))
 
     log.info("Repo loaded: %s/%s  files=%d", owner, name, file_count)
     return {
@@ -182,7 +191,7 @@ def load_local_repo(path: str) -> dict:
     file_count = sum(
         1
         for f in root.rglob("*")
-        if f.is_file() and ".git" not in f.parts
+        if f.is_file() and not (SKIP_DIRS & set(f.relative_to(root).parts))
     )
 
     name = root.name or "local"
@@ -198,6 +207,7 @@ def load_local_repo(path: str) -> dict:
     # The active repository changed — the cached graph now describes a
     # different codebase.
     clear_graph_cache()
+    _detach_stale_session(str(root))
 
     log.info("Local repo loaded: %s  files=%d", root, file_count)
     return {
@@ -208,3 +218,22 @@ def load_local_repo(path: str) -> dict:
         "readme_length": len(readme),
         "is_local": True,
     }
+
+
+def _detach_stale_session(root: str) -> None:
+    """
+    Release a live session that points at a DIFFERENT repository.
+
+    The live session owns the graph the app serves. If a second
+    repository is loaded while a session is attached to the first, the
+    app would keep serving the FIRST repository's graph — the same class
+    of bug as the stale graph cache, but with the live index on top of
+    it.
+    """
+    try:
+        from watcher import session
+
+        if session.root and session.root != root:
+            session.detach()
+    except Exception:  # noqa: BLE001 - the watcher is an optimisation
+        pass

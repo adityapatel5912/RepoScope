@@ -10,6 +10,7 @@ import ImpactPanel, { type ImpactRequest } from "./ImpactPanel";
 import AIKeyPanel from "./AIKeyPanel";
 import OnboardingPath from "./OnboardingPath";
 import InsightsPanel from "./InsightsPanel";
+import RepoMapPanel from "./RepoMapPanel";
 import { toast } from "./Toasts";
 import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
@@ -156,10 +157,14 @@ export default function LeftPanel({
               {stats.map(({ label, value }) => (
                 <div
                   key={label}
+                  data-testid={`stat-${label.toLowerCase()}`}
                   className="px-3 py-2 rounded-md bg-bg-panel-alt border border-border-hairline flex flex-col gap-0.5"
                 >
                   <span className="label-caps !text-[10px]">{label}</span>
-                  <span className="text-lg font-bold text-accent-cyan leading-tight">
+                  <span
+                    data-testid={`stat-value-${label.toLowerCase()}`}
+                    className="text-lg font-bold text-accent-cyan leading-tight"
+                  >
                     {value ?? "—"}
                   </span>
                 </div>
@@ -180,6 +185,14 @@ export default function LeftPanel({
           enabled={Boolean(repoInfo)}
           repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
           onSelectNode={onHighlightNode}
+        />
+      )}
+
+      {/* ── Agent context: what RepoScope's map costs vs the whole repo ── */}
+      {repoInfo && (
+        <RepoMapPanel
+          enabled={Boolean(repoInfo)}
+          repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
         />
       )}
 

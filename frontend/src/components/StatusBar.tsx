@@ -6,9 +6,11 @@ interface Props {
   repoInfo: { file_count?: number; loaded_at?: string } | null;
   lastEvent: string;
   tokenCount: number;
+  /** The live-index status, shown in local mode. */
+  liveUpdate?: string | null;
 }
 
-export default function StatusBar({ repo, repoInfo, lastEvent, tokenCount }: Props) {
+export default function StatusBar({ repo, repoInfo, lastEvent, tokenCount, liveUpdate }: Props) {
   const [health, setHealth] = useState<"ok" | "down" | "checking">("checking");
 
   useEffect(() => {
@@ -85,6 +87,21 @@ export default function StatusBar({ repo, repoInfo, lastEvent, tokenCount }: Pro
 
       {/* Token count */}
       <span className="shrink-0" title={`Tokens: ${tokenCount}`}>Tokens: <span className="text-accent-cyan font-mono">{tokenCount}</span></span>
+
+      {/* Live index — local mode only. It says what the watcher is
+          doing, so a user who just saved a file can see that the graph
+          was rebuilt for it. */}
+      {liveUpdate && (
+        <>
+          <span className="text-border-strong shrink-0">·</span>
+          <span
+            className="shrink-0 text-accent-emerald"
+            title="Live index — the graph is rebuilt automatically when a file changes"
+          >
+            {liveUpdate}
+          </span>
+        </>
+      )}
 
       {/* Right-aligned: last event timestamp */}
       <span className="ml-auto" />

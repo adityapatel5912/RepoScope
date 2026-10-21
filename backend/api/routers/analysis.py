@@ -31,30 +31,18 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
 def _current_graph() -> dict:
-    """The cached graph for the loaded repository."""
-    from orchestrator import get_cached_graph
+    """
+    The graph for the loaded repository.
 
-    graph = get_cached_graph()
-    if graph.get("nodes"):
-        return graph
+    It reads the SAME source as `/api/repo/graph` — the live session
+    when there is one, the orchestrator's cache otherwise. Two paths
+    meant an endpoint could answer about a different codebase than the
+    one on screen.
+    """
+    from orchestrator import current_graph
 
-    # The graph is built lazily — build it now if a repository is loaded.
-    state = load_state()
-    local_path = state.get("local_path")
-    if not local_path:
-        return {}
-
-    from graph_builder import build_graph_from_repo
-
-    try:
-        built = build_graph_from_repo(local_path)
-    except Exception:  # noqa: BLE001 - never fail an analysis endpoint
-        return {}
-
-    from orchestrator import _graph_cache
-
-    _graph_cache.update(built)
-    return built
+    graph, _root = current_graph()
+    return graph
 
 
 @router.get("/hotspots")
@@ -176,10 +164,15 @@ async def repo_map(budget: int = 8000):
     The number that matters is the reduction. `full_context_tokens` is
     what an agent pays to read the whole repository; `tokens` is what it
     pays to read this map instead.
+
+    The baseline is measured against the SAME repository the map was
+    built from. Measuring one against the other produces a figure that
+    is worse than useless — a map for one codebase compared against a
+    "full repository" count for another.
     """
-    state = load_state()
-    local_path = state.get("local_path")
-    graph = await asyncio.to_thread(_current_graph)
+    from orchestrator import current_graph
+
+    graph, root = await asyncio.to_thread(current_graph)
     if not graph:
         return {
             "available": False,
@@ -194,6 +187,6 @@ async def repo_map(budget: int = 8000):
     from repo_map import build_repo_map_with_metrics
 
     result = await asyncio.to_thread(
-        build_repo_map_with_metrics, graph, local_path, max(500, min(budget, 100_000))
+        build_repo_map_with_metrics, graph, root, max(500, min(budget, 100_000))
     )
     return {"available": True, **result}

@@ -55,6 +55,15 @@ log = logging.getLogger("reposcope.watcher")
 #: How long to wait after the last file event before re-indexing.
 DEFAULT_DEBOUNCE_MS = 500
 
+#: The directory RepoScope writes its OWN log to.
+#:
+#: The watcher must not treat the backend's log output as a change to
+#: the user's code. It did — every API request wrote a log line, the
+#: watcher fired, and the index was rebuilt. On a repository of a few
+#: hundred files that was a 300 ms re-index per request, for a file the
+#: user did not write.
+BACKEND_LOG_DIR = (Path(__file__).resolve().parent / "logs").resolve()
+
 try:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
@@ -170,6 +179,8 @@ class RepoWatcher:
             return
         if not rel or rel.split("/")[0] in self.ignore_dirs:
             return
+        if self._is_own_output(path):
+            return
 
         with self._lock:
             if event_type == "deleted" or event_type == "moved":
@@ -179,6 +190,18 @@ class RepoWatcher:
                 self._changed.add(rel)
                 self._removed.discard(rel)
             self._schedule_locked()
+
+    def _is_own_output(self, path: Path) -> bool:
+        """True when the path is RepoScope's own output, not the user's code."""
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return False
+        try:
+            resolved.relative_to(BACKEND_LOG_DIR)
+            return True
+        except ValueError:
+            return False
 
     def _schedule_locked(self) -> None:
         """(Re)start the debounce timer. Must be called with the lock held."""

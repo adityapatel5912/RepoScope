@@ -1853,4 +1853,64 @@ Deliverable: the diff + the qa.py output + the red/green demonstration.
 **The gate for closing any sprint: the QA suite is green, and every new journey has a committed
 screenshot.**
 
+---
+
+## 22. Sprint 0 delivery record
+
+**Status: complete.** Sprint 0 shipped on 2026-10-21. This section records what was actually
+built and measured, so the next agent does not re-derive it.
+
+### 22.1 Delivered
+
+| Deliverable | File | Notes |
+|---|---|---|
+| Backend rule source of truth | `backend/arch_rules.py` | 5 canonical layers, dependency policy, `.reposcope.yml` loader |
+| Router package | `backend/api/` | `register_routers(app)`; `routers/arch.py` → `GET /api/arch/rules`; `routers/qa.py` (QA-mode only) |
+| GraphStore | `backend/graph_store.py` | `GraphStore` Protocol + `JsonGraphStore`; validates the C10 contract on save |
+| Graph analysis | `backend/graph_analysis.py` | PageRank, betweenness, degree, SCC cycles, entry points, reachability, `top_hubs` |
+| Local ingest | `backend/repo_loader.py` | `load_local_repo(path)` — no clone, no PAT (also the CLI foundation) |
+| Fixtures | `backend/tests/fixtures/` | `multilang/`, `circular/`, `nested/`, `real_small/` (vendored MIT `tomli` 2.5.0) |
+| Golden gate | `backend/tests/test_graph_golden.py` | 4 snapshots; explicit regeneration only (`--regen-golden`) |
+| Parity gate | `backend/tests/test_arch_rules.py` | Runs the frontend's own rules via `scripts/parity_classify.js`; asserts zero divergence |
+| QA harness | `frontend/playwright.config.ts`, `frontend/tests/e2e/`, `scripts/qa.py` | 6 journeys, console/network gate, committed screenshots |
+| QA report | `docs/QA_REPORT.md` | What is covered — and explicitly what is not |
+| CI | `.github/workflows/qa.yml` | L1 unit → L2 contract → L3 journey |
+
+### 22.2 Verified numbers
+
+| Measure | Value |
+|---|---|
+| Backend tests | **128 passed** (was 38) |
+| QA journeys | **6 passed**, 0 console errors, 0 unexpected HTTP failures |
+| Backend line count | 1,123 → 1,131 (the 1,200 cap holds) |
+| Layer-rule parity | 90 corpus cases, **0 divergence** between `arch_rules.py` and `layerClassifier.ts` |
+| Fixture coverage | 4 repositories, 100 nodes, 86 edges pinned by golden snapshots |
+| New runtime deps | `networkx`, `pyyaml` (both already present in the environment) |
+
+### 22.3 Defects found by the safety net
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P2** | **Duplicate node ids.** Four `__init__` methods in one file collapsed to one id (`func:<rel>:__init__`). Duplicate ids break React list keys and corrupt the graph store. Surfaced by the vendored real-world fixture on day one. | **Fixed** — colliding names now receive a deterministic `@{lineno}` suffix; the id scheme is otherwise unchanged |
+| **P2** | **Root node painted under the sticky header.** `fitViewOptions.minZoom` (0.3) was HIGHER than the ReactFlow `minZoom` prop (0.2), so fitView clamped, could not fit a tall pyramid, and centred the overflow — the top 24px sat under the TopBar (`z-50`), clipping the root node and making it unclickable. | **Fixed** — the fit-view floor now matches the prop; guarded permanently by journey J05 |
+| **P2** | **Mojibake in the UI.** A PowerShell `Get-Content`/`Set-Content` round-trip re-encoded `GraphView.tsx` through Windows-1252; the UI rendered "multilang Â· Architecture". Invisible to unit tests and to the console gate — only a human reading the screenshot caught it. | **Fixed** — file restored from git and re-edited; `backend/tests/test_repo_encoding.py` now fails the build on any double-encoded file |
+| **P2** | **The node drawer covered the LAYERS legend.** Both were `absolute top-4 right-4`; the drawer (z-10) painted over the legend (z-5) and cut it in half. | **Fixed** — the legend yields while a node is selected and returns when the drawer closes |
+| **P3** | **The Repository card showed "—" for NODES and EDGES.** The graph counts were never copied into the repo info, on either the load path or the mount path. | **Fixed** — counts are taken from the graph itself |
+| **P3** | The ReactFlow canvas overlaps the header by 6px. Cosmetic — the canvas background sits behind the header's bottom edge. | ⬜ Not fixed (Sprint 0 scope) |
+
+### 22.4 Frontend changes made in Sprint 0
+
+| Change | Why |
+|---|---|
+| `App.tsx` — mount-time pickup of an already-loaded repo | **Required for local CLI mode.** `reposcope run .` loads the repo server-side, so the browser must show it on open instead of waiting for a GitHub URL. Previously `getGraph()` ran only after a form submission. |
+| `GraphView.tsx` — shared `FIT_VIEW_OPTIONS` constant | One place for the fit-view settings; the floor bug lived in three duplicated literals |
+| `vite.config.ts` — configurable API proxy target | The QA harness runs its own backend on :8010; the proxy target defaults to :8000 so normal dev is unchanged |
+
+### 22.5 Open items carried into Sprint 1
+
+- The frontend still holds a copy of the layer rules. The parity test enforces equivalence; migrating the frontend to consume `GET /api/arch/rules` is a Sprint 1 task.
+- Golden snapshots live in `backend/tests/golden/`, **not** inside the fixture directories — a snapshot stored inside a fixture becomes a graph node and makes the test self-referential. This bit us and is now documented in the test file.
+- Visual-regression baselines (`toHaveScreenshot()`) are specified but not yet wired up — see `docs/QA_REPORT.md`.
+- The ReactFlow canvas overlaps the header by 6px (cosmetic, P3, not fixed).
+
 

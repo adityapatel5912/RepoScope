@@ -1,0 +1,171 @@
+name: QA
+
+# Part III of docs/ROADMAP_V2.md — the four-layer gate.
+#
+#   L1 unit     -> pytest
+#   L2 contract -> httpx against a live uvicorn
+#   L3 journey  -> Playwright (nightly; browser download is slow for every PR)
+#   L4 visual   -> screenshots committed to docs/screenshots/v2/
+#
+# The journey layer is the one that catches the defects unit tests cannot
+# see — SVG NaN attributes, /api/* 404s, a blank canvas. It runs on every
+# push to main and on demand, and nightly for every branch, so a red suite
+# is still visible without paying the browser cost on every PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"   # nightly
+  workflow_dispatch:
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: L1 · unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install networkx pyyaml
+
+      - name: pytest
+        working-directory: backend
+        run: python -m pytest -q
+
+  contract:
+    name: L2 · API contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install networkx pyyaml
+
+      - name: Boot the API and assert the contract
+        working-directory: backend
+        env:
+          REPOSCOPE_QA: "1"
+        run: |
+          set -euo pipefail
+          python -m uvicorn main:app --host 127.0.0.1 --port 8010 --log-level warning &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8010/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+
+          echo "· /api/health"
+          curl -fsS http://127.0.0.1:8010/api/health | python -c "import json,sys; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
+
+          echo "· GET /api/arch/rules"
+          curl -fsS http://127.0.0.1:8010/api/arch/rules | python -c "
+          import json,sys
+          d = json.load(sys.stdin)
+          assert [l['id'] for l in d['layers']] == ['client','backend','storage','external','compute'], d
+          assert d['default_layer'] == 'backend', d
+          assert len(d['layer_rules']) == 5, d
+          assert d['config_errors'] == [], d
+          print('  ok:', len(d['layers']), 'layers,', len(d['layer_rules']), 'rules')
+          "
+
+          echo "· POST /api/qa/load-fixture"
+          curl -fsS -X POST "http://127.0.0.1:8010/api/qa/load-fixture?name=multilang" \
+            | python -c "import json,sys; d=json.load(sys.stdin); assert d.get('repo')=='multilang', d; print('  ok:', d['repo'], d['file_count'], 'files')"
+
+          echo "· GET /api/repo/graph"
+          curl -fsS http://127.0.0.1:8010/api/repo/graph | python -c "
+          import json,sys
+          d = json.load(sys.stdin)
+          assert len(d['nodes']) > 0, 'graph is empty'
+          assert len(d['edges']) > 0, 'graph has no edges'
+          ids = [n['id'] for n in d['nodes']]
+          assert len(ids) == len(set(ids)), 'duplicate node ids'
+          print('  ok:', len(d['nodes']), 'nodes,', len(d['edges']), 'edges')
+          "
+
+  journey:
+    name: L3 · browser journeys
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: unit
+    if: github.event_name != 'pull_request' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install networkx pyyaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install the Chromium browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the QA harness
+        run: python scripts/qa.py
+
+      - name: Upload the QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: |
+            qa-report/
+            frontend/test-results/
+          retention-days: 14
+
+      - name: Upload journey screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-screenshots
+          path: docs/screenshots/v2/
+          retention-days: 14

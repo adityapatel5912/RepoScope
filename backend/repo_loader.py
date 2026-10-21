@@ -131,3 +131,57 @@ def load_repo(url: str, user_token: str | None = None) -> dict:
 def _parse_github_url(url: str) -> tuple[str, str]:
     parts = url.rstrip("/").replace(".git", "").split("/")
     return parts[-2], parts[-1]
+
+
+def load_local_repo(path: str) -> dict:
+    """
+    Load a repository that is already on disk — no clone, no GitHub, no PAT.
+
+    This is what makes local mode possible (Milestone 2.2, the `reposcope`
+    CLI) and what makes the browser-QA harness hermetic: a QA run must not
+    depend on the network, because a network failure looks like a product
+    failure.
+
+    Every downstream feature (graph, chat, impact analysis, onboarding, the
+    PR bot) already reads `state["local_path"]`, so all of them light up
+    without further change.
+
+    Returns the same shape as `load_repo`.
+    """
+    root = Path(path).expanduser().resolve()
+    if not root.is_dir():
+        raise RuntimeError(f"Not a directory: {root}")
+
+    readme = ""
+    for name in ("README.md", "README.rst", "README.txt", "readme.md"):
+        candidate = root / name
+        if candidate.exists():
+            readme = candidate.read_text(errors="ignore")
+            log.info("README found: %s (%d chars)", name, len(readme))
+            break
+
+    file_count = sum(
+        1
+        for f in root.rglob("*")
+        if f.is_file() and ".git" not in f.parts
+    )
+
+    name = root.name or "local"
+    state = load_state()
+    state["repo"] = name
+    state["owner"] = ""
+    state["local_path"] = str(root)
+    state["readme"] = readme
+    state["file_count"] = file_count
+    state["is_local"] = True
+    save_state(state)
+
+    log.info("Local repo loaded: %s  files=%d", root, file_count)
+    return {
+        "local_path": str(root),
+        "owner": "",
+        "repo": name,
+        "file_count": file_count,
+        "readme_length": len(readme),
+        "is_local": True,
+    }

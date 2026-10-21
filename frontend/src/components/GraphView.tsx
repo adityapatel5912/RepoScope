@@ -63,6 +63,25 @@ const nodeTypes: NodeTypes = {
 
 // ── Canvas palette (A10: #FAF8FF container, #D9D2C0 dots) ───────────────────
 const CANVAS_BG  = "#FAF8FF";
+
+/**
+ * Shared fit-view options.
+ *
+ * The floor MUST match the ReactFlow `minZoom` prop (0.2). It used to be
+ * 0.3, which was HIGHER than the prop — so when the pyramid was taller
+ * than the canvas, fitView clamped the zoom at 0.3, could not fit the
+ * content, and centred the overflow. The overflow at the top was painted
+ * under the sticky TopBar (z-50), which clipped the root node and made it
+ * unclickable.
+ *
+ * Measured by the browser-QA harness (journey J05): the root node
+ * overlapped the header by 24px before this fix.
+ */
+const FIT_VIEW_OPTIONS = {
+  padding: 0.15,
+  minZoom: 0.2,
+  maxZoom: 0.9,
+} as const;
 const DOT_COLOR  = "#D9D2C0";
 
 // ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
@@ -732,7 +751,7 @@ function GraphInner({
       timer = window.setTimeout(() => {
         const ns = nodesRef.current;
         if (ns.length === 0) return;
-        fitView({ padding: 0.15, minZoom: 0.3, maxZoom: 0.9, duration: 300 });
+        fitView({ ...FIT_VIEW_OPTIONS, duration: 300 });
       }, 150);
     });
     ro.observe(el);
@@ -751,7 +770,7 @@ function GraphInner({
     setEdges(pe);
     setSelected(null);
     setTimeout(() => {
-      fitView({ padding: 0.15, minZoom: 0.3, maxZoom: 0.9, duration: 400 });
+      fitView({ ...FIT_VIEW_OPTIONS, duration: 400 });
     }, 50);
   }, [fitView, setNodes, setEdges]);
 
@@ -907,6 +926,12 @@ function GraphInner({
 
   if (nodes.length === 0) return <EmptyState />;
 
+  // The legend and the node drawer both sit at `absolute top-4 right-4`,
+  // so an open drawer painted over the legend and cut it in half. The
+  // drawer is the focus while a node is selected, so the legend yields and
+  // returns when the drawer closes.
+  const legendVisible = legendShown && !selected;
+
   return (
     <div
       ref={containerRef}
@@ -920,7 +945,7 @@ function GraphInner({
         </h2>
       </div>
 
-      <Legend visible={legendShown} />
+      <Legend visible={legendVisible} />
 
       {/* Tour progress bar — top of the graph (4.5) */}
       {tourState && tourState.total > 0 && (
@@ -972,7 +997,7 @@ function GraphInner({
         }}
         onNodeMouseLeave={() => setHoveredNodeId(null)}
         fitView
-        fitViewOptions={{ padding: 0.15, minZoom: 0.3, maxZoom: 0.9 }}
+        fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.2}
         maxZoom={2}
         connectionLineType={ConnectionLineType.SmoothStep}

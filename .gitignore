@@ -54,3 +54,8 @@ htmlcov/
 
 # Playwright artifacts
 .playwright-mcp/
+
+# QA harness output (generated — the committed evidence is docs/screenshots/v2/)
+qa-report/
+frontend/test-results/
+frontend/playwright-report/

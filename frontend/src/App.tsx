@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import TopBar from "./components/TopBar";
 import LeftPanel from "./components/LeftPanel";
 import GraphCanvas from "./components/GraphView";
@@ -10,7 +10,7 @@ import { useKeyboard } from "./hooks/useKeyboard";
 import { useRepoLoader } from "./hooks/useRepoLoader";
 import type { TourGraphState } from "./components/GraphView";
 import { FolderTree, MessageSquare, ChevronDown } from "lucide-react";
-import { getGraph } from "./api/client";
+import { getGraph, getStatus } from "./api/client";
 import type { ContextPayload } from "./api/client";
 
 type Mode = "understanding" | "tracking" | "incident";
@@ -132,11 +132,60 @@ export default function App() {
       if (g?.nodes?.length) {
         setRawNodes(g.nodes);
         setRawEdges(g.edges ?? []);
+        // The load response does not carry graph counts — take them from the
+        // graph itself so the Repository card is not left showing "—".
+        setRepoInfo((prev) =>
+          prev
+            ? {
+                ...prev,
+                node_count: g.nodes.length,
+                edge_count: (g.edges ?? []).length,
+              }
+            : prev,
+        );
       }
     }).catch(() => { /* graph fetch failed — will populate on first chat query instead */ });
   }, []);
 
   const loader = useRepoLoader(handleLoaded);
+
+  // ── Pick up a repository that is already loaded on the backend ───────────
+  // The CLI loads the repository server-side (`reposcope run .`), so the
+  // browser must show it on open instead of waiting for someone to type a
+  // GitHub URL. This is also what lets the browser-QA harness render a
+  // graph without cloning anything over the network.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [status, graph] = await Promise.all([getStatus(), getGraph()]);
+        if (cancelled) return;
+        const loadedRepo = status?.repo as string | undefined;
+        if (loadedRepo) {
+          const owner = (status?.owner as string | undefined) ?? "";
+          const readme = (status?.readme as string | undefined) ?? "";
+          setRepo(owner ? `${owner}/${loadedRepo}` : loadedRepo);
+          setRepoInfo({
+            owner,
+            repo: loadedRepo,
+            file_count: status?.file_count as number | undefined,
+            node_count: graph?.nodes?.length ?? undefined,
+            edge_count: graph?.edges?.length ?? undefined,
+            readme_length: readme.length || undefined,
+          });
+        }
+        if (graph?.nodes?.length) {
+          setRawNodes(graph.nodes);
+          setRawEdges(graph.edges ?? []);
+        }
+      } catch {
+        // No repository loaded — the empty state is the correct UI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearRepo = useCallback(() => {
     setRepo(null);

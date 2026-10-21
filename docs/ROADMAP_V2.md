@@ -1542,3 +1542,315 @@ Adds to Section 8:
 | R18 | SARIF output is malformed → GitHub silently rejects it | Low | Validate against the SARIF 2.1.0 schema in CI |
 | R19 | Too many additions dilute the demo | **High** | **Part II is not all-or-nothing.** The minimum demo-critical set is **M7.1 + M8.1 + M8.3 + M10**. Everything else is optional |
 
+---
+
+# PART III — Verification & QA Discipline
+
+> Added per explicit request: *everything must be tested by opening localhost, taking
+> screenshots, and analysing the result like proper QA — using the MCP servers.*
+
+---
+
+## 17. Why this is a milestone, not a chore
+
+### 17.1 The evidence — a prior audit that was never turned into a gate
+
+RepoScope already has a browser-QA history. It lives in `.playwright-mcp/` (2026-09-26) and it
+contains **13 console logs, 100+ page snapshots, and screenshots** from a manual Playwright audit
+of the running app on `http://localhost:5173`.
+
+Two facts make this a milestone rather than a chore:
+
+**① Real bugs were found this way — the kind unit tests cannot find.**
+
+| Observed in the console logs | Why unit tests miss it |
+|---|---|
+| `<circle> attribute cx: Expected length, "NaN"` (×318 in one session) | React SVG geometry error — only exists in a rendered browser DOM |
+| `<pattern> attribute x/y: Expected length, "NaN"` | Same class — SVG defs, not application state |
+| `Failed to load resource: 404 → /api/tour/generate` | Route-level failure, invisible to unit tests that call handlers directly |
+| `Password field is not contained in a form` | DOM semantics — a11y defect, only observable in the live document |
+
+**② The audit produced no lasting protection.**
+`.playwright-mcp/` is **gitignored** (`.gitignore`), so every artefact — the console evidence, the
+snapshots, the screenshots — is invisible to the repo and to any future agent. The defects were
+fixed by hand in commits like `fix(ui): polish AI assistant response tables…`, and **nothing
+prevents them from coming back**. There is no e2e suite, no Playwright dependency, no test script
+in `frontend/package.json` (verified: `dev`, `build`, `preview` only), and no CI workflow that
+opens a browser.
+
+### 17.2 The principle
+
+> **Unit tests prove functions work. Only opening localhost proves the product works.**
+
+RepoScope's judge-facing failure mode is not a wrong function — it is a **blank canvas, a broken
+route, a NaN in the SVG, or a console full of errors during a live demo**. Every one of those
+passes a 100%-green pytest suite. The gate must therefore be a *browser* gate.
+
+### 17.3 The four-layer gate — "Definition of Verified" (DoV)
+
+No feature is **Done** until it clears all four layers.
+
+| Layer | Tool | Target | Proves |
+|---|---|---|---|
+| **L1 Unit** | `pytest` | functions in isolation | logic is correct |
+| **L2 Contract** | `httpx` → live `uvicorn` | `127.0.0.1:8010` | the API contract holds on a running server |
+| **L3 Journey** | Playwright | real Chromium, real DOM | the user flow works end-to-end |
+| **L4 Visual + Console** | Playwright screenshots + chrome-devtools MCP | rendered pixels + browser console | it **looks** right **and** is error-free |
+
+**L4 is the gate that did not exist.** L3 alone passes while the console fills with React key
+warnings, unhandled rejections, 404 assets, and CORS failures.
+
+### 17.4 Hard rules
+
+| Rule | Detail |
+|---|---|
+| **R-QA1** | **Zero console errors** on every journey. `console.error` + `pageerror` + unhandled rejections must be empty. |
+| **R-QA2** | **Zero unexpected HTTP failures.** No 4xx/5xx on any request the app initiates, except explicitly-declared intents (e.g. a deliberately-missing repo → 404). |
+| **R-QA3** | **Every journey commits a screenshot** to `docs/screenshots/v2/<journey>/`. The directory is **not** gitignored — this directly fixes the `.playwright-mcp/` evidence loss. |
+| **R-QA4** | **Every journey has a visual-regression baseline** via Playwright `toHaveScreenshot()`. Baselines are committed; updates are explicit (`--update-snapshots`), never automatic. |
+| **R-QA5** | **A known-bad whitelist exists and is reviewed.** Each whitelisted console message carries an inline justification. An unexplained console error fails the build. |
+| **R-QA6** | **QA is a gate in every sprint, not a phase at the end.** A sprint cannot be closed with an untested feature. |
+| **R-QA7** | **MCP servers are instruments, not the gate.** The committed Playwright suite is the gate; MCP servers are how a human or agent investigates and drafts. |
+
+---
+
+## 18. The QA harness
+
+### 18.1 File manifest
+
+```
+frontend/playwright.config.ts     baseURL, webServer, projects, screenshot policy
+frontend/tests/e2e/               journey specs (one file per journey group)
+frontend/tests/e2e/helpers.ts     console/network collectors + screenshot helper
+scripts/qa.py                     the runner: boot → wait → test → collect → report
+.github/workflows/qa.yml          CI: unit → contract → journey → artefact upload
+docs/screenshots/v2/              committed screenshot evidence (NOT gitignored)
+docs/QA_REPORT.md                 the standing QA report — what is covered, what is not
+```
+
+### 18.2 The runner — `scripts/qa.py`
+
+```
+1. Start backend:  uvicorn main:app --host 127.0.0.1 --port 8010
+   (env: REPOSCOPE_QA=1 → deterministic clock, no outbound calls, isolated data dir)
+2. Start frontend: npm --prefix frontend run dev  (127.0.0.1:5173)
+3. Wait for GET http://127.0.0.1:8010/api/health == 200   (timeout 60s)
+4. Wait for GET http://127.0.0.1:5173                      (timeout 60s)
+5. Run: npx playwright test --config frontend/playwright.config.ts
+6. Collect per-test: console messages, page errors, failed requests, screenshots
+7. Write qa-report/index.html + qa-report/results.json
+8. Exit non-zero if any test failed OR any un-whitelisted console/network error occurred
+```
+
+**`REPOSCOPE_QA=1` matters.** It makes the run hermetic: no GitHub API calls, no LLM provider
+calls, no writes to `data/repo_state.json`, a fixed seed, and a fixed clock. A QA run that
+depends on the network is a QA run that fails for the wrong reason.
+
+### 18.3 Console & network collection — `frontend/tests/e2e/helpers.ts`
+
+```ts
+// Attach to every page: console errors, unhandled exceptions, failed requests.
+// Collect, then assert empty at test end (minus the reviewed whitelist).
+export function attachErrorCollector(page: Page) { /* console, pageerror, response */ }
+export const WHITELIST: Array<{ pattern: RegExp; reason: string }> = [ /* reviewed */ ];
+```
+
+### 18.4 The smoke matrix
+
+Journeys are the unit of verification. Each maps to a user-visible capability and must produce
+a screenshot.
+
+| # | Journey | Introduced | Notes |
+|---|---|---|---|
+| J01 | Load repo → graph renders (node count > 0, no blank canvas) | **now** | The single most important assertion |
+| J02 | Click node → drawer opens with correct path/size/symbols | **now** | |
+| J03 | Ask a question → SSE streams an answer with citation pills | **now** | Needs a stubbed LLM in `REPOSCOPE_QA=1` mode |
+| J04 | Impact analysis → risk score + direct/transitive rings render | **now** | |
+| J05 | Code tour → steps render, graph pans, step badges advance | **now** | |
+| J06 | PR bot → markdown comment preview renders (no post) | **now** | |
+| J07 | Student mode → 3 levels + quizzes render | **now** | |
+| J08 | Security scan → flags render with severity ordering | **now** | |
+| J09 | Export PNG + SVG → downloads produced, non-zero size | **now** | |
+| J10 | File tree → filter narrows the list | **now** | |
+| J11 | BYOK → provider set + status bar reflects it | **now** | |
+| J12 | **Local mode** → `reposcope run .` boots, graph renders, file edit updates graph **without reload** | Sprint 3 | The differentiator |
+| J13 | **MCP server** → stdio handshake, `tools/list`, one real tool call | Sprint 4 | Via a stdio client, not HTTP |
+| J14 | **IDE deep link** → node click produces the exact expected URI per editor | Sprint 4 | Intercept the navigation; assert the URI string |
+| J15 | **Call edges** → graph renders `calls` edges after the parser rewrite | Sprint 1 | Regression for the C10 contract |
+| J16 | **Clusters** → expand/collapse preserves the pyramid when toggled off | Sprint 2 | |
+| J17 | **Churn heatmap** → hotspot rings render and are visually distinct from layer fill | Sprint 2 | |
+| J18 | **Cycles** → cycle list renders, matches the API result | Sprint 2 | |
+| J19 | **Repo map** → budgeted map renders, token reduction % shown | Sprint 3 | |
+| J20 | **PR boundary violation** → flagged in the PR comment | Sprint 6 | |
+| J21 | **SARIF** → valid against the 2.1.0 schema | Sprint 6 | |
+| J22 | **50k-file traversal** → latency budget met | Sprint 7 | |
+
+**J15–J22 are contract regressions.** They exist to prove the parser rewrite and the new engines
+did not break what already worked.
+
+### 18.5 The role of each MCP server
+
+| MCP server | Role in QA | Explicitly **not** for |
+|---|---|---|
+| **Playwright** (`@playwright/mcp`) | Interactive exploration during development; triaging a failure by hand; **drafting the first version of a journey spec** from a recorded interaction | The CI gate. CI must run the committed suite, not an agent |
+| **chrome-devtools** | Console error triage; network waterfall inspection; performance tracing; catching React key warnings, unhandled rejections, oversized payloads, and CORS failures that a screenshot cannot show | — |
+| **Tavily** | Resolving **expected** behaviour where the spec is ambiguous — the correct `vscode://` URI form, current MCP transport wording, correct ReactFlow LOD thresholds, GitHub REST shapes for webhooks; and competitor-parity checks | — |
+
+**The distinction that matters:** MCP servers are how a human or an autonomous agent
+*investigates*. The committed Playwright suite is how the build *gates*. Using an MCP agent as
+the CI gate would make every run non-deterministic and non-reproducible — the opposite of QA.
+
+### 18.6 Defect severity policy
+
+| Sev | Definition | Gate |
+|---|---|---|
+| **P0** | App fails to load, graph is blank, unhandled crash, console errors on the primary journey | **Blocks the demo.** Must be zero before the demo rehearsal |
+| **P1** | A shipped feature is broken with no workaround | Blocks the sprint from closing |
+| **P2** | Visual glitch, overlapping elements, wrong copy, incorrect colour | Fix before the demo |
+| **P3** | Polish, niceties | Backlog |
+
+### 18.7 The demo rehearsal — the final gate
+
+Before any demo, run the three-act script (§9) under Playwright with a real MCP client:
+
+| Act | Assertion | Screenshot |
+|---|---|---|
+| 1 — `reposcope run .` | Graph renders on a local repo; **no outbound request to GitHub** (assert on the network log) | `docs/screenshots/v2/demo-act1-local/` |
+| 2 — agent queries MCP | The agent's answer contains a `file:line` citation and a risk score that match the MCP tool's raw output | `docs/screenshots/v2/demo-act2-mcp/` |
+| 3 — node → editor | The exact expected editor URI is produced and invoked | `docs/screenshots/v2/demo-act3-editor/` |
+
+**Act 2's assertion is the important one:** it proves the agent's answer was *derived from the
+graph*, not hallucinated — by comparing the agent's citation against the tool's raw output.
+
+**P0 and P1 must both be zero.**
+
+---
+
+## 19. Milestone 11 — QA harness, and its sprint integration
+
+### 19.1 Sprint placement
+
+| Sprint | QA work |
+|---|---|
+| **Sprint 0** | Harness skeleton: `scripts/qa.py`, `playwright.config.ts`, `helpers.ts`, the collector + whitelist, the health-check journey (J00), CI workflow. **Journey list written; J01–J11 specified but not yet automated.** |
+| **Sprint 1** | J15 (call edges) — the C10 contract regression. Plus J01–J11 automated as the baseline. |
+| **Sprint 2** | J16, J17, J18 |
+| **Sprint 3** | J12, J19 |
+| **Sprint 4** | J13, J14 |
+| **Sprint 5** | Extension manual checklist (a VS Code host cannot be driven by Playwright) — verified by a documented manual run + committed screenshots |
+| **Sprint 6** | J20, J21 |
+| **Sprint 7** | J22 |
+
+### 19.2 Definition of done (additions)
+
+- [ ] `scripts/qa.py` boots both servers, runs the suite, and exits non-zero on any failure.
+- [ ] `REPOSCOPE_QA=1` makes the run hermetic — no outbound network, fixed seed, isolated state.
+- [ ] Every journey asserts **zero** un-whitelisted console errors and **zero** unexpected HTTP failures.
+- [ ] The whitelist has an inline justification per entry.
+- [ ] Screenshots for every implemented journey are committed under `docs/screenshots/v2/`.
+- [ ] Visual-regression baselines are committed; updates are explicit only.
+- [ ] `.github/workflows/qa.yml` runs unit → contract → journey and uploads artefacts.
+- [ ] `docs/QA_REPORT.md` states what is covered and — explicitly — what is **not** covered.
+- [ ] The demo rehearsal (J-act1/2/3) passes with P0 = 0 and P1 = 0.
+- [ ] The prior audit's defect classes are covered by assertions:
+      SVG `NaN` attributes, `/api/*` 404s, missing `<form>` around password inputs.
+
+### 19.3 Risk additions
+
+| # | Risk | Severity | Mitigation |
+|---|---|---|---|
+| R20 | QA suite becomes flaky and gets ignored | **High** | Hermetic `REPOSCOPE_QA=1` mode; no live LLM/GitHub calls; no arbitrary sleeps — wait on observable state; quarantine flaky tests loudly instead of silently skipping |
+| R21 | Screenshot baselines churn on every UI tweak | Medium | Per-journey baselines, not one global shot; explicit `--update-snapshots`; review baseline diffs in the PR |
+| R22 | The QA harness itself is never run | **High** | It runs in CI on every PR — a red suite blocks merge |
+| R23 | Playwright adds a heavy dev dependency | Low | `frontend/package.json` devDependency only; CI caches the browser; not in the runtime image |
+
+---
+
+## 20. Agent Prompt G — QA harness (Sprint 0)
+
+```
+Role: QA / Test Automation Engineer
+Context: RepoScope at D:\Aditya\Hackathon Projects\RepoScope.
+         Read C:\Users\Admin\.opencode\plan\reposcope-v2-plan.md Part III (Sections 17-19).
+         Part III is BINDING.
+
+Task: Build the browser-QA harness that gates every feature from here on.
+      The app currently has NO e2e infrastructure and NO console-error gate. A prior manual
+      Playwright audit found real bugs (SVG NaN attributes, /api/tour/generate 404s) that no
+      unit test would catch — and its artefacts were gitignored, so nothing prevents regression.
+
+Requirements:
+1. frontend/playwright.config.ts
+   - testDir: './tests/e2e'
+   - baseURL: http://127.0.0.1:5173
+   - webServer: boot `npm run dev` (frontend) and `uvicorn main:app --port 8010` (backend),
+     env REPOSCOPE_QA=1, reuseExistingServer locally
+   - viewport 1600x900 (matches the repo's documented screenshot size)
+   - screenshot: 'only-on-failure'; trace: 'retain-on-failure'
+   - Add @playwright/test as a DEV dependency of frontend/package.json. NOT a runtime dep.
+
+2. frontend/tests/e2e/helpers.ts
+   - attachErrorCollector(page): collects console messages of type 'error', pageerror events,
+     and responses with status >= 400
+   - WHITELIST: array of {pattern: RegExp, reason: string} — every entry MUST have a reason
+   - assertNoErrors(page): fails on any collected error not matching the whitelist
+   - A helper to assert "no outbound request to api.github.com" (needed by demo Act 1)
+
+3. frontend/tests/e2e/journeys.spec.ts — implement these journeys:
+   - J00 health: GET /api/health returns 200 and the UI mounts (zero console errors)
+   - J01 load repo -> graph renders: use the existing demo repo endpoint
+     (POST /api/repo/load-demo/{demo_id}, see backend/main.py:407) — assert ReactFlow rendered
+     nodes (node count > 0), the canvas is not blank, and assertNoErrors passes
+   - J02 click a node -> the node drawer opens
+   - J04 impact analysis renders a risk score
+   - J09 export -> PNG and SVG downloads are produced with non-zero size
+   Each journey: assertNoErrors + a screenshot into docs/screenshots/v2/<journey>/
+
+4. scripts/qa.py
+   - Boot backend (127.0.0.1:8010) and frontend (127.0.0.1:5173) if not already running
+   - Wait for /api/health == 200 (60s timeout) and for the frontend to serve (60s timeout)
+   - Run `npx playwright test --config frontend/playwright.config.ts`
+   - Write qa-report/index.html + qa-report/results.json
+   - Exit non-zero on any test failure OR any un-whitelisted console/network error
+   - Set REPOSCOPE_QA=1: no outbound GitHub calls, no LLM provider calls, isolated state dir,
+     fixed seed, fixed clock. A QA run must never depend on the network.
+
+5. .github/workflows/qa.yml
+   - jobs: unit (pytest) -> contract (httpx against a live uvicorn) -> journey (playwright)
+   - Cache the Playwright browser
+   - Upload qa-report/ and docs/screenshots/v2/ as artefacts
+
+6. docs/QA_REPORT.md — what IS covered, and explicitly what is NOT covered.
+
+7. Create docs/screenshots/v2/ and ensure it is NOT gitignored. Verify with `git check-ignore`.
+   (.playwright-mcp/ stays ignored — that directory is a different tool's scratch space.)
+
+Verification:
+- `python scripts/qa.py` -> exits 0, writes qa-report/, and every journey screenshot exists.
+- Break something on purpose (e.g. render a component with a NaN SVG attribute), re-run, and
+  show the suite goes RED with a useful message. Then restore it. A gate never observed
+  failing proves nothing.
+- `git check-ignore docs/screenshots/v2/` -> must print nothing (not ignored).
+
+Deliverable: the diff + the qa.py output + the red/green demonstration.
+```
+
+---
+
+## 21. Consolidated sprint plan (Parts I + II + III)
+
+| Sprint | Focus | Part I | Part II | Part III |
+|---|---|---|---|---|
+| **0** | Foundation & safety net | routers, GraphStore, arch rules, fixtures, golden test | `.reposcope.yml` loader, analysis skeleton, benchmarks scaffold | **QA harness skeleton + health journey + CI** |
+| **1** | Tree-sitter engine | `calls` edges, complexity, symbol resolution | qualified resolution, entry points | J15 + baseline J01–J11 |
+| **2** | Graph UX & hotspots | clusters, churn, LOD | **PageRank**, cycles, unreachable | J16, J17, J18 |
+| **3** | Local mode & indexing | CLI, watcher, incremental index | repo map + token metrics | J12, J19 |
+| **4** | MCP server + IDE links | 4 tools, 2 resources, deep links | cycle tool, repo-map resource, team rules | J13, J14 |
+| **5** | IDE extension | mini-graph, status bar, CodeLens | dead-code / cycle badge | extension manual checklist |
+| **6** | PR Bot 2.0 | contract diff, test stubs, PR chat | **repositioning**, SARIF, boundary checks | J20, J21 |
+| **7** | Scale-out | SqliteGraphStore, WebGL | monorepo, taint, ownership | J22 |
+
+**The gate for closing any sprint: the QA suite is green, and every new journey has a committed
+screenshot.**
+
+

@@ -2442,5 +2442,80 @@ symbols WITH their line numbers, and each one opens at its own line.
 - The **VS Code extension** does not exist yet — `reposcope://open` is emitted by the web app
   but nothing handles it yet. Sprint 5.
 
+---
+
+## 29. Sprint 5 — the VS Code / Cursor extension
+
+**Status: COMPLETE.** Shipped 2026-10-22. The extension is built, compiles, passes its unit
+tests, and packages into an installable `.vsix`.
+
+### 29.1 Delivered
+
+| Deliverable | File | Feature |
+|---|---|---|
+| The extension manifest | `extensions/vscode/package.json` | views, commands, menus, configuration |
+| The activation entry point | `extensions/vscode/src/extension.ts` | wires everything together |
+| The backend client | `extensions/vscode/src/graphClient.ts` | reads the graph over HTTP |
+| The blast-radius status bar | `extensions/vscode/src/statusBar.ts` | feature 2 |
+| The "View Callers (8)" CodeLens | `extensions/vscode/src/codeLens.ts` | feature 3 |
+| The Activity Bar mini-graph | `extensions/vscode/src/miniGraph.ts` | feature 1 |
+| The PURE logic | `extensions/vscode/src/model.ts` | no `vscode` import → unit-testable |
+| The unit tests | `extensions/vscode/test/model.test.js` | 11 tests, `node --test` |
+| The caller-count endpoints | `backend/api/routers/analysis.py` | `/callers`, `/dependents` |
+| The packaged extension | `extensions/vscode/reposcope-2.0.0.vsix` | 37 KB, installable |
+| CI job | `.github/workflows/qa.yml` | compile → test → package → upload |
+
+### 29.2 The five features
+
+1. **The mini-graph** — an Activity Bar panel, dark-mode, SVG-rendered, that centres on the
+   file you are editing and haloes it. Clicking a node opens it in the canvas.
+2. **The status bar** — `RepoScope: ⚠️ 12 dependents | Risk: Med`, with the breakdown in the
+   tooltip and a modal for the list. The cost of a change, visible before you make it.
+3. **The CodeLens** — `View Callers (8)` above every exported symbol, in every language
+   RepoScope parses.
+4. **The explorer context menu** — "Visualize in RepoScope Canvas".
+5. **The `reposcope://open` URI handler** — the web app's code-tour steps open the exact file
+   and line in the editor. This closes the loop: map → code → agent → map.
+
+### 29.3 Two design decisions
+
+**The extension never parses code.** It reads the backend over HTTP on localhost — the same
+index the canvas draws. That is Correction C11 applied to a fourth front-end, and it is why
+the number in the CodeLens and the number an agent reports are the same number. That
+agreement is now ASSERTED across the two interfaces
+(`backend/tests/test_extension_api.py`), not assumed.
+
+**The pure logic lives in `model.ts`, which has no `vscode` import.** That is what makes the
+extension testable with a plain `node --test` — no extension host, no mocking, no "it works
+on my machine". The VS Code-specific files are thin wrappers around it.
+
+### 29.4 Verified
+
+| Measure | Value |
+|---|---|
+| Extension unit tests | **11 passed** (`node --test`, no extension host) |
+| TypeScript compile | clean, `strict: true` |
+| The packaged `.vsix` | 37 KB, 24 files, valid manifest |
+| Backend tests | **219 passed** (was 212) |
+| The CodeLens count vs the MCP tool's answer | asserted equal |
+
+### 29.5 What could NOT be verified here, and why
+
+**The extension was never launched in VS Code or Cursor.** Neither editor is installed in this
+environment, and a VS Code extension host cannot be driven by Playwright — the roadmap says
+so explicitly and calls for a manual checklist instead.
+
+What IS verified: it compiles under `strict: true`, its pure logic passes 11 unit tests, its
+two backend endpoints are tested from the server side, and it packages into a valid `.vsix`.
+
+What is NOT: that it activates with zero errors in a real editor, that the status bar updates
+within 1s of switching tabs, and that the CodeLens renders. Those need a human with VS Code
+installed — the manual checklist is in `extensions/vscode/README.md`.
+
+### 29.6 Open items carried into Sprint 6
+
+- The extension is **not published to Open VSX** — that needs an account and a token.
+- The extension has **no way to start the backend**; it assumes one is running.
+
 
 

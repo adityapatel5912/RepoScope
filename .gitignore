@@ -24,6 +24,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# The VS Code extension's compiled output. The packaged .vsix carries it,
+# so committing the build directory would only duplicate it.
+extensions/vscode/out/
+
 # Cache and temp
 /tmp/reposcope/
 .cache/

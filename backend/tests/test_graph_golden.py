@@ -187,17 +187,52 @@ def test_multilang_ignores_external_imports():
         assert edge["target"] in node_ids
 
 
-def test_circular_fixture_produces_two_cycles():
-    """The circular fixture must contain exactly the two intended cycles."""
+def test_circular_fixture_produces_file_and_symbol_cycles():
+    """The circular fixture must contain exactly the cycles it was built for.
+
+    Since Milestone 1.1 the graph carries `calls` edges as well as
+    `imports` edges, so the cycle detector finds TWO levels of cycle:
+
+      * file level   — alpha.py -> beta.py -> gamma.py -> alpha.py
+      * symbol level — alpha_value -> beta_value -> gamma_value -> alpha_value
+
+    The symbol-level cycles are the interesting ones: they were invisible
+    to the import-only graph, and they name the exact functions that form
+    the loop.
+    """
     from graph_analysis import find_cycles
 
     graph = build_graph_from_repo(str(FIXTURES_DIR / "circular"))
     cycles = find_cycles(graph)
-
     members = {frozenset(c) for c in cycles}
+
+    # File-level cycles.
     assert frozenset({"file:alpha.py", "file:beta.py", "file:gamma.py"}) in members
     assert frozenset({"file:a.ts", "file:b.ts", "file:c.ts"}) in members
-    assert len(cycles) == 2, f"expected exactly 2 cycles, got {cycles}"
+
+    # Symbol-level cycles — the same loops, one level down.
+    assert frozenset({
+        "func:alpha.py:alpha_value",
+        "func:beta.py:beta_value",
+        "func:gamma.py:gamma_value",
+    }) in members
+    assert frozenset({
+        "func:a.ts:aValue",
+        "func:b.ts:bValue",
+        "func:c.ts:cValue",
+    }) in members
+
+    assert len(cycles) == 4, f"expected exactly 4 cycles, got {cycles}"
+
+
+def test_isolated_module_is_not_in_any_cycle():
+    """`isolated.py` reaches into the cycle but nothing reaches back."""
+    from graph_analysis import find_cycles
+
+    graph = build_graph_from_repo(str(FIXTURES_DIR / "circular"))
+    for cycle in find_cycles(graph):
+        assert "file:isolated.py" not in cycle
+        assert not any("isolated" in member for member in cycle)
 
 
 def test_nested_fixture_resolves_relative_imports():

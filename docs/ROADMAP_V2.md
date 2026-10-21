@@ -1893,7 +1893,7 @@ built and measured, so the next agent does not re-derive it.
 |---|---|---|
 | **P2** | **Duplicate node ids.** Four `__init__` methods in one file collapsed to one id (`func:<rel>:__init__`). Duplicate ids break React list keys and corrupt the graph store. Surfaced by the vendored real-world fixture on day one. | **Fixed** — colliding names now receive a deterministic `@{lineno}` suffix; the id scheme is otherwise unchanged |
 | **P2** | **Root node painted under the sticky header.** `fitViewOptions.minZoom` (0.3) was HIGHER than the ReactFlow `minZoom` prop (0.2), so fitView clamped, could not fit a tall pyramid, and centred the overflow — the top 24px sat under the TopBar (`z-50`), clipping the root node and making it unclickable. | **Fixed** — the fit-view floor now matches the prop; guarded permanently by journey J05 |
-| **P2** | **Mojibake in the UI.** A PowerShell `Get-Content`/`Set-Content` round-trip re-encoded `GraphView.tsx` through Windows-1252; the UI rendered "multilang Â· Architecture". Invisible to unit tests and to the console gate — only a human reading the screenshot caught it. | **Fixed** — file restored from git and re-edited; `backend/tests/test_repo_encoding.py` now fails the build on any double-encoded file |
+| **P2** | **Mojibake in the UI.** A PowerShell `Get-Content`/`Set-Content` round-trip re-encoded `GraphView.tsx` through Windows-1252, so the separator in the graph title rendered as two characters instead of a middle dot. Invisible to unit tests and to the console gate — only a human reading the screenshot caught it. | **Fixed** — file restored from git and re-edited; `backend/tests/test_repo_encoding.py` now fails the build on any double-encoded file |
 | **P2** | **The node drawer covered the LAYERS legend.** Both were `absolute top-4 right-4`; the drawer (z-10) painted over the legend (z-5) and cut it in half. | **Fixed** — the legend yields while a node is selected and returns when the drawer closes |
 | **P3** | **The Repository card showed "—" for NODES and EDGES.** The graph counts were never copied into the repo info, on either the load path or the mount path. | **Fixed** — counts are taken from the graph itself |
 | **P3** | The ReactFlow canvas overlaps the header by 6px. Cosmetic — the canvas background sits behind the header's bottom edge. | ⬜ Not fixed (Sprint 0 scope) |
@@ -1912,5 +1912,71 @@ built and measured, so the next agent does not re-derive it.
 - Golden snapshots live in `backend/tests/golden/`, **not** inside the fixture directories — a snapshot stored inside a fixture becomes a graph node and makes the test self-referential. This bit us and is now documented in the test file.
 - Visual-regression baselines (`toHaveScreenshot()`) are specified but not yet wired up — see `docs/QA_REPORT.md`.
 - The ReactFlow canvas overlaps the header by 6px (cosmetic, P3, not fixed).
+
+---
+
+## 23. Sprint 1 delivery record — the Tree-sitter polyglot engine
+
+**Status: complete.** Sprint 1 shipped on 2026-10-21.
+
+### 23.1 Delivered
+
+| Deliverable | File | Notes |
+|---|---|---|
+| Parser contract | `backend/parsers/base.py` | `Symbol`, `Import`, `CallSite`, `ParseResult`, the `LanguageParser` protocol, and the cyclomatic-complexity counter |
+| Python parser | `backend/parsers/python.py` | Tree-sitter queries; absolute and relative imports with their bound names |
+| ECMAScript parsers | `backend/parsers/typescript.py` | TypeScript, TSX, and JavaScript — separate query sets, because a query naming a node type the grammar lacks fails to compile |
+| Go parser | `backend/parsers/go.py` | Functions, methods (with their receiver type), and types |
+| Rust parser | `backend/parsers/rust.py` | Functions, structs, enums, traits, and `impl` blocks |
+| Registry | `backend/parsers/registry.py` | Extension to parser; a missing grammar degrades to "no parser", never a crash |
+| Graph integration | `backend/graph_builder.py` | Symbols, imports, and call sites become nodes and edges; the C10 contract is unchanged |
+| Call resolution | `backend/graph_builder.py` | Same file → imported module → unambiguous global, in that order |
+
+### 23.2 Verified numbers
+
+| Measure | Before | After |
+|---|---|---|
+| Backend tests | 128 | **161** |
+| Languages parsed by AST | Python only (`ast`) | Python, TypeScript, TSX, JavaScript, Go, Rust |
+| Symbol nodes with a line number | Python only | **all languages** |
+| `calls` edges | none | 5 (multilang) · 7 (circular) · 3 (nested) · **75** (real_small) |
+| Graph determinism | not measured | **verified across 3 separate processes per fixture** |
+| Duplicate node ids | 0 | 0 |
+| Dangling edges | 0 | 0 |
+
+### 23.3 Three bugs the new engine surfaced
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P2** | **Calls inside same-named symbols were mis-attributed.** Four `__init__` methods in one file all matched the name `__init__`, so every call inside them was attributed to the first one. The parser now carries the enclosing symbol's **line**, which disambiguates them. | **Fixed** |
+| **P2** | **Go types were not extracted.** The query captured `type_declaration` while the name node's parent was the inner `type_spec`, so the name never matched its definition. | **Fixed** — the query captures `type_spec` |
+| **P3** | **Go method receiver types were lost.** The receiver type sits at `parameter_list > parameter_declaration > type_identifier` — deeper than a direct-child search reaches. | **Fixed** — `find_descendant_of_type` added |
+
+### 23.4 The call graph found cycles the import graph could not
+
+The `circular` fixture now yields **four** cycles, not two: the two file-level loops, and the two symbol-level loops underneath them.
+
+```
+file level    alpha.py  -> beta.py  -> gamma.py  -> alpha.py
+symbol level  alpha_value -> beta_value -> gamma_value -> alpha_value
+```
+
+The symbol-level cycles name the exact functions that form the loop — which is what makes a cycle report actionable rather than noise. The import-only graph could never show this.
+
+### 23.5 API notes for the next agent
+
+These are the tree-sitter 0.25 facts that cost time to discover. All are recorded in the source.
+
+- **`Query.captures()` no longer exists.** Use `QueryCursor(Query(lang, q)).captures(node)`, which returns a `dict[str, list[Node]]`.
+- **Several grammars have no field names.** `attribute` (Python), `member_expression` (TS/JS), `selector_expression` (Go), and `field_expression` (Rust) expose no `object:`/`property:`/`operand:`/`field:` fields. The receiver and the name are read from the node's children instead.
+- **`import_from_statement` has no `module:` field** in tree-sitter-python. The module is the child before the `import` keyword.
+- **A query naming a node type the grammar lacks fails to compile** — hence separate TypeScript and JavaScript query sets.
+
+### 23.6 Open items carried into Sprint 2
+
+- The frontend still holds a copy of the layer rules; the parity test enforces equivalence. Migrating it to consume `GET /api/arch/rules` is still outstanding.
+- `calls` edges are produced and scored by the frontend, but the pyramid renders only parent-child edges. Rendering call edges as arcs is a Sprint 2 decision.
+- The graph is now richer, so the pyramid's row ranking needs PageRank (M7.1) to stay defensible.
+
 
 

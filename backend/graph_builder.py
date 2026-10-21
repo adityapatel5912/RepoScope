@@ -1,18 +1,36 @@
 """
 graph_builder.py
-Local AST-based code graph builder — fallback when codebase-memory-mcp
-is unavailable. Parses Python files with ast, other files with regex.
+Builds RepoScope's code graph from a directory on disk.
+
+Milestone 1.1 — Tree-sitter polyglot parsing.
+
+Files are parsed by the polyglot parser registry (backend/parsers/):
+Python, TypeScript, TSX, JavaScript, Go, and Rust. Each parser yields the
+same `ParseResult` — symbols, imports, and call sites — so this module
+never needs to know which language it is looking at.
 
 Import edges are RESOLVED against a module index built in a first pass, so
 `from backend.engine import decision_model`, relative imports (`from .db
 import get_db`), and JS/TS relative or alias imports (`@/components/x`)
 all land on real file nodes instead of dangling ids.
+
+Call sites become `calls` edges between symbol nodes. The frontend already
+renders that edge type (frontend/src/components/GraphView.tsx:174).
+
+Correction C10 — the node/edge contract is load-bearing and is preserved
+exactly:
+    file nodes   {id, type, label, language, size}
+    symbol nodes {id, type, label, file, line}
+    ids          file:{rel}  func:{rel}:{name}  class:{rel}:{name}
+    edge types   contains | imports | calls
 """
 import ast
 import logging
 import os
 import re
 from pathlib import Path
+
+from parsers.registry import get_parser
 
 log = logging.getLogger("reposcope.graph_builder")
 
@@ -104,6 +122,20 @@ def build_graph_from_repo(root: str) -> dict:
         return None
 
     # ── Pass 2: parse code files ─────────────────────────────────────────────
+    #
+    # Each file is parsed by the polyglot registry. The parser yields
+    # symbols, imports, and call sites; this module mints the node ids and
+    # the edges so the C10 contract lives in exactly one place.
+    #
+    # The bookkeeping below supports call resolution in pass 3:
+    #   symbols_in_file  rel -> {name -> [node_id, ...]}
+    #   file_imports     rel -> {imported_rel -> set(bound_names)}
+    #   global_symbols   name -> [(rel, node_id), ...]
+    symbols_in_file: dict[str, dict[str, list[tuple[int, str]]]] = {}
+    file_imports: dict[str, dict[str, set[str]]] = {}
+    global_symbols: dict[str, list[tuple[str, str]]] = {}
+    pending_calls: list[tuple[str, str, str, int]] = []  # (src_rel, src_id, callee, line)
+
     for path, rel, suffix in collected:
         fid = f"file:{rel}"
         nodes.append({
@@ -113,12 +145,98 @@ def build_graph_from_repo(root: str) -> dict:
             "language": suffix.lstrip(".") or "txt",
             "size": path.stat().st_size,
         })
-        if suffix in _PY_EXTS:
-            pkg_parts = rel[:-3].split("/")[:-1]   # file's package = parent dirs
-            _parse_python(path, rel, fid, nodes, edges,
-                          pkg_parts, resolve_py)
-        elif suffix in _JS_EXTS:
-            _parse_js_ts(path, rel, fid, nodes, edges, resolve_js)
+
+        parser = get_parser(suffix)
+        if parser is None:
+            # No tree-sitter grammar for this extension — fall back to the
+            # original implementation so nothing is lost.
+            if suffix in _PY_EXTS:
+                pkg_parts = rel[:-3].split("/")[:-1]
+                _parse_python(path, rel, fid, nodes, edges, pkg_parts, resolve_py)
+            elif suffix in _JS_EXTS:
+                _parse_js_ts(path, rel, fid, nodes, edges, resolve_js)
+            continue
+
+        try:
+            source = path.read_bytes()
+        except OSError:
+            continue
+
+        try:
+            result = parser.extract(source, rel)
+        except Exception as exc:  # noqa: BLE001 - a bad file must not stop the graph
+            log.warning("Parser failed for %s: %s", rel, exc)
+            continue
+
+        # ── Symbols ────────────────────────────────────────────────────────
+        name_counts: dict[tuple[str, str], int] = {}
+        for symbol in result.symbols:
+            key = (symbol.kind, symbol.name)
+            name_counts[key] = name_counts.get(key, 0) + 1
+
+        per_file: dict[str, list[tuple[int, str]]] = {}
+        for symbol in result.symbols:
+            shared = name_counts[(symbol.kind, symbol.name)] > 1
+            node_id = _disambiguate(
+                "func" if symbol.kind == "function" else "class",
+                rel, symbol.name, symbol.line, shared,
+            )
+            nodes.append({
+                "id": node_id,
+                "type": symbol.kind,
+                "label": symbol.name,
+                "file": rel,
+                "line": symbol.line,
+            })
+            edges.append({"source": fid, "target": node_id, "type": "contains"})
+            per_file.setdefault(symbol.name, []).append((symbol.line, node_id))
+            global_symbols.setdefault(symbol.name, []).append((rel, node_id))
+        symbols_in_file[rel] = per_file
+
+        # ── Imports ────────────────────────────────────────────────────────
+        imported: dict[str, set[str]] = {}
+        for imp in result.imports:
+            target_rel = _resolve_import(imp, rel, suffix, resolve_py, resolve_js)
+            if not target_rel:
+                continue
+            edges.append({"source": fid, "target": f"file:{target_rel}", "type": "imports"})
+            imported.setdefault(target_rel, set()).update(imp.names)
+        file_imports[rel] = imported
+
+        # ── Call sites ─────────────────────────────────────────────────────
+        for call in result.calls:
+            if call.receiver:
+                # A method call on an object is a dynamic dispatch we
+                # cannot resolve statically. Only an unqualified call is
+                # worth resolving.
+                continue
+            if not call.enclosing:
+                # A call at module level is attributed to the file itself.
+                pending_calls.append((rel, fid, call.callee, 0))
+                continue
+            # Match the enclosing symbol by name AND line. A file may
+            # define several symbols with the same name — four `__init__`
+            # methods is the common case — so the line is what
+            # disambiguates them. Attributing every call to the first
+            # match would silently mis-attribute most of them.
+            enclosing = per_file.get(call.enclosing)
+            if not enclosing:
+                continue
+            match = next(
+                (node_id for line, node_id in enclosing if line == call.enclosing_line),
+                None,
+            )
+            if match is None:
+                match = enclosing[0][1]
+            pending_calls.append((rel, match, call.callee, call.enclosing_line))
+
+    # ── Pass 3: resolve call sites into `calls` edges ───────────────────────
+    for src_rel, src_id, callee, _line in pending_calls:
+        target_id = _resolve_symbol(
+            callee, src_rel, src_id, symbols_in_file, file_imports, global_symbols,
+        )
+        if target_id and target_id != src_id:
+            edges.append({"source": src_id, "target": target_id, "type": "calls"})
 
     # Deduplicate edges
     seen: set[tuple] = set()
@@ -140,6 +258,84 @@ def build_graph_from_repo(root: str) -> dict:
 def _line_of(source: str, offset: int) -> int:
     """1-based line number for a character offset in `source`."""
     return source.count("\n", 0, offset) + 1
+
+
+def _resolve_import(imp, rel: str, suffix: str, resolve_py, resolve_js) -> str | None:
+    """
+    Resolve one parsed import to the repo-relative path it refers to.
+
+    Returns None for external packages — those must not create dangling
+    edges.
+    """
+    if suffix in _PY_EXTS:
+        if imp.is_relative:
+            # Rebuild the package context the way Python resolves it:
+            # level 1 is this package, level 2 the parent, and so on.
+            parts = rel[:-3].split("/")[:-1]
+            base = parts[: len(parts) - (imp.level - 1)] if imp.level <= len(parts) else []
+            module = ".".join(base + ([imp.module] if imp.module else []))
+            target = resolve_py(module or None, 0, parts, imp.names[0] if imp.names else None)
+        else:
+            target = resolve_py(imp.module or None, 0, rel[:-3].split("/")[:-1],
+                                imp.names[0] if imp.names else None)
+    elif suffix in _JS_EXTS:
+        target = resolve_js(imp.module, rel)
+    else:
+        # Go and Rust module paths are package names, not repo paths. They
+        # are not resolvable to files, so they produce no edge.
+        return None
+
+    if not target or not target.startswith("file:"):
+        return None
+    return target[len("file:"):]
+
+
+def _resolve_symbol(
+    callee: str,
+    src_rel: str,
+    src_id: str,
+    symbols_in_file: dict[str, dict[str, list[tuple[int, str]]]],
+    file_imports: dict[str, dict[str, set[str]]],
+    global_symbols: dict[str, list[tuple[str, str]]],
+) -> str | None:
+    """
+    Resolve a call to the symbol it invokes.
+
+    The resolution order is deliberately conservative, because a wrong
+    edge is worse than a missing one:
+
+      1. A symbol defined in the same file.
+      2. A symbol in a module this file imports. When the import binds
+         specific names, only those names are considered.
+      3. A symbol with this name that exists in exactly ONE file in the
+         whole repository — unambiguous, so safe to link.
+
+    Anything more ambiguous is left unlinked rather than guessed.
+    """
+    if not callee:
+        return None
+
+    # 1. Same file.
+    local = symbols_in_file.get(src_rel, {}).get(callee)
+    if local:
+        return local[0][1]
+
+    # 2. An imported module.
+    for imported_rel, bound_names in file_imports.get(src_rel, {}).items():
+        candidates = symbols_in_file.get(imported_rel, {}).get(callee)
+        if not candidates:
+            continue
+        if bound_names and callee not in bound_names:
+            # The import binds specific names and this is not one of them.
+            continue
+        return candidates[0][1]
+
+    # 3. Unambiguous across the whole repository.
+    matches = global_symbols.get(callee)
+    if matches and len(matches) == 1:
+        return matches[0][1]
+
+    return None
 
 
 def _disambiguate(kind: str, rel: str, name: str, lineno: int | None, shared: bool) -> str:

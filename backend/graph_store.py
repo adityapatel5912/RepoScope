@@ -249,3 +249,179 @@ class JsonGraphStore:
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"JsonGraphStore(path={str(self.path)!r})"
+
+
+class SqliteGraphStore:
+    """
+    The SQLite implementation of the GraphStore interface.
+
+    Correction C7: `sqlite3` from the standard library, never a native
+    database as a hard dependency. A failed native install during a demo
+    is fatal; a missing optional package is not. Kùzu may sit behind a
+    feature flag later — never in front of this.
+
+    The schema keeps the full node and edge payloads as JSON, so a
+    round-trip through SQLite returns exactly the graph that went in. That
+    matters because the MCP server, the CLI and the web app must all see
+    the SAME index (Correction C11).
+
+        nodes  (id TEXT PRIMARY KEY, type TEXT, label TEXT, data JSON)
+        edges  (source TEXT, target TEXT, type TEXT, data JSON)
+        files  (path TEXT PRIMARY KEY, sha256 TEXT, size INTEGER)
+        meta   (key TEXT PRIMARY KEY, value TEXT)
+
+    The `files` table is what Milestone 6.2 asks for: a SHA-256 per file,
+    so a re-index knows which files actually changed.
+    """
+
+    def __init__(self, path: str | Path | None = None):
+        self.path = Path(path) if path else Path(tempfile.gettempdir()) / "reposcope" / "graph.db"
+
+    # ── GraphStore interface ───────────────────────────────────────────────
+
+    def exists(self) -> bool:
+        return self.path.is_file()
+
+    def load(self) -> dict:
+        if not self.exists():
+            return empty_graph()
+        try:
+            import sqlite3
+
+            with sqlite3.connect(self.path) as connection:
+                nodes = [
+                    json.loads(row[0])
+                    for row in connection.execute("SELECT data FROM nodes ORDER BY id")
+                ]
+                edges = [
+                    json.loads(row[0])
+                    for row in connection.execute("SELECT data FROM edges ORDER BY source, target, type")
+                ]
+        except Exception as exc:  # noqa: BLE001 - a broken store must not crash the app
+            log.warning("Could not read the sqlite graph store %s: %s", self.path, exc)
+            return empty_graph()
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "summary": graph_summary({"nodes": nodes, "edges": edges}),
+        }
+
+    def save(self, graph: dict) -> None:
+        problems = validate_graph(graph)
+        if problems:
+            raise ValueError(
+                "graph does not satisfy the node/edge contract:\n  "
+                + "\n  ".join(problems)
+            )
+        import sqlite3
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.path) as connection:
+            self._create_schema(connection)
+            connection.execute("DELETE FROM nodes")
+            connection.execute("DELETE FROM edges")
+            connection.execute("DELETE FROM files")
+            connection.executemany(
+                "INSERT INTO nodes (id, type, label, data) VALUES (?, ?, ?, ?)",
+                [
+                    (
+                        str(node.get("id", "")),
+                        str(node.get("type", "")),
+                        str(node.get("label", "")),
+                        json.dumps(node, sort_keys=True),
+                    )
+                    for node in graph.get("nodes", []) or []
+                ],
+            )
+            connection.executemany(
+                "INSERT INTO edges (source, target, type, data) VALUES (?, ?, ?, ?)",
+                [
+                    (
+                        str(edge.get("source", "")),
+                        str(edge.get("target", "")),
+                        str(edge.get("type", "")),
+                        json.dumps(edge, sort_keys=True),
+                    )
+                    for edge in graph.get("edges", []) or []
+                ],
+            )
+            files = [
+                (str(node.get("label", "")), str(node.get("sha256", "")), int(node.get("size") or 0))
+                for node in graph.get("nodes", []) or []
+                if node.get("type") == "file"
+            ]
+            connection.executemany(
+                "INSERT OR REPLACE INTO files (path, sha256, size) VALUES (?, ?, ?)",
+                files,
+            )
+            connection.executemany(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                [
+                    ("schema_version", str(SCHEMA_VERSION)),
+                    ("summary", graph.get("summary") or graph_summary(graph)),
+                    ("node_count", str(len(graph.get("nodes", []) or []))),
+                    ("edge_count", str(len(graph.get("edges", []) or []))),
+                ],
+            )
+            connection.commit()
+
+    def stats(self) -> dict:
+        graph = self.load()
+        nodes = graph.get("nodes", []) or []
+        edges = graph.get("edges", []) or []
+
+        node_types: dict[str, int] = {}
+        for node in nodes:
+            node_type = str(node.get("type", "unknown"))
+            node_types[node_type] = node_types.get(node_type, 0) + 1
+
+        edge_types: dict[str, int] = {}
+        for edge in edges:
+            edge_type = str(edge.get("type", "unknown"))
+            edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
+
+        return {
+            "path": str(self.path),
+            "exists": self.exists(),
+            "schema_version": SCHEMA_VERSION,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "node_types": node_types,
+            "edge_types": edge_types,
+            "summary": graph.get("summary", ""),
+        }
+
+    # ── Internals ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _create_schema(connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS nodes (
+                id    TEXT PRIMARY KEY,
+                type  TEXT,
+                label TEXT,
+                data  TEXT
+            );
+            CREATE TABLE IF NOT EXISTS edges (
+                source TEXT,
+                target TEXT,
+                type   TEXT,
+                data   TEXT
+            );
+            CREATE INDEX IF NOT EXISTS edges_source ON edges(source);
+            CREATE INDEX IF NOT EXISTS edges_target ON edges(target);
+            CREATE TABLE IF NOT EXISTS files (
+                path   TEXT PRIMARY KEY,
+                sha256 TEXT,
+                size   INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT
+            );
+            """
+        )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"SqliteGraphStore(path={str(self.path)!r})"

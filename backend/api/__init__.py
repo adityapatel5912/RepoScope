@@ -13,13 +13,17 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import analysis, arch
+from api.routers import analysis, arch, local
 
 
 def register_routers(app: FastAPI) -> None:
     """Mount every router onto the application."""
     app.include_router(arch.router)
     app.include_router(analysis.router)
+    # Sprint 3 (decision D1): the local-mode and repo-status endpoints
+    # move here. `/api/repo/status` keeps its path and its response
+    # shape, so no client had to change.
+    app.include_router(local.router)
 
     # QA-only routes exist so the browser-QA harness can reach a known state
     # without touching the network. They are mounted ONLY in QA mode, so a

@@ -2171,5 +2171,140 @@ noise, so the actual architecture was invisible.
   updated before the JavaScript probe, and the test failed with three exact mismatches
   (`.gitignore`, `.editorconfig`, `LICENSE`). That is the gate doing its job.
 
+---
+
+## 27. Sprint 3 — local mode, incremental indexing, and the repo map
+
+**Status: BACKEND COMPLETE · FRONTEND AND QA OUTSTANDING.** The backend of Sprint 3 is
+committed and verified. The frontend surface (the LOCAL MODE badge, the live-update
+subscription, the repo-map panel) and the two new QA journeys (J12, J19) are **not done**.
+Sprint 3 is **not closed** — the demo checkpoint for it ("`reposcope run .` on a local repo;
+graph updates live on edit") has not been run end to end in a browser.
+
+This section is the handover. Everything below was built and measured; nothing below is a plan.
+
+### 27.1 What was built
+
+| Deliverable | File | Milestone |
+|---|---|---|
+| Content-addressed parse cache (SHA-256, LRU, persistent) | `backend/parse_cache.py` | 6.2 |
+| Parse/assemble split + live incremental indexer | `backend/graph_builder.py` | 6.2 |
+| Live event bus (thread-safe, latest-wins) | `backend/live_events.py` | 2.2 |
+| File watcher (watchdog, 500 ms debounce) | `backend/watcher.py` | 2.2 |
+| Local-mode endpoints + the SSE live-graph stream | `backend/api/routers/local.py` | 2.2 |
+| `GET /api/analysis/repo-map` | `backend/api/routers/analysis.py` | 8.1 |
+| The repo map | `backend/repo_map.py` | 8.1 |
+| The token estimator | `backend/token_metrics.py` | 8.1 |
+| The CLI (`run` / `index` / `mcp`) | `cli/main.py` | 2.2 |
+| Packaging (`reposcope`, `reposcope-mcp`) | `pyproject.toml` | 2.2 |
+| SQLite graph store (stdlib `sqlite3`) | `backend/graph_store.py` | 6.1 |
+| A working MCP server (stdio + Streamable HTTP) | `backend/mcp_server/` | 3 (partial) |
+| The benchmark runner | `benchmarks/run.py` | 8.1 |
+
+### 27.2 The design decision that makes the rest work
+
+The graph builder was split into two stages:
+
+```
+parse     one file at a time, depending ONLY on that file's bytes
+assemble  the whole repository, resolving imports and call sites
+```
+
+Parsing is expensive; assembly is cheap. Separating them means an edit re-parses **one**
+file and reuses every other file's parse result.
+
+The cache is keyed by the file's **SHA-256, not its path**. That is the whole point: a
+content-addressed cache cannot go stale. A path-keyed cache needs mtime heuristics and
+eventually serves a stale parse result — the kind of bug that shows up weeks later as
+"the graph disagrees with the code".
+
+The C10 contract is untouched. The golden test still passes for all four fixtures, and
+`build_graph_from_repo(root)` keeps its signature (`cache` is an optional accelerator —
+the graph is identical with or without one).
+
+### 27.3 The numbers (measured by `benchmarks/run.py`, 2026-10-21)
+
+14 repositories: 4 local fixtures + 10 public ones (`pallets/*`, `tiangolo/typer`,
+`psf/requests`, `psf/black`, `encode/httpx`, `Textualize/rich`).
+
+| Repository | Files | Nodes | Index (s) | Warm (s) | Incremental (ms) | Full context | Repo map | Reduction |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `real_small` | 9 | 54 | 0.080 | 0.027 | **3.2** | 12,528 | 337 | 97.3% |
+| `itsdangerous` | 79 | 194 | 0.323 | 0.064 | **9.8** | 105,621 | 1,805 | 98.3% |
+| `requests` | 159 | 937 | 1.280 | 0.431 | **96.4** | 2,632,160 | 3,989 | 99.8% |
+| `httpx` | 154 | 1,365 | 1.527 | 0.687 | **189.4** | 348,904 | 5,192 | 98.5% |
+| `jinja` | 136 | 1,929 | 1.687 | 1.020 | **392.6** | 377,256 | 5,215 | 98.6% |
+| `click` | 207 | 2,256 | 3.326 | 2.265 | **1,612.2** | 537,806 | 7,840 | 98.5% |
+| `rich` | 582 | 2,649 | 6.498 | 3.584 | **2,098.0** | 2,971,154 | 7,920 | 99.7% |
+| `werkzeug` | 323 | 2,808 | 4.537 | 3.266 | **2,284.6** | 670,851 | 7,922 | 98.8% |
+| `typer` | 805 | 3,243 | 7.797 | 3.893 | **2,961.3** | 675,873 | 7,931 | 98.8% |
+| `black` | 544 | 3,753 | 9.777 | 6.694 | **3,815.0** | 2,006,931 | 7,926 | 99.6% |
+
+**The context-reduction figure is 98–99%** on every real repository. That is the number
+the product is built around, and it is now measured rather than asserted.
+
+### 27.4 The "<50 ms for a one-file change" target — HALF MET, and the reason
+
+The target is met comfortably up to a few hundred files (3–10 ms) and missed badly beyond
+that (1.6–3.8 s). The cause is **not** the incremental indexing — it is the centrality
+recomputation that runs afterwards. Measured directly on `psf/black` (3,753 nodes,
+4,502 edges):
+
+| Stage | Time |
+|---|---|
+| PageRank over the whole graph | **14.5 ms** |
+| Betweenness centrality over the whole graph | **2,537.5 ms** |
+| `attach_analysis` (both) | 2,488.9 ms |
+
+So the re-parse is fast; **`networkx.betweenness_centrality` is O(n·m) and dominates
+everything**. Betweenness is a nice-to-have — it powers the "on the critical path"
+insight, and nothing in the pyramid, the hotspot blend or the repo map depends on it.
+
+**The fix is known and is Sprint 7 work**: compute betweenness lazily (on demand, cached,
+or only for the visible subgraph) instead of on every graph publish. Until then, the live
+watcher will feel sluggish on a repository of more than a few hundred files. This is a
+known limitation, not a mystery.
+
+### 27.5 Defects found and fixed in this sprint
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P1** | **The CLI crashed on a Windows console.** `print()` of an em dash raised `UnicodeEncodeError` on a cp1252 pipe. The CLI died on its own help text. | **Fixed** — stdout/stderr are reconfigured with `errors="replace"`, and the CLI's own output strings are ASCII |
+| **P1** | **The benchmark runner modified the repositories it measured.** It restored an edited file as *text*, so Windows translated `\n` into `\r\n` and the restore left the file subtly changed. Three committed fixtures were corrupted by a benchmark run. | **Fixed** — the file is restored from its original **bytes** |
+| **P2** | **A repository under a directory named `build` or `dist` indexed nothing.** The skip-list was tested against the ABSOLUTE path parts, so the whole tree was skipped before a single file was read. | **Fixed** — the skip-list is tested against the *relative* parts |
+| **P2** | **The graph indexed its own index.** `.reposcope/` was not in the skip-list, so the graph store and the parse cache became graph nodes — and every re-index then saw a "changed" file. | **Fixed** — `.reposcope` is skipped |
+| **P2** | **The summary reported the pre-dedupe edge count.** `54 nodes, 156 edges` where the graph had 125 edges. The golden test caught it. | **Fixed** |
+| **P2** | **The grammar-free fallback produced a different graph from tree-sitter.** The fallback resolved imports eagerly, per alias; tree-sitter resolved them lazily, per statement. The two paths disagreed for the same repository. | **Fixed** — the fallback now emits the same unresolved-import shape and is resolved by the same code |
+| **P3** | `@app.on_event("startup")` is deprecated in FastAPI. | **Fixed** — replaced with a `lifespan` context manager |
+
+### 27.6 What is NOT done — the Sprint 3 remainder
+
+1. **The frontend.** No LOCAL MODE badge, no live-update subscription, no repo-map panel.
+   The backend pushes `context` events on `GET /api/local/events` and the frontend's existing
+   `handleContext` already knows how to render one — so the work is a small `EventSource`
+   subscription, not a new rendering path.
+2. **QA journeys J12 and J19.** The QA router already supports
+   `POST /api/qa/load-fixture?copy=true&watch=true`, which loads a **writable copy** of a
+   fixture and starts the watcher — so J12 can edit a file and assert the graph updates
+   without touching a committed fixture.
+3. **`reposcope run .` has never been run in a browser.** The CLI serves the API and mounts
+   `frontend/dist` when it exists, but the built frontend has not been exercised through it.
+4. **The MCP server is only partly done.** All four tools work and the stdio handshake
+   succeeds, but the server has no test suite, no `reposcope://` resources, and the HTTP
+   transport has not been exercised. Sprint 4 completes it.
+5. **Betweenness is still computed eagerly** — see §27.4.
+
+### 27.7 Notes for the next agent
+
+- **The MCP server is a client of the GraphStore, not a second parser.** `load_index()` in
+  `backend/mcp_server/server.py` reads `.reposcope/graph.json` and builds it only if it is
+  missing. Do not let it grow its own parsing.
+- **The live stream uses the `context` event name on purpose.** The frontend already handles
+  it; a new event name would mean a new frontend path.
+- **The `EventBus` keeps only the latest payload per subscriber.** A graph is a snapshot,
+  not a stream of deltas.
+- **`.reposcope/` is gitignored** and skipped by the parser.
+- **`main.py` is 1,023 lines** — the 1,200 cap still holds.
+
 
 

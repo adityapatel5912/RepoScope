@@ -33,6 +33,10 @@ backend/logs/
 # App runtime state
 data/repo_state.json
 
+# RepoScope's own index — the graph store and the parse cache.
+# Never committed: it is derived from the repository it lives in.
+.reposcope/
+
 # Scratch / dev images dumped at repo root
 pyramid-*.png
 scratch-*.png

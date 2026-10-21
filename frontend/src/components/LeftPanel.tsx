@@ -178,6 +178,7 @@ export default function LeftPanel({
       {repoInfo && (
         <InsightsPanel
           enabled={Boolean(repoInfo)}
+          repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
           onSelectNode={onHighlightNode}
         />
       )}

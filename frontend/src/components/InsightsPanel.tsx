@@ -28,10 +28,19 @@ import {
 interface Props {
   /** Only fetch when a repository is loaded. */
   enabled: boolean;
+  /**
+   * Identifies the loaded repository.
+   *
+   * The analysis MUST be re-fetched when the repository changes, not
+   * just when the panel first mounts. Without this the panel kept showing
+   * the previous repository's numbers — a stale "Most central" list that
+   * looked like it belonged to the repo on screen.
+   */
+  repoKey?: string;
   onSelectNode?: (nodeId: string) => void;
 }
 
-export default function InsightsPanel({ enabled, onSelectNode }: Props) {
+export default function InsightsPanel({ enabled, repoKey, onSelectNode }: Props) {
   const [cycles, setCycles] = useState<CycleDetail[] | null>(null);
   const [unreachable, setUnreachable] = useState<UnreachableEntry[] | null>(null);
   const [unreachableTotal, setUnreachableTotal] = useState(0);
@@ -65,7 +74,9 @@ export default function InsightsPanel({ enabled, onSelectNode }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+    // `repoKey` is in the dependency list on purpose — it is what makes
+    // the panel re-fetch when a different repository is loaded.
+  }, [enabled, repoKey]);
 
   if (!enabled) return null;
 
@@ -134,14 +145,22 @@ export default function InsightsPanel({ enabled, onSelectNode }: Props) {
             to it.
           </p>
           <ul className="flex flex-col gap-0.5">
-            {unreachable!.slice(0, 3).map((entry) => (
+            {unreachable!.slice(0, 4).map((entry) => (
               <li key={entry.id}>
                 <button
                   onClick={() => onSelectNode?.(entry.id)}
                   className="text-[10px] font-mono text-text-secondary hover:text-accent-cyan transition-colors text-left truncate max-w-full"
-                  title={entry.file || entry.label}
+                  title={`${entry.file || ""} — ${entry.label}`}
                 >
+                  {/*
+                    Several unreachable symbols can live in the same file,
+                    so the symbol name is shown alongside the path —
+                    otherwise the list reads as the same row repeated.
+                  */}
                   {entry.file || entry.label}
+                  {entry.label && entry.label !== entry.file && (
+                    <span className="opacity-70"> · {entry.label}</span>
+                  )}
                 </button>
               </li>
             ))}

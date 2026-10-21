@@ -96,8 +96,11 @@ def test_classify_examples():
 def test_classify_falls_back_to_extension_then_default():
     # No ordered rule matches, but the .ts extension does.
     assert classify("file:src/util/helpers.ts", "helpers.ts") == "client"
-    # Nothing matches at all.
-    assert classify("file:README.md", "README.md") == DEFAULT_LAYER
+    # A non-code file is classified by its kind, not by falling through to
+    # the default. A README is a document, not backend code.
+    assert classify("file:README.md", "README.md") == "storage"
+    # Nothing matches at all — a file with no extension and no signal.
+    assert classify("file:somefile", "somefile") == DEFAULT_LAYER
 
 
 # ── Dependency policy ───────────────────────────────────────────────────────

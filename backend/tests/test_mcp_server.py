@@ -28,15 +28,27 @@ import pytest
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 #: The tools the server exposes. The roadmap names four; the repo map
-#: (M8.1) was added because it is the number the product is built
-#: around, and an agent that can ask for the map directly saves a round
-#: trip.
+#: (M8.1), the cycles (M7.3), the hotspots (M1.3) and the unreachable
+#: symbols (M7.2) were added because each is a question an agent asks
+#: and the graph already answers.
 EXPECTED_TOOLS = {
     "get_architecture_overview",
     "calculate_blast_radius",
     "get_dependency_lineage",
     "explain_architectural_rule",
     "get_repo_map",
+    "find_dependency_cycles",
+    "get_hotspots",
+    "find_unreachable_symbols",
+}
+
+#: The resources — the READ side, which costs no tool call.
+EXPECTED_RESOURCES = {
+    "reposcope://graph/summary",
+    "reposcope://hotspots",
+    "reposcope://repo-map",
+    "reposcope://dead-code",
+    "reposcope://cycles",
 }
 
 
@@ -210,6 +222,95 @@ def test_get_repo_map_reports_the_context_saving():
     assert payload["reduction_pct"] > 0
     assert payload["text"], "the map has no text"
     assert "::" in payload["text"], "the map is not in the documented format"
+
+
+def test_find_dependency_cycles_reports_the_circular_fixture():
+    """The circular fixture must produce its file-level and symbol-level cycles."""
+    from mcp_server.server import build_server
+
+    server = build_server(str(FIXTURES_DIR / "circular"))
+
+    async def check():
+        from mcp.shared.memory import create_connected_server_and_client_session
+
+        async with create_connected_server_and_client_session(server) as session:
+            await session.initialize()
+            return await session.call_tool("find_dependency_cycles", {})
+
+    payload = _payload(_run(check()))
+    assert payload["available"] is True
+    assert payload["file_cycles"] > 0
+    assert payload["symbol_cycles"] > 0
+    assert payload["total"] >= 4
+
+
+def test_find_unreachable_symbols_is_labelled_as_an_estimate():
+    payload = _payload(_call("find_unreachable_symbols", {}))
+    assert payload["available"] is True
+    # It must never present a static estimate as a certainty.
+    assert payload["estimate"] is True
+    assert "not proof of dead code" in payload["caveat"].lower()
+
+
+def test_get_hotspots_degrades_without_git():
+    """The fixture is not a git repository — the tool must say so, not crash."""
+    payload = _payload(_call("get_hotspots", {}))
+    assert "available" in payload
+
+
+# ── The resources ───────────────────────────────────────────────────────────
+
+def test_the_resources_are_listed():
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    async def check():
+        server = _server_for("multilang")
+        async with create_connected_server_and_client_session(server) as session:
+            await session.initialize()
+            return await session.list_resources()
+
+    listed = _run(check())
+    uris = {str(resource.uri) for resource in listed.resources}
+    assert uris == EXPECTED_RESOURCES, f"unexpected resource set: {sorted(uris)}"
+
+
+def _read_resource(uri: str):
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    async def check():
+        server = _server_for("multilang")
+        async with create_connected_server_and_client_session(server) as session:
+            await session.initialize()
+            return await session.read_resource(uri)
+
+    result = _run(check())
+    return json.loads(result.contents[0].text)
+
+
+def test_the_graph_summary_resource_describes_the_graph():
+    payload = _read_resource("reposcope://graph/summary")
+    assert payload["node_count"] > 0
+    assert payload["edge_count"] > 0
+    assert payload["file_count"] > 0
+    assert payload["symbol_count"] > 0
+    assert payload["top_hubs"]
+
+
+def test_the_repo_map_resource_carries_the_saving():
+    payload = _read_resource("reposcope://repo-map")
+    assert payload["tokens"] > 0
+    assert payload["reduction_pct"] >= 0
+
+
+def test_the_dead_code_resource_is_labelled_as_an_estimate():
+    payload = _read_resource("reposcope://dead-code")
+    assert payload["estimate"] is True
+
+
+def test_the_cycles_resource_reports_the_cycles():
+    payload = _read_resource("reposcope://cycles")
+    assert payload["available"] is True
+    assert "cycles" in payload
 
 
 # ── The transport rule ──────────────────────────────────────────────────────

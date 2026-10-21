@@ -16,7 +16,7 @@ import ReactFlow, {
   ConnectionLineType,
 } from "reactflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon, Flame, Network } from "lucide-react";
+import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon, Flame, Network, ExternalLink } from "lucide-react";
 import LayerNode, { NODE_W, NODE_H, CHILD_W, RANK_CONFIGS, type LayerNodeData } from "./graph/LayerNode";
 import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
 import EmptyState from "./EmptyState";
@@ -393,6 +393,23 @@ function buildPyramidGraph(
     .filter((e) => typeof e?.source === "string" && typeof e?.target === "string");
   const importEdges = edgeList.filter((e) => e.type === "imports" || e.type === "calls");
 
+  // The symbols each file defines, with their line numbers.
+  //
+  // This is what makes "open in editor" open the EXACT line rather than
+  // the top of the file: the drawer can offer `greet() — line 19` and
+  // take the user straight there.
+  const symbolsByFile = new Map<string, { name: string; line: number }[]>();
+  for (const node of rn) {
+    if (node.type !== "function" && node.type !== "class") continue;
+    if (!node.file) continue;
+    const list = symbolsByFile.get(node.file) ?? [];
+    list.push({ name: String(node.label), line: Number(node.line ?? 0) });
+    symbolsByFile.set(node.file, list);
+  }
+  for (const list of symbolsByFile.values()) {
+    list.sort((a, b) => a.line - b.line);
+  }
+
   log(
     `[EDGE DIAG] nodes: ${rn.length} · edges in: ${edgeList.length} · ` +
     `matching IDs: ${edgeList.filter((e) =>
@@ -509,6 +526,7 @@ function buildPyramidGraph(
               size: item.node.size,
               rank: r,
               churn: churnScores?.get(String(item.node.label)) ?? 0,
+              symbolRefs: symbolsByFile.get(String(item.node.label))?.slice(0, 8),
             } satisfies LayerNodeData,
           };
           out.push(node);
@@ -535,6 +553,7 @@ function buildPyramidGraph(
             size: item.node.size,
             rank: r,
             churn: churnScores?.get(String(item.node.label)) ?? 0,
+            symbolRefs: symbolsByFile.get(String(item.node.label))?.slice(0, 8),
           } satisfies LayerNodeData,
         };
         out.push(node);
@@ -800,10 +819,19 @@ interface NodeDrawerProps {
   onAskAbout: (label: string) => void;
   onAnalyzeImpact?: (label: string) => void;
   onStartTour?: (label: string) => void;
+  /**
+   * Open the node's file in the user's editor.
+   *
+   * `localRoot` is the absolute path of the repository on this machine
+   * (known in local mode); without it the path is copied instead.
+   */
+  onOpenInEditor?: (path: string, line: number) => void;
+  localRoot?: string | null;
 }
 
 function NodeDrawer({
   node, edges, onClose, onAskAbout, onAnalyzeImpact, onStartTour,
+  onOpenInEditor, localRoot,
 }: NodeDrawerProps) {
   const data = node.data as LayerNodeData;
   const style = LAYER_STYLE[data.layer];
@@ -908,10 +936,50 @@ function NodeDrawer({
             </div>
           </div>
         )}
+        {data.symbolRefs && data.symbolRefs.length > 0 && data.fullPath && (
+          <div className="pt-1.5 border-t border-border-hairline">
+            <p className="label-caps !text-[10px] mb-1.5">Symbols</p>
+            <ul className="flex flex-col gap-0.5">
+              {data.symbolRefs.map((symbol) => (
+                <li key={`${symbol.name}:${symbol.line}`}>
+                  <button
+                    onClick={() =>
+                      onOpenInEditor?.(data.fullPath!, symbol.line)
+                    }
+                    className="text-[10px] font-mono text-text-secondary hover:text-accent-cyan
+                      transition-colors text-left truncate max-w-full"
+                    title={`Open ${data.fullPath}:${symbol.line} in your editor`}
+                    data-testid="open-symbol-in-editor"
+                  >
+                    {symbol.name}
+                    {symbol.line > 0 && (
+                      <span className="opacity-60"> : {symbol.line}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
       <div className="flex flex-col gap-2">
+        {data.kind === "file" && data.fullPath && (
+          <button
+            onClick={() => void onOpenInEditor?.(data.fullPath!, data.line ?? 0)}
+            className="btn-secondary w-full !text-xs"
+            title={
+              localRoot
+                ? `Open ${data.fullPath}${data.line ? `:${data.line}` : ""} in your editor`
+                : "Copy the path — set a workspace root in Settings to open it directly"
+            }
+            data-testid="open-in-editor"
+          >
+            <ExternalLink size={12} />
+            Open in editor
+          </button>
+        )}
         <button onClick={() => onAskAbout(data.label)} className="btn-secondary w-full !text-xs">
           <MessageSquare size={12} />
           Ask about this
@@ -936,6 +1004,10 @@ interface InnerProps {
   onAskAbout?: (msg: string) => void;
   onAnalyzeImpact?: (label: string) => void;
   onStartTour?: (label: string) => void;
+  /** Open a file in the user's editor (Milestone 2.1). */
+  onOpenInEditor?: (path: string, line: number) => void;
+  /** The absolute path of the repository on this machine, in local mode. */
+  localRoot?: string | null;
   repoTitle?: string;
   highlightNode?: string | null;
   impactTarget?: string | null;
@@ -946,6 +1018,7 @@ interface InnerProps {
 
 function GraphInner({
   rawNodes, rawEdges, onAskAbout, onAnalyzeImpact, onStartTour, repoTitle,
+  onOpenInEditor, localRoot,
   highlightNode = null, impactTarget = null,
   impactDirect = [], impactTransitive = [],
   tourState = null,
@@ -1491,6 +1564,8 @@ function GraphInner({
             setSelected(null);
             onStartTour?.(label);
           }}
+          onOpenInEditor={onOpenInEditor}
+          localRoot={localRoot}
         />
       )}
     </div>
@@ -1504,6 +1579,10 @@ interface Props {
   onAskAbout?: (msg: string) => void;
   onAnalyzeImpact?: (label: string) => void;
   onStartTour?: (label: string) => void;
+  /** Open a file in the user's editor (Milestone 2.1). */
+  onOpenInEditor?: (path: string, line: number) => void;
+  /** The absolute path of the repository on this machine, in local mode. */
+  localRoot?: string | null;
   repoTitle?: string;
   highlightNode?: string | null;
   impactTarget?: string | null;
@@ -1514,6 +1593,7 @@ interface Props {
 
 export default function GraphCanvas({
   rawNodes, rawEdges, onAskAbout, onAnalyzeImpact, onStartTour, repoTitle,
+  onOpenInEditor, localRoot,
   highlightNode, impactTarget, impactDirect, impactTransitive, tourState,
 }: Props) {
   return (
@@ -1524,6 +1604,8 @@ export default function GraphCanvas({
         onAskAbout={onAskAbout}
         onAnalyzeImpact={onAnalyzeImpact}
         onStartTour={onStartTour}
+        onOpenInEditor={onOpenInEditor}
+        localRoot={localRoot}
         repoTitle={repoTitle}
         highlightNode={highlightNode}
         impactTarget={impactTarget}

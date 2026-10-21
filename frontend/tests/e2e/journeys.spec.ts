@@ -15,12 +15,24 @@
  */
 import { expect, test } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   assertNoErrors,
   attachErrorCollector,
   captureJourney,
   expectGraphHasNodes,
 } from "./helpers";
+import {
+  buildEditorUri,
+  buildRepoScopeUri,
+  parseRepoScopeUri,
+  resolveWorkspaceRoot,
+} from "../../src/utils/ideLinks";
+
+// The frontend is an ES module package, so __dirname is not defined.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const BACKEND_URL =
   process.env.REPOSCOPE_QA_BACKEND_URL ?? "http://127.0.0.1:8010";
@@ -422,5 +434,266 @@ test.describe("RepoScope QA journeys", () => {
 
     assertNoErrors(errors, "J19");
     await captureJourney(page, "j19-repo-map", "repo-map-panel");
+  });
+
+  test("J13 — the MCP server answers over stdio", async ({ page }) => {
+    /**
+     * The agent-facing half of the wedge.
+     *
+     * The server is driven over a REAL stdio pipe — the same way Claude
+     * Desktop or Cursor drives it — with raw JSON-RPC. An in-process
+     * call would prove the tools work but not that the transport does,
+     * and the transport is the part that breaks when the SDK moves.
+     */
+    const errors = attachErrorCollector(page);
+    await loadFixture("multilang");
+
+    const backendDir = path.resolve(HERE, "../../../backend");
+    const root = path.resolve(backendDir, "tests/fixtures/multilang");
+
+    const exchange = await new Promise<string>((resolve, reject) => {
+      const child = spawn(
+        process.env.REPOSCOPE_PYTHON ?? "python",
+        ["-m", "mcp_server.server", "--root", root],
+        { cwd: backendDir },
+      );
+
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(
+          new Error(
+            `the MCP server did not answer in time.\n` +
+            `stdout:\n${stdout}\nstderr:\n${stderr}`,
+          ),
+        );
+      }, 120_000);
+
+      // The stream is NOT closed early. Closing stdin tells the server to
+      // shut down, and it does so before the tool call has finished —
+      // which is why the first attempt saw the handshake and the tool
+      // list but never the tool call. The process is killed instead.
+      const finish = () => {
+        clearTimeout(timer);
+        child.kill();
+        resolve(stdout);
+      };
+
+      child.stdout.on("data", () => {
+        // Wait until the tool call has been answered.
+        if (stdout.includes('"id":3')) finish();
+      });
+
+      child.on("close", () => {
+        clearTimeout(timer);
+        resolve(stdout);
+      });
+
+      child.stdin.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "reposcope-qa", version: "1" },
+          },
+        }) + "\n",
+      );
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+      child.stdin.write(
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }) + "\n",
+      );
+      child.stdin.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "calculate_blast_radius",
+            arguments: { target_file: "helpers.py" },
+          },
+        }) + "\n",
+      );
+    });
+
+    const responses = exchange
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    const handshake = responses.find((r) => r.id === 1);
+    expect(handshake, "no initialize response").toBeTruthy();
+    expect(handshake!.error).toBeUndefined();
+    const result = handshake!.result as { serverInfo: { name: string }; protocolVersion: string };
+    expect(result.serverInfo.name).toBe("RepoScope");
+    expect(result.protocolVersion).toBeTruthy();
+
+    const listing = responses.find((r) => r.id === 2);
+    expect(listing, "no tools/list response").toBeTruthy();
+    const tools = (listing!.result as { tools: { name: string; inputSchema: { type: string } }[] }).tools;
+    const names = tools.map((t) => t.name);
+    for (const expected of [
+      "get_architecture_overview",
+      "calculate_blast_radius",
+      "get_dependency_lineage",
+      "explain_architectural_rule",
+      "get_repo_map",
+      "find_dependency_cycles",
+    ]) {
+      expect(names, `the MCP server is missing ${expected}`).toContain(expected);
+    }
+    for (const tool of tools) {
+      expect(tool.inputSchema.type).toBe("object");
+    }
+
+    // A real tool call, with a real answer.
+    const call = responses.find((r) => r.id === 3);
+    expect(call, "no tools/call response").toBeTruthy();
+    const payload = (call!.result as { content: { text: string }[] }).content[0].text;
+    const blast = JSON.parse(payload);
+    expect(blast.available).toBe(true);
+    expect(
+      blast.direct_impacts.map((n: { label: string }) => n.label),
+    ).toContain("app.py");
+
+    assertNoErrors(errors, "J13");
+  });
+
+  test("J14 — a node click produces the exact editor URI", async ({ page }) => {
+    /**
+     * The map → code link.
+     *
+     * The URI formats are asserted directly (they are pure functions),
+     * and then the real path is exercised: click a file node, click
+     * "Open in editor", and read the URI the app actually produced.
+     */
+    const errors = attachErrorCollector(page);
+
+    // ── The URI formats ──
+    expect(buildEditorUri("vscode", "/home/me/app.py", 12, 3)).toBe(
+      "vscode://file//home/me/app.py:12:3",
+    );
+    expect(buildEditorUri("vscode-insiders", "C:\\repo\\app.py", 7)).toBe(
+      "vscode-insiders://file/C:/repo/app.py:7:0",
+    );
+    expect(buildEditorUri("cursor", "/home/me/app.py", 42)).toBe(
+      "cursor://file//home/me/app.py:42:0",
+    );
+    expect(
+      buildEditorUri("jetbrains", "/home/me/proj/src/app.py", 5, 0, {
+        project: "proj",
+      }),
+    ).toBe(
+      "jetbrains://idea/navigate/reference?project=proj&path=home%2Fme%2Fproj%2Fsrc%2Fapp.py%3A5",
+    );
+    expect(buildEditorUri("sublime", "/home/me/app.py", 9)).toBe(
+      "subl://open?url=file:///home/me/app.py&line=9",
+    );
+
+    // ── The workspace-root resolution ──
+    expect(resolveWorkspaceRoot("backend/auth.py", "/home/me/proj")).toBe(
+      "/home/me/proj/backend/auth.py",
+    );
+    expect(resolveWorkspaceRoot("backend/auth.py", "C:\\repo")).toBe(
+      "C:\\repo/backend/auth.py",
+    );
+    // No root → no path. The caller must fall back to copying it.
+    expect(resolveWorkspaceRoot("backend/auth.py", "")).toBeNull();
+    expect(resolveWorkspaceRoot("backend/auth.py", null)).toBeNull();
+
+    // ── The round trip through the app's own URI scheme ──
+    const repoUri = buildRepoScopeUri({ path: "backend/auth.py", line: 12 });
+    expect(parseRepoScopeUri(repoUri)).toEqual({
+      path: "backend/auth.py",
+      line: 12,
+      col: 0,
+    });
+
+    // ── The real path, in the browser ──
+    await loadFixture("multilang");
+    await page.goto("/");
+    await expectGraphHasNodes(page);
+
+    // Capture the URI the app emits. The event fires before the
+    // navigation, so it is observed even though the test browser has no
+    // editor protocol handler.
+    await page.evaluate(() => {
+      (window as unknown as { __qaEditorUri?: string }).__qaEditorUri = "";
+      window.addEventListener("reposcope:open-editor", (event) => {
+        const detail = (event as CustomEvent<{ uri: string }>).detail;
+        (window as unknown as { __qaEditorUri?: string }).__qaEditorUri = detail.uri;
+      });
+    });
+
+    // A PYTHON node, specifically — the roadmap's acceptance is that a
+    // Python node opens the exact line, and the fixture has two.
+    const pythonNode = page.locator('.react-flow__node[data-id="file:app.py"]').first();
+    await expect(pythonNode).toBeVisible({ timeout: 15_000 });
+    await pythonNode.click();
+
+    const openButton = page.getByTestId("open-in-editor");
+    await expect(openButton).toBeVisible({ timeout: 15_000 });
+    await openButton.click();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => (window as unknown as { __qaEditorUri?: string }).__qaEditorUri ?? "",
+          ),
+        { timeout: 15_000, message: "the app never produced an editor URI" },
+      )
+      .not.toBe("");
+
+    const produced = await page.evaluate(
+      () => (window as unknown as { __qaEditorUri?: string }).__qaEditorUri ?? "",
+    );
+    // The URI names the real file, in a scheme an editor can handle.
+    expect(produced).toMatch(/^(vscode|vscode-insiders|cursor|jetbrains|subl):/);
+    expect(produced).toContain("app.py");
+    expect(produced.endsWith("app.py:0:0")).toBe(true);
+
+    // ── And the EXACT line, via a symbol ──
+    //
+    // "Open in editor" on the file opens the file. The drawer's symbol
+    // list opens the symbol's own line — which is the acceptance
+    // criterion: clicking a Python node opens the exact line.
+    await page.evaluate(() => {
+      (window as unknown as { __qaEditorUri?: string }).__qaEditorUri = "";
+    });
+
+    const symbolLink = page.getByTestId("open-symbol-in-editor").first();
+    await expect(symbolLink).toBeVisible({ timeout: 15_000 });
+    const symbolText = (await symbolLink.innerText()).trim();
+    await symbolLink.click();
+
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => (window as unknown as { __qaEditorUri?: string }).__qaEditorUri ?? "",
+          ),
+        { timeout: 15_000, message: "the symbol link never produced an editor URI" },
+      )
+      .not.toBe("");
+
+    const symbolUri = await page.evaluate(
+      () => (window as unknown as { __qaEditorUri?: string }).__qaEditorUri ?? "",
+    );
+    // The line in the URI must be the line the drawer showed.
+    const shownLine = Number(symbolText.split(":").pop()?.trim() ?? 0);
+    expect(shownLine).toBeGreaterThan(0);
+    expect(symbolUri).toContain(`app.py:${shownLine}`);
+    expect(symbolUri).toContain(".py");
+
+    assertNoErrors(errors, "J14");
+    await captureJourney(page, "j14-ide-link", "editor-uri");
   });
 });

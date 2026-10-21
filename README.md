@@ -267,6 +267,56 @@ npm run dev
 
 ---
 
+## 🤖 RepoScope as an MCP server
+
+RepoScope is not just a map you look at — it is an index an agent can
+query. The same graph the canvas draws is served over the Model Context
+Protocol, so Cursor, Claude Code and Claude Desktop can ask it
+questions directly.
+
+```bash
+pip install reposcope
+
+# Register with your client — the root is the repository to index.
+reposcope-mcp --root /path/to/your/repo
+```
+
+```json
+{
+  "mcpServers": {
+    "reposcope": {
+      "command": "reposcope-mcp",
+      "args": ["--root", "/path/to/your/repository"]
+    }
+  }
+}
+```
+
+**Tools** — every one deterministic, so the agent quotes the graph rather
+than guessing:
+
+| Tool | What it answers |
+|---|---|
+| `get_architecture_overview` | The layers, the central files, the entry points |
+| `calculate_blast_radius` | What breaks if this file or symbol changes |
+| `get_dependency_lineage` | What a file needs, and what needs it |
+| `explain_architectural_rule` | Does this import cross a declared boundary? |
+| `get_repo_map` | The budgeted map, and the context it saves |
+| `find_dependency_cycles` | The dependency loops, and the layers they span |
+| `get_hotspots` | The files that change often AND are widely depended upon |
+| `find_unreachable_symbols` | The symbols no entry point can reach (a static estimate) |
+
+**Resources** — the read side, no tool call needed:
+
+`reposcope://graph/summary` · `reposcope://hotspots` ·
+`reposcope://repo-map` · `reposcope://dead-code` · `reposcope://cycles`
+
+Transports are **stdio** (the default) and **Streamable HTTP**
+(`reposcope-mcp --http`). SSE is deprecated by the MCP spec and is not
+offered.
+
+---
+
 ## 📉 What RepoScope saves an agent
 
 An agent that wants to understand a repository normally reads the whole thing. RepoScope

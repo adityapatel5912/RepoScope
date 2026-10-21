@@ -2356,5 +2356,91 @@ adding a symbol REFLOWS the pyramid and changes which nodes are on screen — th
 - **The QA harness takes its ports.** If something else is on :8010 or :5183, the harness
   stops it. That is deliberate: a gate that tests unknown code is worse than no gate.
 
+---
+
+## 28. Sprint 4 — the MCP server and the IDE deep links
+
+**Status: COMPLETE.** Shipped 2026-10-22. The MCP server is finished — eight tools, five
+resources, both transports — and the map now opens the exact line in the user's editor.
+
+### 28.1 Delivered
+
+| Deliverable | File | Milestone |
+|---|---|---|
+| 8 MCP tools, 5 MCP resources | `backend/mcp_server/` | 3 |
+| Client registration template | `docs/reposcope-mcp.json` | 3 |
+| IDE protocol handlers (5 editors) | `frontend/src/utils/ideLinks.ts` | 2.1 |
+| The open-in-editor action | `frontend/src/utils/openInEditor.ts` | 2.1 |
+| Editor settings modal | `frontend/src/components/EditorSettings.tsx` | 2.1 |
+| "Open in editor" in the node drawer, at the exact line | `frontend/src/components/GraphView.tsx` | 2.1 |
+| QA journeys J13 and J14 | `frontend/tests/e2e/journeys.spec.ts` | — |
+
+### 28.2 The MCP server
+
+The four tools the roadmap named, plus four more — each one is a question an agent asks, and
+the graph already answered it:
+
+```
+get_architecture_overview   calculate_blast_radius    get_dependency_lineage
+explain_architectural_rule   get_repo_map              find_dependency_cycles
+get_hotspots                find_unreachable_symbols
+```
+
+And five resources — the read side, which costs no tool call:
+
+```
+reposcope://graph/summary   reposcope://hotspots    reposcope://repo-map
+reposcope://dead-code       reposcope://cycles
+```
+
+**The server is a client of the GraphStore, not a second parser.** It reads
+`.reposcope/graph.json` and builds it only when it is missing. That is Correction C11, and it
+is why the answer an agent gets is the same artifact a human is looking at.
+
+**Verified over a REAL stdio pipe**, not in-process: the initialize handshake, `tools/list`,
+and a `tools/call` whose answer names the actual dependent (`app.py` depends on `helpers.py`).
+An in-process call proves the tools work; it does not prove the transport does — and the
+transport is what breaks when the SDK moves.
+
+### 28.3 The IDE deep links
+
+Five protocols, all as pure functions so they can be asserted directly:
+
+| Editor | URI |
+|---|---|
+| VS Code | `vscode://file/{abs}:{line}:{col}` |
+| VS Code Insiders | `vscode-insiders://file/{abs}:{line}:{col}` |
+| Cursor | `cursor://file/{abs}:{line}:{col}` |
+| JetBrains | `jetbrains://idea/navigate/reference?project={proj}&path={rel}:{line}` |
+| Sublime Text | `subl://open?url=file://{abs}&line={line}` |
+
+Two decisions worth recording:
+
+**In local mode the link works with NO configuration.** The backend is reading the files off
+the disk, so it knows the absolute path — `reposcope run .` is enough. The workspace root only
+matters in web mode, where the server has never seen the user's checkout.
+
+**When the path cannot be resolved, the path is COPIED and the reason is given.** Not a
+silent failure, and not a link to the wrong file.
+
+**The drawer's symbol list opens the exact line.** The roadmap's acceptance is "clicking a
+Python node opens the exact line" — a file node has no line, so the drawer lists the file's
+symbols WITH their line numbers, and each one opens at its own line.
+
+### 28.4 Defects found and fixed in this sprint
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P2** | **The QA whitelist was not applied to failed requests.** `requestfailed` pushed straight into the error list without consulting `WHITELIST`, so a whitelisted console error could still fail the journey while the same event passed the console check. The review of "is this failure expected?" has to happen in ONE place. | **Fixed** — `isWhitelisted` now runs on failed requests too |
+| **P3** | The first J13 attempt closed the server's stdin immediately after writing, which told the server to shut down before the tool call had been answered — the handshake and the tool list arrived, the tool call did not. | **Fixed** — the process is killed after the answer, not before |
+
+### 28.5 Open items carried into Sprint 5
+
+- The MCP server has no **screenshots in Claude Desktop and Cursor**. The protocol is
+  verified over a real pipe; the clients themselves are not installed here.
+- The **Streamable HTTP transport** is implemented but has not been exercised end to end.
+- The **VS Code extension** does not exist yet — `reposcope://open` is emitted by the web app
+  but nothing handles it yet. Sprint 5.
+
 
 

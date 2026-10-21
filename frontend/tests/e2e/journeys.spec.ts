@@ -117,6 +117,33 @@ test.describe("RepoScope QA journeys", () => {
         JSON.stringify(overlap!.offenders),
     ).toEqual([]);
 
+    // The root node must also be fully inside the canvas. An earlier fit
+    // nudged the viewport upwards to clear the floating toolbar, which
+    // clipped the repo node off the top of the canvas instead.
+    //
+    // The values below are the node's offset from each canvas edge, so a
+    // POSITIVE number means "inside" and a negative one means "clipped".
+    const root = await page.evaluate(`(() => {
+      const canvas = document.querySelector(".react-flow");
+      const node = document.querySelector('.react-flow__node[data-id="repo:root"]');
+      if (!canvas || !node) return null;
+      const c = canvas.getBoundingClientRect();
+      const n = node.getBoundingClientRect();
+      return {
+        top: Math.round(n.top - c.top),
+        bottom: Math.round(c.bottom - n.bottom),
+        left: Math.round(n.left - c.left),
+        right: Math.round(c.right - n.right),
+      };
+    })()`);
+    expect(root, "the root node was not found").not.toBeNull();
+    // A small negative tolerance: the root may touch an edge, but it must
+    // not disappear behind it.
+    expect(root!.top, "the root node is clipped by the canvas top").toBeGreaterThanOrEqual(-2);
+    expect(root!.bottom, "the root node is clipped by the canvas bottom").toBeGreaterThanOrEqual(-2);
+    expect(root!.left, "the root node is clipped by the canvas left").toBeGreaterThanOrEqual(-2);
+    expect(root!.right, "the root node is clipped by the canvas right").toBeGreaterThanOrEqual(-2);
+
     assertNoErrors(errors, "J05");
     await captureJourney(page, "j05-header-clearance", "nodes-clear-header");
   });

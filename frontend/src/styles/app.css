@@ -306,16 +306,33 @@
    costs nothing — no re-layout, no re-render of every node.
 
      lod-compact  (zoom < 0.40) — hide the subtitle line
-     lod-minimal  (zoom < 0.25) — hide the subtitle AND the edges
-   */
+     lod-minimal  (zoom < 0.25) — hide the label too
+
+   The EDGES are never hidden. Hiding them turned a large graph into a
+   field of disconnected boxes: the hierarchy IS the information, and
+   dropping it at low zoom destroyed the one thing a small view could
+   still communicate.
+
+   What IS hidden at minimal zoom is the text. At a 0.2 zoom a 10px font
+   renders at 2px — not small, but meaningless, and it makes the node look
+   like noise. Dropping it turns each node into a clean colour block, so
+   the low-zoom view becomes an architecture density map: colour is the
+   layer, and the shape is the dependency structure.
+ */
 .react-flow.lod-compact .rs-node-subtitle,
 .react-flow.lod-minimal .rs-node-subtitle {
   display: none;
 }
 
-.react-flow.lod-minimal .react-flow__edges {
-  opacity: 0;
-  pointer-events: none;
+.react-flow.lod-minimal .rs-node-label {
+  display: none;
+}
+
+/* The rank guides stay legible at any zoom — they are orientation, not
+   content. They grow leftwards, away from the graph, so they never
+   overlap a node. */
+.react-flow .rs-rank-label {
+  transform-origin: right center;
 }
 
 .react-flow__attribution {

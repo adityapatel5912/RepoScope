@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -41,7 +42,10 @@ BACKEND_DIR = REPO_ROOT / "backend"
 QA_REPORT_DIR = REPO_ROOT / "qa-report"
 
 BACKEND_PORT = int(os.getenv("REPOSCOPE_QA_BACKEND_PORT", "8010"))
-FRONTEND_PORT = int(os.getenv("REPOSCOPE_QA_FRONTEND_PORT", "5173"))
+# The QA harness uses its OWN frontend port so it never fights a developer's
+# dev server on :5173. Sharing the port meant the QA run could kill (or be
+# confused with) the server the developer was actually using.
+FRONTEND_PORT = int(os.getenv("REPOSCOPE_QA_FRONTEND_PORT", "5183"))
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}"
 FRONTEND_URL = f"http://127.0.0.1:{FRONTEND_PORT}"
 
@@ -130,16 +134,46 @@ def start_frontend() -> subprocess.Popen | None:
 
 
 def stop(process: subprocess.Popen | None) -> None:
+    """
+    Stop a server AND everything it spawned.
+
+    `npm run dev` spawns Vite as a CHILD process. Killing npm alone leaves
+    the child running — a Vite server stays bound to :5173, still proxying
+    /api to the QA backend on :8010. When the QA run ends and :8010 goes
+    away, that orphaned Vite turns every API call into a bare 500
+    "Internal Server Error" for whoever opens the app next.
+
+    So the whole process TREE has to go.
+    """
     if process is None:
         return
+
+    if os.name == "nt":
+        # taskkill /T kills the process tree.
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                timeout=30,
+            )
+        except Exception:  # noqa: BLE001 - best effort
+            pass
+    else:
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        except Exception:  # noqa: BLE001
+            pass
+
     try:
-        process.terminate()
         process.wait(timeout=8)
-    except Exception:  # noqa: BLE001 - best-effort teardown
+    except Exception:  # noqa: BLE001
         try:
             process.kill()
         except Exception:  # noqa: BLE001
             pass
+
+    # Give the OS a moment to release the port.
+    time.sleep(0.4)
 
 
 def run_playwright(extra_args: list[str]) -> int:

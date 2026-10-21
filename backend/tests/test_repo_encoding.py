@@ -91,8 +91,11 @@ def test_repo_has_no_mojibake():
 
     assert not offenders, (
         "mojibake found - a file was likely re-encoded through Windows-1252. "
-        "Restore it with `git checkout -- <file>` and re-apply the edit with a "
-        "UTF-8-safe editor:\n  " + "\n  ".join(offenders)
+        "Repair it with: python scripts/repair_mojibake.py <file>  "
+        "(or restore it with `git checkout -- <file>` and re-apply the edit "
+        "with a UTF-8-safe editor). Do NOT use PowerShell's "
+        "Get-Content/Set-Content to edit source files:\n  "
+        + "\n  ".join(offenders)
     )
 
 

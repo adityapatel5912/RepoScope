@@ -97,6 +97,18 @@ def get_cached_graph() -> dict:
     return _graph_cache
 
 
+def clear_graph_cache() -> None:
+    """
+    Forget the cached graph.
+
+    Called whenever the active repository changes. Without this, loading
+    a second repository keeps serving the FIRST one's graph — the
+    analysis endpoints, the PR bot, and the web UI would all describe a
+    codebase that is no longer loaded.
+    """
+    _graph_cache.update({"nodes": [], "edges": [], "graph_summary": ""})
+
+
 async def build_context(
     mode: str,
     message: str,

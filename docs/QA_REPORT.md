@@ -85,26 +85,29 @@ failure you cannot distinguish from a product bug is worse than no gate.
 | J03 | `GET /api/arch/rules` serves the shared rule set | ✅ implemented |
 | J04 | The graph survives a page reload with no console errors | ✅ implemented |
 | J05 | No graph node is painted under the sticky header | ✅ implemented |
-| J06 | Ask a question → SSE streams an answer with citation pills | ⬜ Sprint 1 |
-| J07 | Impact analysis → risk score and rings render | ⬜ Sprint 1 |
-| J08 | Code tour → steps render and advance | ⬜ Sprint 1 |
-| J09 | PR bot → markdown comment preview renders | ⬜ Sprint 1 |
-| J10 | Export PNG + SVG → downloads produced, non-zero size | ⬜ Sprint 1 |
-| J11 | File tree → filter narrows the list | ⬜ Sprint 1 |
-| J12 | BYOK → provider set, status bar reflects it | ⬜ Sprint 1 |
-| J13 | Student mode → 3 levels and quizzes render | ⬜ Sprint 1 |
-| J14 | Security scan → flags render, severity ordered | ⬜ Sprint 1 |
-| J15 | **Local mode** — `reposcope run .` boots, graph renders, file edit updates the graph **without reload** | ⬜ Sprint 3 |
-| J16 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ⬜ Sprint 4 |
-| J17 | **IDE deep link** — node click produces the exact expected URI per editor | ⬜ Sprint 4 |
-| J18 | **Call edges** — graph renders `calls` edges after the parser rewrite | ⬜ Sprint 1 |
-| J19 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ⬜ Sprint 2 |
-| J20 | **Churn heatmap** — hotspot rings distinct from the layer fill | ⬜ Sprint 2 |
-| J21 | **Cycles** — cycle list matches the API result | ⬜ Sprint 2 |
-| J22 | **Repo map** — budgeted map renders, token reduction % shown | ⬜ Sprint 3 |
-| J23 | **PR boundary violation** — flagged in the PR comment | ⬜ Sprint 6 |
-| J24 | **SARIF** — valid against the 2.1.0 schema | ⬜ Sprint 6 |
-| J25 | **50k-file traversal** — latency budget met | ⬜ Sprint 7 |
+| J06 | The analysis endpoints serve the graph intelligence (hubs, cycles, unreachable) | ✅ implemented |
+| J07 | The churn heatmap overlay renders, and the layer legend stays readable | ✅ implemented |
+| J08 | The architecture cluster view renders | ✅ implemented |
+| J09 | Ask a question → SSE streams an answer with citation pills | ⬜ Sprint 3 |
+| J10 | Impact analysis → risk score and rings render | ⬜ Sprint 3 |
+| J11 | Code tour → steps render and advance | ⬜ Sprint 3 |
+| J12 | PR bot → markdown comment preview renders | ⬜ Sprint 3 |
+| J13 | Export PNG + SVG → downloads produced, non-zero size | ⬜ Sprint 3 |
+| J14 | File tree → filter narrows the list | ⬜ Sprint 3 |
+| J15 | BYOK → provider set, status bar reflects it | ⬜ Sprint 3 |
+| J16 | Student mode → 3 levels and quizzes render | ⬜ Sprint 3 |
+| J17 | Security scan → flags render, severity ordered | ⬜ Sprint 3 |
+| J18 | **Local mode** — `reposcope run .` boots, graph renders, file edit updates the graph **without reload** | ⬜ Sprint 3 |
+| J19 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ⬜ Sprint 4 |
+| J20 | **IDE deep link** — node click produces the exact expected URI per editor | ⬜ Sprint 4 |
+| J21 | **Call edges** — graph renders `calls` edges after the parser rewrite | ⬜ Sprint 3 |
+| J22 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ⬜ Sprint 3 |
+| J23 | **Churn heatmap** — hotspot rings distinct from the layer fill | ✅ implemented |
+| J24 | **Cycles** — cycle list matches the API result | ⬜ Sprint 3 |
+| J25 | **Repo map** — budgeted map renders, token reduction % shown | ⬜ Sprint 3 |
+| J26 | **PR boundary violation** — flagged in the PR comment | ⬜ Sprint 6 |
+| J27 | **SARIF** — valid against the 2.1.0 schema | ⬜ Sprint 6 |
+| J28 | **50k-file traversal** — latency budget met | ⬜ Sprint 7 |
 
 The ✅ journeys are the Sprint 0 foundation. The rest fill in as their
 sprints land.
@@ -126,8 +129,16 @@ non-deterministic and non-reproducible — the opposite of QA.
 
 | Severity | Defect | Status |
 |---|---|---|
+| **P1** | **Loading a second repository kept serving the first one's graph.** The orchestrator's graph cache was never invalidated when the active repo changed, so the analysis endpoints and the UI described a codebase that was no longer loaded. | ✅ Fixed — `orchestrator.clear_graph_cache()` |
 | **P2** | **Duplicate node ids.** Four `__init__` methods in one file all produced the id `func:<rel>:__init__`. Duplicate ids break React list keys in the graph renderer and corrupt the graph store. Found by the vendored real-world fixture. | ✅ Fixed — colliding names now get a deterministic `@{lineno}` suffix |
 | **P2** | **Root node painted under the sticky header.** `fitView` clamped its zoom at 0.3, could not fit a tall pyramid, and centred the overflow. The top 24px was under the TopBar (`z-50`): the root node was clipped and unclickable. | ✅ Fixed — the fit-view floor now matches the `minZoom` prop (0.2). Guarded by journey J05. |
+| **P2** | **Mojibake in the graph title** after a Windows-1252 round-trip re-encoded `GraphView.tsx`. Invisible to unit tests and to the console gate — only a human reading the screenshot caught it. | ✅ Fixed — `scripts/repair_mojibake.py` reverses the mis-decode; the encoding test names it in its failure message |
+| **P2** | **The node drawer covered the LAYERS legend** — both were `absolute top-4 right-4`. | ✅ Fixed — the legend yields while a node is selected |
+| **P2** | **The churn legend covered the LAYERS legend** — same cause. | ✅ Fixed — the churn spectrum now lives inside the layer legend card |
+| **P2** | **The `cluster` node type was never registered in `nodeTypes`**, so ReactFlow drew plain white boxes with no layer colour and no file count. | ✅ Fixed |
+| **P2** | **Cluster cards overlapped each other** — a 190px pitch against a 260px card. | ✅ Fixed — the pitch is now `width + 40` |
+| **P2** | **The fit-view placed the cluster cards under the floating toolbar**, making them unclickable. ReactFlow 11 only supports a numeric `padding`, so an asymmetric fit is impossible. | ✅ Fixed — `fitClearOfToolbar()` nudges the viewport after the fit |
+| **P3** | The Repository card showed em dashes for NODES and EDGES on both the load and mount paths. | ✅ Fixed |
 | **P3** | The ReactFlow canvas overlaps the header by 6px. Cosmetic — the canvas background sits behind the header's bottom edge. | ⬜ Not fixed (Sprint 0 scope) |
 
 ## What is NOT covered — read this

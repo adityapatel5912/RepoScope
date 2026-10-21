@@ -247,12 +247,25 @@ def build_graph_from_repo(root: str) -> dict:
             seen.add(key)
             unique_edges.append(e)
 
-    log.info("Graph built: %d nodes, %d edges from %s", len(nodes), len(unique_edges), root)
-    return {
+    graph = {
         "nodes": nodes,
         "edges": unique_edges,
         "summary": f"{len(nodes)} nodes, {len(unique_edges)} edges",
     }
+
+    # Attach centrality (M7.1). PageRank replaces the naive
+    # `incoming x 2 + outgoing` heuristic the pyramid used to rank files
+    # with, and the same scores drive the hotspot blend and the "top
+    # hubs" MCP resource.
+    try:
+        from graph_analysis import attach_analysis
+
+        attach_analysis(graph)
+    except Exception as exc:  # noqa: BLE001 - analysis must never break the graph
+        log.warning("Graph analysis failed, continuing without it: %s", exc)
+
+    log.info("Graph built: %d nodes, %d edges from %s", len(nodes), len(unique_edges), root)
+    return graph
 
 
 def _line_of(source: str, offset: int) -> int:

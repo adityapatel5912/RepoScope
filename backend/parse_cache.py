@@ -78,6 +78,11 @@ SKIP_DIRS = frozenset({
     # index its own cache and the graph store, and every re-index would
     # see a "changed" file.
     ".reposcope",
+    # Browser-QA artifacts (console logs, traces) are not architecture.
+    # They are gitignored, but the indexer has its own skip list and
+    # would otherwise report `.playwright-mcp/` as the repository's
+    # second-largest top-level folder.
+    ".playwright-mcp",
 })
 
 

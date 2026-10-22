@@ -178,7 +178,10 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
     ? (ring !== "none" ? `${ring}, ${churnRing}` : churnRing)
     : ring;
 
-  const { dir, filename, fullPath } = splitFilePath(data.fullPath || data.subtitle || data.label, data.label);
+  const { dir, filename, fullPath } = splitFilePath(
+    isFolder ? (data.fullPath || data.label) : (data.fullPath || data.subtitle || data.label),
+    data.label,
+  );
   const rootFontSize = isRoot
     ? data.label.length > 22
       ? 13
@@ -225,17 +228,17 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
           title={isRoot ? data.label : fullPath || filename}
           style={{
             color: textColor,
-            fontSize: isChild ? 11 : isRoot ? rootFontSize : cfg.fontSize,
+            fontSize: isChild ? 11 : isRoot ? rootFontSize : isFolder ? cfg.fontSize + 2 : cfg.fontSize,
             fontWeight: isChild ? 700 : cfg.fontWeight,
           }}
         >
-          {isRoot ? data.label : isCluster ? data.label : filename}
+          {isRoot || isFolder || isCluster ? data.label : filename}
         </div>
         {(isCluster || isFolder) && data.subtitle && (
           <div
             className="rs-node-subtitle font-mono text-[10px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
             title={data.subtitle}
-            style={{ color: subColor }}
+            style={{ color: subColor, fontSize: isFolder ? 11 : undefined }}
           >
             {data.subtitle}
           </div>

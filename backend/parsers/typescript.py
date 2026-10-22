@@ -28,10 +28,13 @@ from parsers.base import (
     CallSite,
     Import,
     ParseResult,
+    ReceiverType,
     Symbol,
     compute_complexity,
+    find_descendant_of_type,
     first_child_of_type,
     text_of,
+    type_name,
 )
 
 try:
@@ -141,6 +144,7 @@ class _ECMAScriptParser:
         self._extract_symbols(root, source, result)
         self._extract_imports(root, source, result)
         self._extract_calls(root, source, result)
+        self._extract_receivers(root, source, result)
         return result
 
     # ── Symbols ────────────────────────────────────────────────────────────
@@ -288,10 +292,21 @@ class _ECMAScriptParser:
             receiver = None
             callee = None
             for child in member_node.children:
-                if child.type == "identifier":
-                    receiver = child.text.decode("utf-8", "replace")
-                elif child.type == "property_identifier":
+                if child.type == "property_identifier":
                     callee = child.text.decode("utf-8", "replace")
+            # The object is the first child: `identifier` for `obj.m()`,
+            # `this` for `this.m()`, and a nested member for `a.b.m()`.
+            # Keep the nested form whole so the resolver refuses it — a
+            # chained receiver is not evidence that `a` is the type that
+            # declares `m`.
+            obj = member_node.children[0] if member_node.children else None
+            if obj is not None:
+                if obj.type == "identifier":
+                    receiver = obj.text.decode("utf-8", "replace")
+                elif obj.type == "this":
+                    receiver = "this"
+                elif obj.type == "member_expression":
+                    receiver = obj.text.decode("utf-8", "replace")
             if not callee:
                 continue
             enclosing, enclosing_line = self._enclosing_symbol(call_node)
@@ -304,6 +319,117 @@ class _ECMAScriptParser:
                     enclosing_line=enclosing_line,
                 )
             )
+
+    # ── Receiver types (tier-4 resolution) ─────────────────────────────────
+
+    def _extract_receivers(self, root, source: bytes, result: ParseResult) -> None:
+        """
+        Record only explicitly typed or constructor-assigned variables.
+
+        TypeScript's annotations make this precise; for JavaScript the
+        constructor form (`const u = new User()`) still gives a safe
+        inference. Anything else is left out.
+        """
+        stack = [root]
+        while stack:
+            node = stack.pop()
+
+            if node.type in ("required_parameter", "optional_parameter"):
+                name_node = first_child_of_type(node, ("identifier",))
+                if name_node is not None:
+                    declared = self._declared_type(node)
+                    if declared:
+                        scope, scope_line = self._enclosing_function(node)
+                        result.receivers.append(
+                            ReceiverType(
+                                name=name_node.text.decode("utf-8", "replace"),
+                                type=declared,
+                                line=node.start_point[0] + 1,
+                                scope=scope,
+                                scope_line=scope_line,
+                            )
+                        )
+
+            elif node.type == "variable_declarator":
+                name_node = first_child_of_type(node, ("identifier",))
+                if name_node is not None:
+                    declared = self._declared_type(node)
+                    if declared:
+                        scope, scope_line = self._enclosing_function(node)
+                        result.receivers.append(
+                            ReceiverType(
+                                name=name_node.text.decode("utf-8", "replace"),
+                                type=declared,
+                                line=node.start_point[0] + 1,
+                                scope=scope,
+                                scope_line=scope_line,
+                            )
+                        )
+
+            elif node.type == "public_field_definition":
+                name_node = first_child_of_type(node, ("property_identifier",))
+                if name_node is not None:
+                    declared = self._declared_type(node)
+                    class_name = self._enclosing_class(node)
+                    if declared and class_name:
+                        result.receivers.append(
+                            ReceiverType(
+                                name="this." + name_node.text.decode("utf-8", "replace"),
+                                type=declared,
+                                line=node.start_point[0] + 1,
+                                scope=class_name,
+                                scope_line=0,
+                            )
+                        )
+
+            stack.extend(node.children)
+
+    @staticmethod
+    def _declared_type(node) -> str:
+        """The annotated type, or the constructor name in a `new` value."""
+        annotation = first_child_of_type(node, ("type_annotation",))
+        if annotation is not None:
+            type_node = find_descendant_of_type(
+                annotation, ("type_identifier", "identifier")
+            )
+            if type_node is not None:
+                return type_name(type_node.text.decode("utf-8", "replace"))
+
+        new_expression = first_child_of_type(node, ("new_expression",))
+        if new_expression is not None:
+            constructor = find_descendant_of_type(
+                new_expression, ("identifier", "type_identifier")
+            )
+            if constructor is not None:
+                return type_name(constructor.text.decode("utf-8", "replace"))
+        return ""
+
+    def _enclosing_function(self, node) -> tuple[str, int]:
+        """The function an expression sits inside, or ("", 0) at module level."""
+        current = node.parent
+        while current is not None:
+            if current.type in ("function_declaration", "method_definition"):
+                name = first_child_of_type(
+                    current, ("identifier", "property_identifier")
+                )
+                if name is not None:
+                    return (
+                        name.text.decode("utf-8", "replace"),
+                        current.start_point[0] + 1,
+                    )
+            if current.type == "variable_declarator":
+                # An arrow function's body is scoped to the variable that
+                # holds it; a plain `const x = ...` is module level.
+                arrow = first_child_of_type(current, ("arrow_function",))
+                if arrow is not None:
+                    name = first_child_of_type(current, ("identifier",))
+                    if name is not None:
+                        return (
+                            name.text.decode("utf-8", "replace"),
+                            current.start_point[0] + 1,
+                        )
+            current = current.parent
+        return "", 0
 
     def _enclosing_symbol(self, node) -> tuple[str | None, int]:
         """The name and line of the symbol a call sits inside."""

@@ -253,7 +253,20 @@ def run_playwright(extra_args: list[str]) -> int:
         "--config", str(FRONTEND_DIR / "playwright.config.ts"),
         *extra_args,
     ]
-    log(f"  $ {' '.join(command)}", Colours.DIM)
+    log(f"  $ {subprocess.list2cmdline(command)}", Colours.DIM)
+    if os.name == "nt":
+        # `npx.cmd` is launched through the system shell. Passing a list
+        # makes Python concatenate the arguments and the shell re-parses
+        # them, so a regex like `--grep "J22|J23"` becomes a PIPE.
+        # `list2cmdline` only quotes whitespace, so quote metacharacters
+        # explicitly before the shell sees them.
+        def shell_safe(argument: str) -> str:
+            if any(char in argument for char in ' |&<>^()'):
+                return '"' + argument.replace('"', '""') + '"'
+            return argument
+
+        line = " ".join(shell_safe(argument) for argument in command)
+        return subprocess.call(line, cwd=str(FRONTEND_DIR))
     return subprocess.call(command, cwd=str(FRONTEND_DIR))
 
 

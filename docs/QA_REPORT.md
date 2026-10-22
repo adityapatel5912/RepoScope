@@ -77,6 +77,12 @@ failure you cannot distinguish from a product bug is worse than no gate.
 
 ## The smoke matrix
 
+> **Numbering note (2026-10-22).** This report is the Sprint 3 record and predates the final
+> journey numbering in `docs/ROADMAP_V2.md` §18.4. Its "J18 — local mode" is **J12** in the
+> committed suite, and its "J19 — repo map" is unchanged. The rows below are left as written so
+> the report remains an accurate account of the run it describes; the authoritative mapping is
+> the roadmap table and `frontend/tests/e2e/journeys.spec.ts`.
+
 | # | Journey | Status |
 |---|---|---|
 | J00 | Backend healthy, UI mounts | ✅ implemented |

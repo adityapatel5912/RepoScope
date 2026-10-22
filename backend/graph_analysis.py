@@ -31,7 +31,47 @@ from typing import Iterable
 
 import networkx as nx
 
+from graph_utils import LruCache, graph_signature
+
 log = logging.getLogger("reposcope.graph_analysis")
+
+#: The betweenness cache. Betweenness is O(n*m) and the graph changes on
+#: every edit, so it is computed on demand and kept for a few graphs.
+_BETWEENNESS_CACHE = LruCache(maxsize=4)
+
+#: The digraph cache.
+#:
+#: Building a networkx graph is not free — on a 3,753-node repository it
+#: costs ~90 ms, and the analysis needed it THREE times (PageRank,
+#: degrees, betweenness). Caching it turned a 190 ms analysis into a
+#: fraction of that, and it is the same trick as the adjacency cache:
+#: keyed by CONTENT, so an edit invalidates it automatically.
+_DIGRAPH_CACHE = LruCache(maxsize=4)
+
+
+def cached_digraph(
+    graph: dict,
+    edge_types: Iterable[str] | None = None,
+    include_isolated: bool = True,
+) -> nx.DiGraph:
+    """
+    The analysis digraph, from the cache when possible.
+
+    The returned graph is SHARED — callers must not mutate it. Every
+    caller in this module only reads.
+    """
+    key = (
+        graph_signature(graph),
+        tuple(sorted(edge_types)) if edge_types is not None else None,
+        include_isolated,
+    )
+    cached = _DIGRAPH_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    digraph = build_digraph(graph, edge_types, include_isolated)
+    _DIGRAPH_CACHE.put(key, digraph)
+    return digraph
 
 #: Edge types that represent a real dependency for traversal purposes.
 DEPENDENCY_EDGE_TYPES = frozenset({"imports", "calls"})
@@ -91,7 +131,7 @@ def pagerank_scores(
     these scores drive the pyramid layout, the CI risk gate, and the MCP
     tools — non-determinism would make them untrustworthy.
     """
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     if digraph.number_of_nodes() == 0:
         return {}
     try:
@@ -130,8 +170,17 @@ def betweenness_centrality(graph: dict) -> dict[str, float]:
     """
     Betweenness centrality — nodes that sit on the critical path between
     other nodes. Useful for identifying "choke points" in a codebase.
+
+    **This is expensive** — networkx's implementation is O(n·m), and on a
+    3,753-node repository it takes 2.5 SECONDS. It is therefore NOT
+    computed when the graph is built; it is computed on demand, by
+    `critical_path()`, and the result is cached.
+
+    Computing it eagerly was the single biggest cost in the live-update
+    loop: every re-index paid 2.5 seconds for a number the UI never
+    rendered.
     """
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     if digraph.number_of_nodes() == 0:
         return {}
     return {
@@ -140,9 +189,38 @@ def betweenness_centrality(graph: dict) -> dict[str, float]:
     }
 
 
+def critical_path(graph: dict, limit: int = 15) -> list[dict]:
+    """
+    The nodes on the critical path — the "choke points" of the codebase.
+
+    Computed on demand and cached, because it is O(n·m) and the graph
+    changes on every edit.
+    """
+    signature = graph_signature(graph)
+    cached = _BETWEENNESS_CACHE.get(signature)
+    if cached is None:
+        cached = betweenness_centrality(graph)
+        _BETWEENNESS_CACHE.put(signature, cached)
+
+    nodes_by_id = {n["id"]: n for n in graph.get("nodes", []) or []}
+    ranked = sorted(cached.items(), key=lambda item: (-item[1], item[0]))
+
+    out: list[dict] = []
+    for node_id, score in ranked[: max(1, min(limit, 200))]:
+        node = nodes_by_id.get(node_id, {})
+        out.append({
+            "id": node_id,
+            "label": node.get("label", node_id),
+            "type": node.get("type", ""),
+            "file": node.get("file", ""),
+            "betweenness": round(score, 8),
+        })
+    return out
+
+
 def degree_scores(graph: dict) -> dict[str, tuple[int, int]]:
     """(in_degree, out_degree) for every node."""
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     return {
         node_id: (int(digraph.in_degree(node_id)), int(digraph.out_degree(node_id)))
         for node_id in digraph.nodes
@@ -161,7 +239,7 @@ def find_cycles(graph: dict, min_length: int = 2) -> list[list[str]]:
     reported — a file that imports itself is a genuine defect, and it is
     length 1 by definition.
     """
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     cycles: list[list[str]] = []
     self_loops: list[list[str]] = []
     for component in nx.strongly_connected_components(digraph):
@@ -219,7 +297,7 @@ def entry_points(graph: dict) -> list[str]:
     worthless. An isolated module is a leaf that nothing reaches — that is
     precisely the thing worth reporting.
     """
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     nodes_by_id = {n["id"]: n for n in graph.get("nodes", []) or []}
 
     conventional = {
@@ -249,7 +327,7 @@ def unreachable_nodes(graph: dict) -> list[str]:
     reflection, and plugin registration are invisible to static analysis.
     The UI must label it as an estimate (see M7.2 in the roadmap).
     """
-    digraph = build_digraph(graph)
+    digraph = cached_digraph(graph)
     if digraph.number_of_nodes() == 0:
         return []
 
@@ -268,7 +346,7 @@ def unreachable_nodes(graph: dict) -> list[str]:
     return unreachable
 
 
-def attach_analysis(graph: dict) -> dict:
+def attach_analysis(graph: dict, include_betweenness: bool = False) -> dict:
     """
     Attach PageRank, degrees, and betweenness to every node in place.
 
@@ -277,10 +355,21 @@ def attach_analysis(graph: dict) -> dict:
         in_degree   int
         out_degree  int
         betweenness float
+
+    **Betweenness is NOT computed by default.** It is O(n·m) — 2.5
+    seconds on a 3,753-node repository — and it was the dominant cost of
+    every re-index, for a number the UI never rendered. It is computed
+    on demand by `critical_path()`, and cached.
+
+    The `betweenness` key is still present on every node (0.0 when it has
+    not been computed), so the node shape does not change.
     """
     scores = pagerank_scores(graph)
     degrees = degree_scores(graph)
-    betweenness = betweenness_centrality(graph)
+
+    betweenness: dict[str, float] = {}
+    if include_betweenness:
+        betweenness = betweenness_centrality(graph)
 
     for node in graph.get("nodes", []) or []:
         node_id = node.get("id")

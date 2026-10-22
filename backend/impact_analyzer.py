@@ -7,7 +7,7 @@ import json
 import logging
 
 from runtime_config import ask_llm
-from graph_utils import build_adjacency
+from graph_utils import build_adjacency_cached
 
 log = logging.getLogger("reposcope.impact")
 
@@ -19,7 +19,7 @@ def compute_blast_radius(graph: dict, target_id: str,
     Depth-0 neighbours = direct impacts; deeper = transitive.
     """
     nodes = {n["id"]: n for n in graph.get("nodes", [])}
-    _, reverse = build_adjacency(graph)
+    _, reverse = build_adjacency_cached(graph)
 
     visited = {target_id}
     queue: list[tuple] = [(target_id, 0)]

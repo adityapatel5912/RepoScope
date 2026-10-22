@@ -62,7 +62,7 @@ export default function TopBar({
       className="
         relative z-50 flex items-center justify-between gap-1 sm:gap-2.5 px-2 sm:px-4
         h-12 sm:h-14 shrink-0
-        bg-bg-panel border-b-[1.5px] border-border-subtle overflow-x-hidden
+        bg-bg-panel border-b-[1.5px] border-border-subtle
       "
     >
       {/* ── Left: logo mark + wordmark + subtitle ── */}
@@ -92,12 +92,14 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* ── Center: Load Repo input ⇄ repo chip ── */}
-      <div className="flex-1 flex justify-center min-w-0 max-w-xs sm:max-w-sm px-1">
+      {/* ── Center: Load Repo input ⇄ repo chip ──
+          Deliberately wider than the old 340px cap: a repository URL is
+          long, and the loading button must never eat into it. */}
+      <div className="flex-1 flex justify-center min-w-0 max-w-md lg:max-w-xl px-1">
         {showInput ? (
-          <div className="relative w-full max-w-[340px] min-w-0">
-            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
-              <div className="relative flex-1 min-w-[120px]">
+          <div className="relative w-full max-w-[480px] min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <div className="relative flex-1 min-w-[90px]">
                 <Link2
                   size={13}
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
@@ -126,16 +128,19 @@ export default function TopBar({
                 id="load-repo-btn"
                 onClick={() => void loader.submit()}
                 disabled={loader.loading || !loader.url.trim()}
-                className="btn-primary !py-1.5 !px-2.5 sm:!px-3 !text-xs shrink-0"
+                className="btn-primary !py-1.5 !px-2.5 sm:!px-3 !text-xs shrink-0 justify-center min-w-[74px]"
               >
                 {loader.loading ? <span className="btn-spinner" /> : null}
                 {loader.loading ? "Loading" : "Load"}
               </button>
             </div>
 
-            {/* Staged loading progress, anchored under the input */}
+            {/* Staged loading progress, anchored under the input. The
+                header must stay overflow-visible for this to escape the
+                bar; clipping it here is what made the URL and the button
+                appear to overlap. */}
             {loader.loading && loader.stepIdx >= 0 && loader.stepIdx < 4 && (
-              <div className="pop-in absolute left-0 right-0 top-10 z-50 card p-3">
+              <div className="pop-in absolute left-0 right-0 top-full mt-2 z-50 card p-3 shadow-lg">
                 <LoadingStepper steps={loader.steps} />
               </div>
             )}
@@ -254,8 +259,8 @@ export default function TopBar({
 
           {settingsOpen && (
             <div className="
-              drawer-slide-in absolute right-0 top-10 w-56 z-[60]
-              card p-2
+              drawer-slide-in absolute right-0 top-full mt-2 w-56 z-[60]
+              card p-2 shadow-lg
             ">
               <button
                 onClick={() => { onShowShortcuts?.(); setSettingsOpen(false); }}

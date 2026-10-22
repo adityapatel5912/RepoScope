@@ -1,8 +1,8 @@
 {
   "name": "reposcope",
   "displayName": "RepoScope",
-  "description": "The code graph, in your editor. Blast radius, callers, and a live architecture map — from the same index the RepoScope canvas draws.",
-  "version": "2.0.0",
+  "description": "The code graph, in your editor. Blast radius, callers, and a live architecture map - from the same index the RepoScope canvas draws.",
+  "version": "2.0.1",
   "publisher": "adityapatel5912",
   "license": "MIT",
   "repository": {
@@ -16,6 +16,7 @@
   "keywords": ["code graph", "architecture", "blast radius", "mcp", "dependencies"],
   "activationEvents": [
     "onStartupFinished",
+    "onView:reposcope.graph",
     "onLanguage:python",
     "onLanguage:typescript",
     "onLanguage:javascript",
@@ -37,7 +38,8 @@
       "reposcope": [
         {
           "id": "reposcope.graph",
-          "name": "Architecture"
+          "name": "Architecture",
+          "type": "webview"
         }
       ]
     },

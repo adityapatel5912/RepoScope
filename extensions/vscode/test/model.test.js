@@ -4,7 +4,7 @@
  *
  *     npm run compile && node --test test/
  *
- * A plain `node --test` — no mocking, no VS Code, no extension host.
+ * A plain `node --test` - no mocking, no VS Code, no extension host.
  * That is possible because everything that can be decided without an
  * editor lives in `model.ts`, which has no `vscode` import.
  *
@@ -27,6 +27,7 @@ const {
   escapeXml,
   parseOpenUri,
   renderLegend,
+  shortenLabel,
 } = require("../out/model.js");
 
 const GRAPH = {
@@ -65,24 +66,40 @@ test("the bands are ordered by the graph's own centrality", () => {
   );
 });
 
-test("the SVG renders a node per file and an edge per import", () => {
+test("with no file open, the map is the repository at a glance", () => {
   const svg = renderSvg(GRAPH);
   assert.match(svg, /<svg/);
+  assert.match(svg, /4 files, 3 layers/);
+  assert.match(svg, /MOST CENTRAL/);
+  assert.match(svg, /TOP FOLDERS/);
+  // Only the top modules are drawn - a sidebar is not a canvas.
+  assert.ok((svg.match(/data-id="/g) || []).length <= 6);
   assert.match(svg, /data-id="file:app\.py"/);
-  assert.match(svg, /<path/);       // the import edges
-  // One node per file — counted by the data-id the click handler reads.
-  assert.equal((svg.match(/data-id="/g) || []).length, 4);
 });
 
-test("the focused node gets a halo", () => {
+test("with a file open, the map is that file's neighbourhood", () => {
   const svg = renderSvg(GRAPH, "file:app.py");
-  // The halo is a bigger, translucent circle.
-  assert.match(svg, /opacity="0\.22"/);
+  assert.match(svg, /THIS FILE/);
+  assert.match(svg, /USES \(1\)/);
+  assert.match(svg, /USED BY \(0\)/);
+  assert.match(svg, /helpers\.py/);
+  // A file two hops away is not the file's neighbourhood.
+  assert.doesNotMatch(svg, /README\.md/);
 });
 
-test("the map names its bands, so the rows read as ranks", () => {
-  const svg = renderSvg(GRAPH);
-  assert.match(svg, /CORE/);
+test("the focused file is named, not just dotted", () => {
+  const svg = renderSvg(GRAPH, "file:app.py");
+  assert.match(svg, />app\.py</);
+  assert.match(svg, /data-id="file:app\.py"/);
+});
+
+test("the dependents are on the other side of the edge", () => {
+  // helpers.py is used by app.py and ui.tsx.
+  const svg = renderSvg(GRAPH, "file:helpers.py");
+  assert.match(svg, /USED BY \(2\)/);
+  assert.match(svg, /app\.py/);
+  assert.match(svg, /ui\.tsx/);
+  assert.match(svg, /USES \(0\)/);
 });
 
 test("every node says what it is on hover", () => {
@@ -97,6 +114,14 @@ test("the legend lists only the layers the repository uses", () => {
   assert.match(legend, /data/);
   // The fixture has no Go/Rust files and no tests.
   assert.doesNotMatch(legend, /compute/);
+});
+
+test("a long path is shortened from the head, never from the file name", () => {
+  assert.equal(shortenLabel("app.py", 42), "app.py");
+  const shortened = shortenLabel("backend/tests/fixtures/real_small/src/tomli/_parser.py", 30);
+  assert.ok(shortened.length <= 30, shortened);
+  assert.ok(shortened.endsWith("_parser.py"), shortened);
+  assert.ok(shortened.startsWith("…"), shortened);
 });
 
 test("an empty graph says what to do", () => {

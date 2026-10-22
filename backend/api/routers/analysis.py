@@ -45,6 +45,24 @@ def _current_graph() -> dict:
     return graph
 
 
+def _file_of(node: dict) -> str:
+    """
+    The file a node belongs to, always.
+
+    A file node has no `file` of its own — it IS the file. But the
+    extension jumps to `caller.file`, so a file-level caller that
+    answered with an empty path would send the developer to the
+    workspace root instead of the file that calls.
+    """
+    file_path = str(node.get("file") or "")
+    if file_path:
+        return file_path
+    node_id = str(node.get("id") or "")
+    if node_id.startswith("file:"):
+        return node_id[len("file:"):]
+    return ""
+
+
 @router.get("/hotspots")
 async def hotspots(window_days: int = 90):
     """
@@ -284,12 +302,70 @@ async def callers(file: str = "", symbol: str = ""):
             {
                 "id": n["id"],
                 "label": n.get("label", ""),
-                "file": n.get("file", ""),
-                "line": n.get("line", 0),
+                "file": _file_of(n),
+                "line": int(n.get("line") or 0),
             }
             for n in caller_nodes
         ],
     }
+
+
+@router.get("/callers-batch")
+async def callers_batch(file: str = "", symbols: str = ""):
+    """
+    The callers of EVERY symbol in a file, in ONE request.
+
+    The extension's CodeLens needs a count above each definition line.
+    Asking once per line meant a file with fifty definitions fired fifty
+    HTTP requests — the lens took seconds to appear, and the backend did
+    fifty times the work for one answer.
+
+    The counts are the SAME counts `/callers` returns: one implementation,
+    one answer, whichever way it is asked for.
+    """
+    graph = await asyncio.to_thread(_current_graph)
+    if not graph:
+        return {"available": False, "reason": "no graph", "results": {}}
+
+    nodes = graph.get("nodes", []) or []
+    edges = graph.get("edges", []) or []
+    nodes_by_id = {n["id"]: n for n in nodes}
+
+    wanted = [name for name in symbols.split(",") if name]
+    results: dict[str, dict] = {}
+    for name in wanted:
+        symbol_nodes = [
+            n for n in nodes
+            if n.get("type") in ("function", "class")
+            and (not file or n.get("file") == file)
+            and n.get("label") == name
+        ]
+        if not symbol_nodes:
+            results[name] = {"found": False, "count": 0, "callers": []}
+            continue
+
+        target_ids = {n["id"] for n in symbol_nodes}
+        caller_ids = {
+            e["source"] for e in edges
+            if e.get("type") == "calls" and e.get("target") in target_ids
+        }
+        caller_nodes = [nodes_by_id[i] for i in caller_ids if i in nodes_by_id]
+        caller_nodes.sort(key=lambda n: (str(n.get("file", "")), int(n.get("line") or 0)))
+        results[name] = {
+            "found": True,
+            "count": len(caller_nodes),
+            "callers": [
+                {
+                    "id": n["id"],
+                    "label": n.get("label", ""),
+                    "file": _file_of(n),
+                    "line": int(n.get("line") or 0),
+                }
+                for n in caller_nodes
+            ],
+        }
+
+    return {"available": True, "file": file, "results": results}
 
 
 @router.get("/dependents")
@@ -332,8 +408,8 @@ async def dependents(file: str = ""):
             {
                 "id": n["id"],
                 "label": n.get("label", ""),
-                "file": n.get("file", ""),
-                "line": n.get("line", 0),
+                "file": _file_of(n),
+                "line": int(n.get("line") or 0),
             }
             for n in impact["direct_impacts"][:10]
         ],

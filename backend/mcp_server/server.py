@@ -57,17 +57,27 @@ def load_index(root: Path) -> dict:
     """
     Load the graph for a repository, building it if necessary.
 
-    Reads the persisted index when there is one; otherwise builds it and
-    persists it, so the next call is instant.
+    Reads the persisted index when there is one — but only when that
+    index is still TRUE. An index is dated when it is written, and a
+    source file newer than that date means the index describes a
+    codebase that no longer exists. Answering an agent from a stale
+    index is worse than rebuilding it: the agent cites it.
+
+    Otherwise the graph is built and persisted, so the next call is
+    instant.
     """
     from graph_store import JsonGraphStore
 
     store = JsonGraphStore(root / ".reposcope" / "graph.json")
     if store.exists():
         graph = store.load()
-        if graph.get("nodes"):
+        if graph.get("nodes") and _index_is_current(store, root):
             log.info("Loaded the index from %s", store.path)
             return graph
+        log.info(
+            "The index at %s no longer describes the source — rebuilding it",
+            store.path,
+        )
 
     from graph_builder import build_graph_from_repo
     from parse_cache import ParseCache, default_cache_path
@@ -81,6 +91,16 @@ def load_index(root: Path) -> dict:
     except ValueError as exc:
         log.warning("Could not persist the index: %s", exc)
     return graph
+
+
+def _index_is_current(store, root: Path) -> bool:
+    """True when the persisted index is newer than every source file."""
+    from graph_builder import newest_source_mtime
+
+    built_at = store.built_at()
+    if built_at is None:
+        return False
+    return newest_source_mtime(root) <= built_at
 
 
 def build_server(root: str | None = None):

@@ -83,3 +83,36 @@ def golden_snapshot():
         return json.loads(path.read_text(encoding="utf-8"))
 
     return _load
+
+
+@pytest.fixture
+def served_graph():
+    """
+    Make the endpoints answer about a FIXTURE, not about whatever
+    repository the developer happens to have loaded.
+
+    `/api/analysis/callers` and `/api/analysis/dependents` answer about
+    "the loaded repository", which is process-wide state on disk. A test
+    that calls them without pinning the repository therefore passes or
+    fails depending on what the developer's machine was doing — the
+    worst kind of test. This fixture pins it.
+
+    Usage::
+
+        def test_x(served_graph):
+            ...
+    """
+    import orchestrator
+    from graph_builder import build_graph_from_repo
+
+    cache = orchestrator.get_cached_graph()
+    saved = dict(cache)
+    root = str(FIXTURES_DIR / "multilang")
+    built = build_graph_from_repo(root)
+    cache.update(built)
+    cache["root"] = root
+    try:
+        yield built
+    finally:
+        cache.clear()
+        cache.update(saved)

@@ -33,6 +33,7 @@ import json
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -209,6 +210,11 @@ class JsonGraphStore:
             )
         payload = {
             "schema_version": SCHEMA_VERSION,
+            # WHEN the index was built. A reader compares this with the
+            # repository's newest source file to decide whether the index
+            # is still true — an index that cannot be dated is an index
+            # nobody can trust.
+            "built_at": time.time(),
             "summary": graph.get("summary") or graph_summary(graph),
             "nodes": graph.get("nodes", []),
             "edges": graph.get("edges", []),
@@ -217,6 +223,25 @@ class JsonGraphStore:
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         os.replace(tmp, self.path)
+
+    def built_at(self) -> float | None:
+        """
+        When this index was built, or None when it carries no stamp.
+
+        An index written before the stamp existed returns None, and the
+        caller treats that as "of unknown age" — which is the honest
+        answer.
+        """
+        if not self.exists():
+            return None
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        value = raw.get("built_at") if isinstance(raw, dict) else None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
 
     def stats(self) -> dict:
         graph = self.load()

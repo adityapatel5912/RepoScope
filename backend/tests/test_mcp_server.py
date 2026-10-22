@@ -313,6 +313,88 @@ def test_the_cycles_resource_reports_the_cycles():
     assert "cycles" in payload
 
 
+# ── The index must be true, not merely present ──────────────────────────────
+
+def test_a_current_index_is_reused(tmp_path):
+    """An index that describes the source is used as-is — rebuilding is waste."""
+    import json
+
+    from graph_builder import build_graph_from_repo
+    from graph_store import JsonGraphStore
+    from mcp_server.server import load_index
+
+    repo = tmp_path / "repo"
+    (repo / "pkg").mkdir(parents=True)
+    (repo / "pkg" / "one.py").write_text("def one():\n    return 1\n", encoding="utf-8")
+
+    store = JsonGraphStore(repo / ".reposcope" / "graph.json")
+    store.save(build_graph_from_repo(str(repo)))
+    stamped = store.built_at()
+    assert stamped is not None
+
+    graph = load_index(repo)
+
+    assert any(n.get("label") == "pkg/one.py" for n in graph["nodes"])
+    # The index was not rewritten, so it was reused.
+    raw = json.loads(store.path.read_text(encoding="utf-8"))
+    assert raw["built_at"] == stamped
+
+
+def test_a_stale_index_is_rebuilt_rather_than_served(tmp_path):
+    """
+    An index older than the source describes a codebase that no longer
+    exists. Serving it to an agent is worse than rebuilding it: the agent
+    cites it.
+    """
+    import json
+
+    from graph_builder import build_graph_from_repo
+    from graph_store import JsonGraphStore
+    from mcp_server.server import load_index
+
+    repo = tmp_path / "repo"
+    (repo / "pkg").mkdir(parents=True)
+    (repo / "pkg" / "one.py").write_text("def one():\n    return 1\n", encoding="utf-8")
+
+    store = JsonGraphStore(repo / ".reposcope" / "graph.json")
+    store.save(build_graph_from_repo(str(repo)))
+
+    # A file appears AFTER the index was written, and the index's stamp
+    # is moved back so the difference is unambiguous.
+    (repo / "pkg" / "two.py").write_text("def two():\n    return 2\n", encoding="utf-8")
+    raw = json.loads(store.path.read_text(encoding="utf-8"))
+    raw["built_at"] = 0
+    store.path.write_text(json.dumps(raw), encoding="utf-8")
+
+    graph = load_index(repo)
+
+    labels = {n.get("label") for n in graph["nodes"]}
+    assert "pkg/two.py" in labels, "the stale index was served instead of rebuilding"
+
+
+def test_an_index_without_a_stamp_is_not_trusted(tmp_path):
+    """An index that cannot be dated is an index of unknown age — rebuild it."""
+    import json
+
+    from graph_builder import build_graph_from_repo
+    from graph_store import JsonGraphStore
+    from mcp_server.server import load_index
+
+    repo = tmp_path / "repo"
+    repo.mkdir(parents=True)
+    (repo / "one.py").write_text("def one():\n    return 1\n", encoding="utf-8")
+
+    store = JsonGraphStore(repo / ".reposcope" / "graph.json")
+    store.save(build_graph_from_repo(str(repo)))
+    raw = json.loads(store.path.read_text(encoding="utf-8"))
+    raw.pop("built_at", None)
+    store.path.write_text(json.dumps(raw), encoding="utf-8")
+
+    load_index(repo)
+
+    assert store.built_at() is not None, "the index was not re-dated"
+
+
 # ── The transport rule ──────────────────────────────────────────────────────
 
 def test_no_sse_transport_anywhere_in_the_codebase():

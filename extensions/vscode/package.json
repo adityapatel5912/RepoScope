@@ -53,6 +53,11 @@
         "category": "RepoScope"
       },
       {
+        "command": "reposcope.showGraph",
+        "title": "RepoScope: Show the architecture map",
+        "category": "RepoScope"
+      },
+      {
         "command": "reposcope.showCallers",
         "title": "RepoScope: Show callers",
         "category": "RepoScope"
@@ -90,6 +95,11 @@
           "type": "string",
           "default": "http://127.0.0.1:8000",
           "description": "The RepoScope backend. Run `reposcope run .` to start one."
+        },
+        "reposcope.canvasUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:4100",
+          "description": "The RepoScope web canvas. `reposcope run .` serves it on port 4100."
         },
         "reposcope.statusBar": {
           "type": "boolean",

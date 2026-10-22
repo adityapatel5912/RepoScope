@@ -41,6 +41,20 @@ export class StatusBarController {
     this.item.dispose();
   }
 
+  /**
+   * The backend is not reachable.
+   *
+   * This is NOT the same as "no file is open". Telling a developer that
+   * the blast radius is unavailable because there is no file when the
+   * real problem is that the backend has not started sends them looking
+   * in the wrong place.
+   */
+  offline(): void {
+    this.item.text = "RepoScope: offline";
+    this.item.tooltip =
+      "Could not reach the RepoScope backend.\nStart one with: reposcope run .";
+  }
+
   /** Refresh for the given file (a repo-relative path), or hide. */
   async update(file: string | null): Promise<void> {
     const current = ++this.token;

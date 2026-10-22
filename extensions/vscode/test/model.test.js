@@ -25,6 +25,8 @@ const {
   formatStatusText,
   formatStatusTooltip,
   escapeXml,
+  parseOpenUri,
+  renderLegend,
 } = require("../out/model.js");
 
 const GRAPH = {
@@ -68,13 +70,33 @@ test("the SVG renders a node per file and an edge per import", () => {
   assert.match(svg, /<svg/);
   assert.match(svg, /data-id="file:app\.py"/);
   assert.match(svg, /<path/);       // the import edges
-  assert.equal((svg.match(/<circle/g) || []).length, 4);  // one per file
+  // One node per file — counted by the data-id the click handler reads.
+  assert.equal((svg.match(/data-id="/g) || []).length, 4);
 });
 
 test("the focused node gets a halo", () => {
   const svg = renderSvg(GRAPH, "file:app.py");
   // The halo is a bigger, translucent circle.
-  assert.match(svg, /opacity="0\.28"/);
+  assert.match(svg, /opacity="0\.22"/);
+});
+
+test("the map names its bands, so the rows read as ranks", () => {
+  const svg = renderSvg(GRAPH);
+  assert.match(svg, /CORE/);
+});
+
+test("every node says what it is on hover", () => {
+  const svg = renderSvg(GRAPH);
+  assert.match(svg, /<title>app\.py · backend<\/title>/);
+});
+
+test("the legend lists only the layers the repository uses", () => {
+  const legend = renderLegend(GRAPH);
+  assert.match(legend, /backend/);
+  assert.match(legend, /client/);
+  assert.match(legend, /data/);
+  // The fixture has no Go/Rust files and no tests.
+  assert.doesNotMatch(legend, /compute/);
 });
 
 test("an empty graph says what to do", () => {
@@ -137,4 +159,24 @@ test("the status bar tooltip shows the evidence, not just the conclusion", () =>
   assert.match(tooltip, /Direct dependents: 3/);
   assert.match(tooltip, /Transitive dependents: 9/);
   assert.match(tooltip, /Risk score: 7\/10/);
+});
+
+test("a reposcope://open link carries the file and the line", () => {
+  const target = parseOpenUri("path=backend/graph_builder.py&line=15");
+  assert.deepEqual(target, { path: "backend/graph_builder.py", line: 15 });
+});
+
+test("a reposcope://open link without a line opens the top of the file", () => {
+  const target = parseOpenUri("path=backend/graph_builder.py");
+  assert.deepEqual(target, { path: "backend/graph_builder.py", line: 1 });
+});
+
+test("a reposcope://open link without a file is not a target", () => {
+  assert.equal(parseOpenUri("line=15"), null);
+  assert.equal(parseOpenUri(""), null);
+});
+
+test("a reposcope://open link with a nonsense line still opens the file", () => {
+  const target = parseOpenUri("path=a.py&line=not-a-number");
+  assert.deepEqual(target, { path: "a.py", line: 1 });
 });

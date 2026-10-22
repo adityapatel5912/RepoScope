@@ -2938,20 +2938,20 @@ imported from its own root; `backend/` is a source root here, so `backend/main.p
 `from graph_builder import build_graph_from_repo`, and "graph_builder" is not that file's dotted
 path. Every such import produced no edge, so the blast radius of the most central module in the
 repository read **"no dependents"**, the MCP lineage tool answered **"empty"**, and the VS Code
-status bar said **"low risk"**. Fixing the resolution took import edges from **124 to 323**.
+status bar said **"low risk"**. Fixing the resolution took import edges from **124 to 326**.
 
 ### 32.1 What was verified, and how
 
 | Surface | How it was verified | Result |
 |---|---|---|
 | Web app | Chrome DevTools MCP against the built bundle | Graph, drawer, settings, modes, no console errors |
-| Local mode | `python -m cli.main run .` against **this** repository | 452 files, watcher live, nothing leaves the machine |
-| Watcher | Created and deleted a file while the server ran | 1929 → 1930 → 1929 nodes, correctly |
+| Local mode | `python -m cli.main run .` against **this** repository | 347 files, watcher live, nothing leaves the machine |
+| Watcher | Created and deleted a file while the server ran | 1860 → 1861 → 1860 nodes, correctly |
 | MCP (stdio) | The real MCP client, over a pipe | 8 tools, 5 resources, all answers checked |
 | MCP (HTTP) | A real Streamable HTTP session | initialize → tools/list → resources/list → tool call → resource read |
 | MCP (in OpenCode) | The server configured in `opencode.json` | Connected; tools live in the agent's catalog |
 | Extension | A real VS Code window, the extension installed from the VSIX | Status bar, CodeLens, mini-graph, URI handler |
-| Extension (unit) | `npm test` | **18 passed** |
+| Extension (unit) | `npm test` | **20 passed** |
 | Backend | `python -m pytest -q` | **330 passed** |
 | Frontend | `tsc --noEmit` | Clean |
 
@@ -3001,7 +3001,7 @@ first letter at the canvas edge; the legend is an overlay, so two nodes were hid
 The fit now lands the graph in the space that is actually free.
 
 **10. "Group by directory" did nothing.** (frontend/src/components/GraphView.tsx)
-The flag reached the pyramid builder as an unused parameter. It now groups: **452 files → 77
+The flag reached the pyramid builder as an unused parameter. It now groups: **347 files → 70
 directories**, each node saying how many files it holds, the drawer listing them, and the ranks
 unchanged (a group sits in the rank of its most important member). The default follows the size
 of the repository — nine files read better as nine files.
@@ -3011,18 +3011,43 @@ of the repository — nine files read better as nine files.
 header boundary. The header no longer clips, and the Load button has a stable width so the
 repository details never run under it.
 
+**12. The Activity Bar view was declared as a tree.** (extensions/vscode/package.json)
+The view had an id, a name, and a `WebviewViewProvider`, but no `"type": "webview"` — and VS Code
+defaults an undeclared view to a tree. The extension was asked for a `TreeDataProvider` it does
+not have, so the panel showed VS Code's "no data provider" placeholder. A second, older install of
+the extension itself held the same view id in the default profile and made the first diagnosis
+look intermittent. The manifest now says what the code implements; the view is verified below.
+
+**13. The indexer and the watcher had two different ignore lists.** (backend/parse_cache.py,
+backend/watcher.py)
+`.playwright-mcp/` was gitignored but not indexed-skipped, so it became the repository's
+second-largest top-level folder; `frontend/dist` was skipped by the indexer but watched, so every
+build triggered a re-index that then ignored the files it had seen. Both now import the same
+`SKIP_DIRS`.
+
 ### 32.3 The extension's look
 
-The mini-graph was "a grid of dots": technically the graph, and unreadable. It is now a map with
-**bands** (ranked by centrality, each labelled and counted), a soft background per band so the rows
-read as rows, a **title on every node** so the mouse says what it is, a **legend** that lists only
-the layers the repository actually uses, and the file you are editing named at the top.
+The first mini-graph was "a grid of dots": technically the graph, and unreadable. It is now
+**focus-first**. With a file open, the Activity Bar shows *this file*, the files it uses most, and
+the files that use it — headed `USES (4)` and `USED BY (18)` for that file, with `+12 more` where
+the list is cut, and a legend for the layers in that neighbourhood. With no file open it is an
+overview: the layer bar, the most central file, and the folders with the most files in them.
+
+A full-repository map still exists underneath (bands ranked by centrality, a soft background per
+band, a title on every node), but the view is no longer asked to be a wall of nodes in a 300px
+column. Switching editors re-centres locally — it does not download the graph again — and first
+paint centres on the file that is already open.
+
+The view was also declared as a tree rather than a webview (defect 12), which is why earlier
+screenshots of the panel showed a placeholder. It is now seen in a real Activity Bar view, with a
+file open, against local mode.
 
 ### 32.4 Published
 
-`adityapatel5912.reposcope 2.0.0` is **published to Open VSX** (`open-vsx.org/extension/
-adityapatel5912/reposcope`) — the namespace was created and the VSIX uploaded with the
-`OVSX_TOKEN` from `.env`. It is not yet **visible in search**: Open VSX hides an extension whose
+`adityapatel5912.reposcope` **2.0.1** is published to Open VSX
+(`open-vsx.org/extension/adityapatel5912/reposcope`); 2.0.0 was uploaded first and has the broken
+view declaration, so 2.0.1 is the version to install. Uploads use the `OVSX_TOKEN` from the
+gitignored `.env`. The listing is not yet **visible in search**: Open VSX hides an extension whose
 publisher namespace has not been verified by email. That last click is a human one.
 
 ### 32.5 The honest list, after this sprint
@@ -3033,22 +3058,28 @@ Still not done — these are real gaps:
    personal access token are still missing. Open VSX covers Cursor and VSCodium; VS Code itself
    needs `code --install-extension` from the VSIX until then.
 2. **The Open VSX extension is invisible until the namespace is verified by email.**
-3. **The extension's mini-graph has not been seen in a real Activity Bar view.** The provider is
-   registered and the map is rendered by the same code the unit tests cover, but the final visual
-   check was blocked by VS Code's own auto-update landing mid-session.
-4. **The `reposcope://open` URI handler was not exercised end to end.** The parsing is unit
+3. **The `reposcope://open` URI handler was not exercised end to end.** The parsing is unit
    tested and the handler now fails with a readable message; the URL dispatch itself could not be
    isolated between two running VS Code instances.
-5. **The browser picker cannot be automated.** Opening a real folder through the native dialog
+4. **The browser picker cannot be automated.** Opening a real folder through the native dialog
    needs a human.
-6. The WebGL tier, the `kuzu` flag, monorepo cross-package edges, the ownership overlay, the
+5. **The local-folder panel builds a graph the canvas does not show.** `LocalFolderPanel.tsx`
+   computes a browser-side graph for a dropped folder; the main canvas still expects the backend
+   pipeline. The panel is honest about being a preview, but the hand-off is unwired.
+6. **`/api/analysis/repo-map` takes 14–24 seconds on this repository.** It re-derives the graph
+   per request; the tool is correct but not usable interactively at this size.
+7. **Test fixtures are still indexed as production code.** `backend/tests/fixtures/` is a real
+   directory in the repository, so the top PageRank hub in this repository is a fixture file and
+   three of the five dependency cycles are fixture files. A separate "tests are not architecture"
+   mode would be the fix.
+8. **`explain_architectural_rule` reports zero rules in effect.** The rules file is parsed but the
+   repository declares no boundaries, so the tool answers an empty rule set instead of saying
+   "none declared" in a way an agent can act on.
+9. The WebGL tier, the `kuzu` flag, monorepo cross-package edges, the ownership overlay, the
    critical-path panel, the PR-comment test stubs, the `@reposcope-bot` reply Action, the
    visual-regression baselines and the unbounded 50k measurement are all still open — carried
    unchanged from Sprint 7.
-7. **Test fixtures are still indexed as production code.** `backend/tests/fixtures/` is a real
-   directory in the repository, so the top PageRank hub in this repository is
-   `backend/tests/fixtures/real_small/src/tomli/_parser.py:set` and three of the five dependency
-   cycles are fixture files. A separate "tests are not architecture" mode would be the fix.
+
 
 ### 32.6 Notes for the next agent
 

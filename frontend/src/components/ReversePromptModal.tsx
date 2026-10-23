@@ -107,7 +107,7 @@ export default function ReversePromptModal({ open, prompt, onClose, onScaffold }
         />
 
         <p className="text-[11px] text-text-muted mt-3 shrink-0">
-          Paste this into Bob or any coding agent to rebuild.
+          Paste this into your coding agent to rebuild.
         </p>
       </div>
     </div>

@@ -1,49 +1,103 @@
 # Handoff
 
-RepoScope is fully built and ready for review.
+**Current release:** package **2.0.0**, extension **2.0.1**.
+**State:** code complete for the v2.0 scope; documentation updated; manual
+verification is still open.
 
 ## What exists
 
 | Path | Contents |
-|------|----------|
-| `backend/` | FastAPI app — SSE, LLM chain, BYOK, repo loader/tracker |
-| `frontend/` | React + Vite + TypeScript + React Flow UI |
-| `md/` | 7 documentation files |
-| `data/` | Mock metrics, logs, repo state JSON |
-| `demo-repo/` | Tiny Python project for instant testing |
-| `docs/BUILD_PROMPT.md` | Original build prompt for reference |
-| `README.md` | Quick start + feature overview |
-| `CONTRIBUTING.md` | Dev setup + commit convention |
+|---|---|
+| `backend/` | FastAPI app, Tree-sitter parsers, graph builder/store, local watcher, analysis, MCP server |
+| `frontend/` | React + Vite + TypeScript canvas, chat, impact, tours, Student Mode, PR Bot |
+| `cli/` | `reposcope` and `reposcope-mcp` entry points |
+| `extensions/vscode/` | VS Code / Cursor / VSCodium extension, version 2.0.1 |
+| `docs/` | Current documentation, screenshots, QA report, verification checklist |
+| `scripts/` | QA and maintenance scripts |
+| `benchmarks/` | Repo-map token-saving benchmark and committed results |
 
-## LLM provider chain
-1. **OpenRouter** (`OPENROUTER_API_KEY`) — primary, uses first model in
-   `Models_OPENROUTER` (free models available)
-2. **Groq** (`GROQ_API_KEY`) — secondary
-3. **NVIDIA NIM** (`NVIDIA_API_KEY`) — tertiary fallback
+## Run it
 
-All provider config reads from `.env` using the exact variable names in
-`.env.example`. No keys are hardcoded.
+### Local mode
 
-## GitHub auth
-- Env var: `GITHUB_PAT`
-- Also accepted via BYOK panel (`POST /api/byok/set`) — session-only,
-  never persisted to disk.
+```bash
+python -m cli.main run . --port 4100 --no-open
+```
 
-## MCP servers
-`.bob/mcp.json` configures `codebase-memory-mcp` and the GitHub MCP server.
-The GitHub server reads `${GITHUB_PAT}` — if Bob doesn't expand env vars in
-MCP config at runtime, paste the token value directly or set it as a system
-environment variable before starting Bob.
+Health: <http://127.0.0.1:4100/api/health>
+Canvas: <http://127.0.0.1:4100>
 
-## Next steps for the developer
-1. Copy `.env.example` → `.env` and fill in real API keys.
-2. `cd backend && pip install -r requirements.txt`
-3. `cd frontend && npm install`
-4. Start backend: `uvicorn main:app --reload --port 8000`
-5. Start frontend: `npm run dev`
-6. Open http://localhost:5173 and test with `demo-repo/` or any public GitHub URL.
-7. Review code, then handle version control manually (`git init`, etc.).
+### Full stack
 
-## Notes
-- No `git` commands were run. All version control is left to the developer.
-- All credentials are read via `os.getenv(...)` — never hardcoded.
+```bash
+# Terminal 1
+cd backend && uvicorn main:app --reload --port 8000
+
+# Terminal 2
+cd frontend && npm install && npm run dev
+```
+
+### MCP
+
+```bash
+cd backend
+python -m mcp_server.server --root ..
+```
+
+## Current verification
+
+Verified in this session:
+
+- backend: **333 tests passed**;
+- frontend TypeScript: clean;
+- frontend production build: success;
+- local mode: health 200, graph loaded, watcher on;
+- MCP stdio sweep: **8 tools, 5 resources, 3 read rounds, clean ping**;
+- OpenCode MCP status: `✓ reposcope connected`.
+
+Not manually verified yet:
+
+- native folder picker / browser preview;
+- live PR Bot comment;
+- VS Code extension in a real editor window;
+- Open VSX search visibility;
+- VS Code Marketplace publishing;
+- LLM-backed flows with a live key.
+
+The authoritative list is
+[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md). Do not mark an item
+complete without evidence.
+
+## Architecture in one paragraph
+
+A repository is parsed by Tree-sitter into file and symbol nodes with
+`imports`, `calls`, and `contains` edges. The graph is written to
+`.reposcope/graph.json`. PageRank, SCC cycles, reachability, hotspots, and
+blast radius run over that snapshot. The FastAPI canvas, the MCP server, and
+the extension all read the same index. Local mode watches the folder and pushes
+re-index events to the browser. LLM features are optional and use the
+OpenRouter → Groq → NVIDIA chain.
+
+## Key constraints
+
+- Local mode must not make outbound requests.
+- The browser folder preview must stay labelled as a preview; it has no
+  cross-file symbol resolution.
+- The Open VSX listing is hidden from search until the publisher namespace
+  email is verified.
+- The VS Code Marketplace needs an Azure DevOps PAT.
+- Some MCP clients have a resource-read bridge issue; the server's direct
+  stdio reads and tool calls work.
+- Do not commit `.env`, `.reposcope/`, `node_modules/`, or build output.
+- Do not push without explicit instruction.
+
+## Where to look next
+
+| Question | Document |
+|---|---|
+| How does it work? | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| What ships? | [FEATURES.md](FEATURES.md) |
+| What is verified? | [QA_REPORT.md](QA_REPORT.md) |
+| What is still manual? | [VERIFICATION_CHECKLIST.md](VERIFICATION_CHECKLIST.md) |
+| How do I run/publish it? | [DEVELOPMENT.md](DEVELOPMENT.md), [DEPLOYMENT.md](DEPLOYMENT.md) |
+| What is still planned? | [ROADMAP_V2.md](ROADMAP_V2.md) |

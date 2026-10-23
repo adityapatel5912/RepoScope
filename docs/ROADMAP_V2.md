@@ -3,7 +3,7 @@
 - **Target:** v2.0.0 Architecture & Multi-Platform Ecosystem
 - **Repository:** adityapatel5912/RepoScope
 - **Audience:** Engineering Team & Technical Autonomous Agents
-- **Context:** IBM Bob 2.0 Hackathon
+- **Context:** v2.0 product and architecture delivery
 - **Date:** October 2026
 - **Status:** **Delivered** - Sprints 0-7 shipped (2026-10-21 - 2026-10-22), then Sprint 8 ran the
   product end to end and fixed what running it found. 31 records Sprint 7 and the items
@@ -58,7 +58,7 @@ picked one side of that line; RepoScope takes both.
 | Security/breaking | `backend/security_scanner.py` (~370 lines) |
 | MCP | `backend/mcp_client.py` (71 lines) — **client only** |
 | CI | `.github/workflows/pr-impact.yml` — posts the impact comment on every PR |
-| Docs | 20 files in `docs/`, incl. `FEATURES.md`, `ARCHITECTURE.md`, `BOB_SESSIONS.md` |
+| Docs | 20 files in `docs/`, incl. `FEATURES.md`, `ARCHITECTURE.md`, `DEMO.md` |
 
 ### 1.2 What already exists (do not rebuild)
 
@@ -1241,7 +1241,7 @@ These are the assets. Any change to the plan must not damage them.
 | **Reverse Build Prompt → Scaffold** | ✅ **Yes** | Unique. |
 | **Integrated Security Scan** (secrets + breaking + CVE) | Partially | Sonar/Semgrep are deeper but are not in the same product. |
 | **Local-first, no PAT required** | ✅ Yes | Matches the "local code graphs are the agent context layer" thesis that `codegraph` popularised — but RepoScope can claim it **and** a visual map. |
-| **IBM Bob lineage** | ✅ Yes | Real differentiator *in this hackathon*. |
+| **Local-first, no PAT required + MCP server** | ⚠️ Yes | The visual map and the agent-facing MCP server share one index. |
 
 ---
 
@@ -2490,9 +2490,9 @@ tests, and packages into an installable `.vsix`.
 | The "View Callers (8)" CodeLens | `extensions/vscode/src/codeLens.ts` | feature 3 |
 | The Activity Bar mini-graph | `extensions/vscode/src/miniGraph.ts` | feature 1 |
 | The PURE logic | `extensions/vscode/src/model.ts` | no `vscode` import → unit-testable |
-| The unit tests | `extensions/vscode/test/model.test.js` | 11 tests, `node --test` |
+| The unit tests | `extensions/vscode/test/model.test.js` | 20 tests, `node --test` (11 at Sprint 5) |
 | The caller-count endpoints | `backend/api/routers/analysis.py` | `/callers`, `/dependents` |
-| The packaged extension | `extensions/vscode/reposcope-2.0.0.vsix` | 37 KB, installable |
+| The packaged extension | `extensions/vscode/reposcope-2.0.1.vsix` | current installable artifact |
 | CI job | `.github/workflows/qa.yml` | compile → test → package → upload |
 
 ### 29.2 The five features
@@ -2535,8 +2535,9 @@ on my machine". The VS Code-specific files are thin wrappers around it.
 environment, and a VS Code extension host cannot be driven by Playwright — the roadmap says
 so explicitly and calls for a manual checklist instead.
 
-What IS verified: it compiles under `strict: true`, its pure logic passes 11 unit tests, its
-two backend endpoints are tested from the server side, and it packages into a valid `.vsix`.
+What IS verified: it compiles under `strict: true`, its pure logic passes 20 unit tests
+(11 at Sprint 5), its two backend endpoints are tested from the server side, and it packages
+into a valid `.vsix`.
 
 What is NOT: that it activates with zero errors in a real editor, that the status bar updates
 within 1s of switching tabs, and that the CodeLens renders. Those need a human with VS Code
@@ -2897,7 +2898,7 @@ v2.0 is delivered, but these are real gaps, not footnotes:
 10. **MCP Streamable HTTP is still not exercised end to end** (carried from Sprint 4);
     stdio is verified over a real pipe.
 11. **The VS Code extension has never been launched in a real editor** (carried from Sprint
-    5). It compiles, passes its 11 unit tests, packages, and its endpoints are tested.
+    5). It compiles, passes its 20 unit tests, packages, and its endpoints are tested.
 12. **The suggested test stubs are still not in the PR comment**, and **the `@reposcope-bot`
     reply Action is still not written** (carried from Sprint 6).
 13. **Visual-regression baselines** (`toHaveScreenshot()`) are still not wired up (carried

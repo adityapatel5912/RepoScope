@@ -1,16 +1,20 @@
-# Contributors & Ownership
+# Ownership
 
-Auto-populated from GitHub API by traversing `authored` edges.
+## Status: planned overlay, not shipped
 
-| Author | Commits | PRs | Last active | Top modules |
-|---|---|---|---|---|
-| <login> | <count> | <count> | <date> | <paths> |
+The analysis API exposes `GET /api/analysis/ownership?path=...`, but the
+ownership data is **not populated** in the current release. The endpoint is a
+seam for a future CODEOWNERS / git-history overlay, not a verified feature.
 
-## Module Ownership (demo)
-| Path | Owner | Reviewer |
-|---|---|---|
-| src/auth/** | identity-team | @alice |
-| src/payment/** | payments-team | @carol |
+Do not present ownership badges, owners, or “who to ask” recommendations as
+available until:
 
-## Code Review Routing
-When agent suggests a change, tag the owner of the changed path.
+1. a source of truth is defined (CODEOWNERS, git author history, or a manual
+   mapping);
+2. the data is loaded into the graph or resolved at request time;
+3. the canvas and extension render it;
+4. the manual checklist has an ownership item with evidence.
+
+For now, use the file tree, hotspots, and dependency lineage instead.
+
+See [`ROADMAP_V2.md`](ROADMAP_V2.md) for the planned work.

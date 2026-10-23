@@ -2,6 +2,33 @@
 
 What is verified, how, and — explicitly — what is **not** covered.
 
+## Current verification — 2026-10-23
+
+This is the status of the shipped v2.0 tree. The Sprint 3 journey table below
+is kept as a historical record; where it disagrees with this section, this
+section wins.
+
+| Check | Command | Result |
+|---|---|---|
+| Backend tests | `python -m pytest -q` | **333 passed** |
+| Frontend type-check | `npx tsc --noEmit` | **clean** |
+| Frontend production build | `npm run build` | **built successfully** |
+| Local mode | `GET http://127.0.0.1:4100/api/health` | **200**, watcher on |
+| Graph snapshot | sidebar in local mode | **363 files, 1,864 nodes, 3,418 edges** (last run; screenshot captures may differ) |
+| MCP stdio sweep | `tools/list`, `resources/list`, read rounds | **8 tools, 5 resources**, clean ping |
+| MCP over HTTP | `POST /mcp` Streamable HTTP | initialize + tool call succeeded |
+| OpenCode client | `opencode mcp list` | **`✓ reposcope connected`** |
+
+Manual checks are **not** covered by those commands and remain unchecked in
+[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md):
+
+- selecting a folder in the native OS dialog;
+- installing and exercising the extension in a real VS Code/Cursor window;
+- Open VSX search visibility after publisher email verification;
+- a live PR Bot comment against a real pull request;
+- one OpenCode `read_mcp_resource` bridge, which stalled and returned an
+  unknown message ID while direct stdio reads and tool calls worked.
+
 The QA harness lives in [`scripts/qa.py`](../scripts/qa.py) and
 [`frontend/tests/e2e/`](../frontend/tests/e2e/). Run it with:
 
@@ -105,12 +132,12 @@ failure you cannot distinguish from a product bug is worse than no gate.
 | J17 | Security scan → flags render, severity ordered | ⬜ Sprint 4 |
 | J18 | **Local mode** — the LOCAL MODE badge shows, a file edit updates the graph **without a page reload** | ✅ implemented |
 | J19 | **Repo map** — the budgeted map renders and the token reduction % is shown | ✅ implemented |
-| J20 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ✅ backend-tested, ⬜ browser journey |
-| J21 | **IDE deep link** — node click produces the exact expected URI per editor | ⬜ Sprint 4 |
-| J22 | **Call edges** — graph renders `calls` edges after the parser rewrite | ⬜ Sprint 4 |
-| J23 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ⬜ Sprint 4 |
+| J20 | **MCP server** — stdio handshake, `tools/list`, one real tool call | ✅ backend-tested (8 tools, 5 resources); OpenCode client connected |
+| J21 | **IDE deep link** — node click produces the exact expected URI per editor | ✅ implemented (`frontend/src/utils/ideLinks.ts`); ⬜ no committed browser journey |
+| J22 | **Call edges** — graph renders `calls` edges after the parser rewrite | ✅ implemented; covered by parser and graph tests |
+| J23 | **Clusters** — expand/collapse preserves the pyramid when toggled off | ✅ implemented; ⬜ no committed browser journey |
 | J24 | **Churn heatmap** — hotspot rings distinct from the layer fill | ✅ implemented |
-| J25 | **Cycles** — cycle list matches the API result | ⬜ Sprint 4 |
+| J25 | **Cycles** — cycle list matches the API result | ✅ implemented; covered by graph-analysis tests |
 | J26 | **PR boundary violation** — flagged in the PR comment | ⬜ Sprint 6 |
 | J27 | **SARIF** — valid against the 2.1.0 schema | ⬜ Sprint 6 |
 | J28 | **50k-file traversal** — latency budget met | ⬜ Sprint 7 |

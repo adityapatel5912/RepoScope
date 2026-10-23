@@ -10,6 +10,12 @@ different capture sessions may show slightly different counts.
 
 All files are in [`docs/screenshots/v2/`](screenshots/v2/).
 
+**Chat:** there is no current v2 chat capture in this set. The README's
+**Chat with citations** section uses the earlier
+[`screenshots/chat.png`](screenshots/chat.png) and labels it as an older UI
+generation; the current assistant still streams cited answers with a
+**Next steps** section.
+
 ### Workspace
 
 | File | Shows |
@@ -97,7 +103,7 @@ of the current canvas.
 
 | File | Feature |
 |---|---|
-| [`chat.png`](screenshots/chat.png) | Cited chat answer |
+| [`chat.png`](screenshots/chat.png) | Cited chat answer with **Next steps**; used in the README's chat section, labelled as earlier UI |
 | [`graph.png`](screenshots/graph.png) | Earlier connectivity pyramid |
 | [`hero.png`](screenshots/hero.png) | Earlier full workspace |
 | [`impact.png`](screenshots/impact.png) | Impact analysis / blast radius |

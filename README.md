@@ -1,6 +1,6 @@
 # RepoScope
 
-![RepoScope hero](docs/screenshots/hero.png)
+![RepoScope thumbnail](thumbnail.png)
 
 > See your repo. Understand it. Track it.
 
@@ -64,7 +64,9 @@ PAT in the sidebar (BYOK — stored in memory only, never written to disk).
 - 📝 **[pitch-deck.md](frontend/public/pitch/pitch-deck.md)** — text version
 - 🎤 **[pitch-script.md](frontend/public/pitch/pitch-script.md)** — 3-minute video script
 - 🗒️ **[slide-notes.md](frontend/public/pitch/slide-notes.md)** — per-slide talking points
-- 🖼️ **[thumbnail.png](frontend/public/pitch/thumbnail.png)** — video thumbnail
+- 🖼️ **[thumbnail.png](thumbnail.png)** — video thumbnail
+
+![Demo video thumbnail](thumbnail.png)
 
 ---
 

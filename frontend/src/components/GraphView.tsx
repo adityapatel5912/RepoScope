@@ -14,13 +14,14 @@ import ReactFlow, {
 } from "reactflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon } from "lucide-react";
-import LayerNode, { NODE_W, NODE_H, type LayerNodeData } from "./graph/LayerNode";import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
+import LayerNode, { NODE_W, NODE_H, CHILD_W, type LayerNodeData } from "./graph/LayerNode";import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
 import EmptyState from "./EmptyState";
 import GraphControls from "./GraphControls";
 import ReversePromptModal from "./ReversePromptModal";
 import { exportGraphPng, exportGraphSvg } from "../utils/graphExport";
 import { generateReversePrompt } from "../api/features";
 import { toast } from "./Toasts";
+import { log } from "../utils/logger";
 import "reactflow/dist/style.css";
 
 // Tour progress emitted by TourPanel (badges + progress bar on the graph)
@@ -49,11 +50,14 @@ const DOT_COLOR    = "#CDC6E0";
 const EDGE_COLOR   = "#57534E";
 
 // ── Pyramid layout constants (no dagre — deterministic manual layout) ───────
-const NODE_GAP_X   = 260;   // horizontal pitch between file nodes
-const RANK_GAP_Y   = 210;   // vertical pitch between rank slots
-const CHILD_GAP_X  = 200;   // pitch between expanded function children
-const CHILD_DY     = 115;   // child row offset under its parent
-const MAX_PER_ROW  = 18;    // wrap ranks wider than this into continuation slots
+// Pitches sized so adjacent nodes keep a positive gutter even before the
+// collision pass (NODE_GAP_X − NODE_W, CHILD_GAP_X − CHILD_W > 0).
+const NODE_GAP_X   = 300;           // horizontal pitch between file nodes
+const RANK_GAP_Y   = 220;           // vertical pitch between rank slots
+const CHILD_GAP_X  = 220;           // pitch between expanded function children
+const CHILD_DY     = RANK_GAP_Y / 2; // child row at half-rank — clear of both neighbours
+const MAX_PER_ROW  = 18;            // wrap ranks wider than this into continuation slots
+const MIN_CLEAR_X  = 24;            // minimum gutter enforced by the collision pass
 
 interface RawNode {
   id: string;
@@ -101,6 +105,7 @@ function fallbackScore(path: string): number {
  */
 function buildPyramidGraph(
   raw: unknown[],
+  rawEdges: unknown[],
   repoTitle: string,
   expandFuncs: boolean,
   invert: boolean,
@@ -110,8 +115,18 @@ function buildPyramidGraph(
 
   const fileNodes = rn.filter((n) => n.type === "file");
   const symbolNodes = rn.filter((n) => n.type === "function" || n.type === "class");
-  const importEdges = (rn as unknown as Array<{ source: string; target: string; type?: string }>)
-    .filter((e) => e.type === "imports" || e.type === "calls");
+  // Real backend edges (imports/calls) — drive ranking AND rendering.
+  const edgeList = (rawEdges as Array<{ source: string; target: string; type?: string }>)
+    .filter((e) => typeof e?.source === "string" && typeof e?.target === "string");
+  const importEdges = edgeList.filter((e) => e.type === "imports" || e.type === "calls");
+
+  // Dev-only EDGE DIAG plumbing check (stripped from production builds).
+  log(
+    `[EDGE DIAG] nodes: ${rn.length} · edges in: ${edgeList.length} · ` +
+    `matching IDs: ${edgeList.filter((e) =>
+      rn.some((n) => n.id === e.source) && rn.some((n) => n.id === e.target),
+    ).length}`,
+  );
 
   // Symbols grouped by parent file id
   const symbolsByFile = new Map<string, RawNode[]>();
@@ -218,11 +233,23 @@ function buildPyramidGraph(
     });
   });
 
-  // Keep only edges whose endpoints were placed
-  const rawEdges = (raw as unknown as Array<{ source: string; target: string; type?: string }>)
-    .filter((e) => placedIds.has(e.source) && placedIds.has(e.target) && e.source !== e.target);
+  // Keep only real edges whose endpoints were placed
+  const validEdges = edgeList.filter(
+    (e) => placedIds.has(e.source) && placedIds.has(e.target) && e.source !== e.target,
+  );
 
-  const edges: Edge[] = rawEdges.slice(0, 1000).map((e, i) => ({
+  // Synthesized containment edges: repo root → first visual row. The backend
+  // graph deliberately carries no structural dir/repo edges (they would pollute
+  // the impact analyzer's reverse-BFS), so the layout adds rank-0 connectivity
+  // at render time.
+  for (const item of slots[0] ?? []) {
+    const target = String(item.node.id);
+    if (placedIds.has(target)) {
+      validEdges.push({ source: "repo:root", target, type: "groups" });
+    }
+  }
+
+  const edges: Edge[] = validEdges.slice(0, 1000).map((e, i) => ({
     id: `e${i}`,
     source: e.source,
     target: e.target,
@@ -233,7 +260,34 @@ function buildPyramidGraph(
     markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: EDGE_COLOR },
   }));
 
-  return { nodes: out, edges };
+  return { nodes: fixOverlaps(out), edges };
+}
+
+/**
+ * Collision pass (Section 2): sweep every row left→right and enforce a minimum
+ * center-to-center gutter so no two nodes can overlap. Uses real node widths
+ * (file vs. child cards), so the result is deterministic — a hashed-grid nudge
+ * can miss pairs that land in different cells.
+ */
+function fixOverlaps(nodes: Node[]): Node[] {
+  const widthOf = (n: Node) => ((n.data as LayerNodeData).child ? CHILD_W : NODE_W);
+  const byRow = new Map<number, Node[]>();
+  for (const n of nodes) {
+    const row = byRow.get(n.position.y);
+    if (row) row.push(n);
+    else byRow.set(n.position.y, [n]);
+  }
+  for (const row of byRow.values()) {
+    row.sort((a, b) => a.position.x - b.position.x);
+    for (let i = 1; i < row.length; i++) {
+      const prev = row[i - 1];
+      const minDist = (widthOf(prev) + widthOf(row[i])) / 2 + MIN_CLEAR_X;
+      if (row[i].position.x - prev.position.x < minDist) {
+        row[i].position = { ...row[i].position, x: prev.position.x + minDist };
+      }
+    }
+  }
+  return nodes;
 }
 
 // ── Legend (FILE 3: top-right, white card, one swatch per layer) ────────────
@@ -432,10 +486,10 @@ function GraphInner({
   }, [fitView]);
 
   const buildGraph = useCallback((
-    rn: unknown[], name: string, expand: boolean, inv: boolean,
+    rn: unknown[], re: unknown[], name: string, expand: boolean, inv: boolean,
   ) => {
     if (rn.length === 0) { setNodes([]); setEdges([]); return; }
-    const { nodes: pyramid, edges: pe } = buildPyramidGraph(rn, name, expand, inv);
+    const { nodes: pyramid, edges: pe } = buildPyramidGraph(rn, re, name, expand, inv);
     setNodes(pyramid);
     setEdges(pe);
     setSelected(null);
@@ -452,7 +506,7 @@ function GraphInner({
   }, [fitView, setNodes, setEdges, setCenter, applyCamera]);
 
   useEffect(() => {
-    buildGraph(rawNodes, repoTitle ?? "Repository", expandFuncs, invert);
+    buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawNodes, rawEdges, repoTitle]);
 
@@ -461,22 +515,22 @@ function GraphInner({
   }, []);
 
   const relayout = useCallback(() => {
-    buildGraph(rawNodes, repoTitle ?? "Repository", expandFuncs, invert);
-  }, [rawNodes, repoTitle, expandFuncs, invert, buildGraph]);
+    buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
+  }, [rawNodes, rawEdges, repoTitle, expandFuncs, invert, buildGraph]);
 
   const toggleDirection = useCallback(() => {
     setInvert((v) => {
-      buildGraph(rawNodes, repoTitle ?? "Repository", expandFuncs, !v);
+      buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, !v);
       return !v;
     });
-  }, [rawNodes, repoTitle, expandFuncs, buildGraph]);
+  }, [rawNodes, rawEdges, repoTitle, expandFuncs, buildGraph]);
 
   const toggleGrouped = useCallback(() => {
     setExpandFuncs((v) => {
-      buildGraph(rawNodes, repoTitle ?? "Repository", !v, invert);
+      buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", !v, invert);
       return !v;
     });
-  }, [rawNodes, repoTitle, invert, buildGraph]);
+  }, [rawNodes, rawEdges, repoTitle, invert, buildGraph]);
 
   // Focus mode — center the highlighted (tour/impact) or selected node
   const focusNode = useCallback(() => {
@@ -657,6 +711,9 @@ function GraphInner({
         minZoom={0.1}
         maxZoom={2}
         defaultEdgeOptions={{ type: "smoothstep" }}
+        nodesDraggable={true}
+        nodesConnectable={false}
+        elementsSelectable={true}
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
       >

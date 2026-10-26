@@ -3,6 +3,33 @@
 Quick fixes for the failures we've actually seen. Most diagnoses start with
 `curl localhost:8000/api/health` and `backend/logs/app.log`.
 
+## Graph renders without edges
+**Cause**: the edge list never reached the layout. `buildPyramidGraph` must
+receive BOTH `rawNodes` and `rawEdges` — inside it, edges are matched against
+placed node IDs, so a `source`/`target` that isn't an exact node id
+(`file:rel`, `func:rel:name`, `class:rel:Name`, `repo:root`) gets filtered
+out. In dev mode the console prints
+`[EDGE DIAG] nodes: N · edges in: M · matching IDs: K`.
+**Fix**: if `edges in: 0`, the `context` SSE event had no edges (check
+`GET /api/repo/graph`). If `matching IDs: 0`, an id transform is mangling
+node ids somewhere between backend and layout — ids must pass through
+untouched. Rendered edges are also capped at 1,000.
+
+## Nodes overlap
+**Cause**: horizontal pitch smaller than node width, or the collision pass
+disabled. The layout enforces a minimum center-to-center gutter of
+`(widthA + widthB) / 2 + 24px` per row via `fixOverlaps`.
+**Fix**: keep `NODE_GAP_X > NODE_W` and `CHILD_GAP_X > CHILD_W` in
+`GraphView.tsx`; increase `NODE_GAP_X` / `RANK_GAP_Y` if rows look cramped.
+Nodes are also draggable — a hand-moved node can sit anywhere until the next
+re-layout.
+
+## Graph is too wide
+Rows wrap at `MAX_PER_ROW` (18) nodes; beyond that, lower the constant or
+zoom out. If Fit view collapses the pyramid into a thin strip, use the
+toolbar zoom + Focus instead — the resize refit deliberately keeps the
+camera when fit zoom would drop below 0.3 (see next entry).
+
 ## Graph renders as a flat horizontal strip
 **Cause**: the whole tree is fit into the viewport at minimum zoom — either
 the ReactFlow `fitView` prop re-firing after the initial camera, or the

@@ -78,6 +78,14 @@ app.add_middleware(
     expose_headers=["X-Request-Id"],
 )
 
+# ── Routers (Correction C9) ────────────────────────────────────────────────
+# New endpoints live in backend/api/routers/ so main.py stays a thin
+# composition root. Decision D1: existing endpoints migrate incrementally
+# as the feature that owns them ships.
+from api import register_routers  # noqa: E402
+
+register_routers(app)
+
 
 # ── Security headers, request IDs, and access logging on every response ─────
 @app.middleware("http")

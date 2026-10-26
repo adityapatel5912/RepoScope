@@ -137,6 +137,36 @@ def build_graph_from_repo(root: str) -> dict:
     }
 
 
+def _line_of(source: str, offset: int) -> int:
+    """1-based line number for a character offset in `source`."""
+    return source.count("\n", 0, offset) + 1
+
+
+def _disambiguate(kind: str, rel: str, name: str, lineno: int | None, shared: bool) -> str:
+    """
+    Build a symbol node id, disambiguating names that collide within a file.
+
+    The id scheme is `func:{rel}:{name}` / `class:{rel}:{name}` — Correction
+    C10 makes that scheme load-bearing, so it is preserved exactly for the
+    overwhelming majority of symbols whose name is unique within their file.
+
+    When a name DOES collide (several `__init__` methods in one class-heavy
+    file, two `main` functions, ...), every colliding symbol gets a
+    deterministic `@{lineno}` suffix. Emitting the suffix for ALL members of
+    a colliding group — rather than for all but the first — keeps the ids
+    symmetric: no symbol is privileged by traversal order.
+
+    Before this, `ast.walk` produced one node id per matching name, so four
+    `__init__` methods in a single file all mapped to
+    `func:src/tomli/_parser.py:__init__`. Duplicate node ids break React
+    list keys in the graph renderer and corrupt the graph store.
+    """
+    base = f"{kind}:{rel}:{name}"
+    if not shared:
+        return base
+    return f"{base}@{lineno}" if lineno else f"{base}@?"
+
+
 def _parse_python(path: Path, rel: str, fid: str, nodes: list, edges: list,
                   pkg_parts: list[str], resolve) -> None:
     try:
@@ -145,30 +175,47 @@ def _parse_python(path: Path, rel: str, fid: str, nodes: list, edges: list,
     except Exception:
         return
 
+    # Pass 1 — collect the definitions so name collisions can be counted
+    # before any node id is minted.
+    funcs: list[tuple[str, int]] = []
+    classes: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            fn_id = f"func:{rel}:{node.name}"
-            nodes.append({
-                "id": fn_id,
-                "type": "function",
-                "label": node.name,
-                "file": rel,
-                "line": node.lineno,
-            })
-            edges.append({"source": fid, "target": fn_id, "type": "contains"})
-
+            funcs.append((node.name, node.lineno))
         elif isinstance(node, ast.ClassDef):
-            cls_id = f"class:{rel}:{node.name}"
-            nodes.append({
-                "id": cls_id,
-                "type": "class",
-                "label": node.name,
-                "file": rel,
-                "line": node.lineno,
-            })
-            edges.append({"source": fid, "target": cls_id, "type": "contains"})
+            classes.append((node.name, node.lineno))
 
-        elif isinstance(node, ast.Import):
+    func_counts: dict[str, int] = {}
+    for name, _ in funcs:
+        func_counts[name] = func_counts.get(name, 0) + 1
+    class_counts: dict[str, int] = {}
+    for name, _ in classes:
+        class_counts[name] = class_counts.get(name, 0) + 1
+
+    for name, lineno in funcs:
+        fn_id = _disambiguate("func", rel, name, lineno, func_counts[name] > 1)
+        nodes.append({
+            "id": fn_id,
+            "type": "function",
+            "label": name,
+            "file": rel,
+            "line": lineno,
+        })
+        edges.append({"source": fid, "target": fn_id, "type": "contains"})
+
+    for name, lineno in classes:
+        cls_id = _disambiguate("class", rel, name, lineno, class_counts[name] > 1)
+        nodes.append({
+            "id": cls_id,
+            "type": "class",
+            "label": name,
+            "file": rel,
+            "line": lineno,
+        })
+        edges.append({"source": fid, "target": cls_id, "type": "contains"})
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
             for alias in node.names:
                 target = resolve(alias.name, 0, pkg_parts)
                 if target and target != fid:
@@ -188,23 +235,50 @@ def _parse_js_ts(path: Path, rel: str, fid: str, nodes: list, edges: list,
     except Exception:
         return
 
-    # Functions: function foo / const foo = / foo = () =>
+    # Pass 1 — collect the definitions so name collisions can be counted
+    # before any node id is minted.
+    funcs: list[tuple[str, int]] = []
     for m in re.finditer(
         r'(?:^|\s)(?:export\s+)?(?:async\s+)?function\s+(\w+)|'
         r'(?:^|\s)(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(',
         source, re.MULTILINE
     ):
         name = m.group(1) or m.group(2)
-        if not name:
-            continue
-        fn_id = f"func:{rel}:{name}"
-        nodes.append({"id": fn_id, "type": "function", "label": name, "file": rel})
+        if name:
+            funcs.append((name, _line_of(source, m.start())))
+
+    classes: list[tuple[str, int]] = []
+    for m in re.finditer(r'(?:^|\s)(?:export\s+)?class\s+(\w+)', source, re.MULTILINE):
+        classes.append((m.group(1), _line_of(source, m.start())))
+
+    func_counts: dict[str, int] = {}
+    for name, _ in funcs:
+        func_counts[name] = func_counts.get(name, 0) + 1
+    class_counts: dict[str, int] = {}
+    for name, _ in classes:
+        class_counts[name] = class_counts.get(name, 0) + 1
+
+    # Pass 2 — emit nodes with deterministic, collision-free ids.
+    for name, lineno in funcs:
+        fn_id = _disambiguate("func", rel, name, lineno, func_counts[name] > 1)
+        nodes.append({
+            "id": fn_id,
+            "type": "function",
+            "label": name,
+            "file": rel,
+            "line": lineno,
+        })
         edges.append({"source": fid, "target": fn_id, "type": "contains"})
 
-    # Classes
-    for m in re.finditer(r'(?:^|\s)(?:export\s+)?class\s+(\w+)', source, re.MULTILINE):
-        cls_id = f"class:{rel}:{m.group(1)}"
-        nodes.append({"id": cls_id, "type": "class", "label": m.group(1), "file": rel})
+    for name, lineno in classes:
+        cls_id = _disambiguate("class", rel, name, lineno, class_counts[name] > 1)
+        nodes.append({
+            "id": cls_id,
+            "type": "class",
+            "label": name,
+            "file": rel,
+            "line": lineno,
+        })
         edges.append({"source": fid, "target": cls_id, "type": "contains"})
 
     # Imports — static `import … from` and `export … from`

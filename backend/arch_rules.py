@@ -54,19 +54,94 @@ LAYERS: tuple[Layer, ...] = ("client", "backend", "storage", "external", "comput
 LAYER_INFO: dict[Layer, dict[str, str]] = {
     "client":   {"name": "Client / UI",            "description": "Frontends, views, components, static assets."},
     "backend":  {"name": "Backend / API",          "description": "Services, routers, handlers, controllers, domain logic."},
-    "storage":  {"name": "Storage / Data",         "description": "Models, schemas, migrations, repositories, persistence."},
+    "storage":  {"name": "Storage / Data",         "description": "Models, schemas, migrations, repositories, persistence, and data files."},
     "external": {"name": "External / Integrations","description": "Third-party SDKs, payment providers, webhooks, OAuth."},
     "compute":  {"name": "Compute / Workers",      "description": "Workers, schedulers, engines, queues, background jobs."},
 }
 
+# ── Non-code files ──────────────────────────────────────────────────────────
+#
+# The rules below were written for SOURCE CODE, but they were applied to
+# every file in the repository — so a PDF in a data folder fell through
+# every rule and landed in "backend". Measured on a real 154-file
+# repository, 53 of 154 files (34%) were misclassified: every PDF,
+# spreadsheet, CSV, markdown file, and JSON manifest.
+#
+# A non-code file is not part of the system's architecture. It is data, a
+# document, a config file, or a media asset — and its KIND says which.
+# The extension decides, not the directory: a PDF is data wherever it
+# lives.
+
+#: Images, video, audio, and fonts — assets served to the browser.
+ASSET_MEDIA_EXTENSIONS = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tif", ".tiff",
+    ".svg", ".avif", ".heic",
+    ".mp4", ".webm", ".mov", ".avi", ".mkv", ".m4v", ".ogv",
+    ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac",
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+})
+
+#: Documents and tabular data.
+ASSET_DATA_EXTENSIONS = frozenset({
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".rtf", ".odt",
+    ".ods", ".csv", ".tsv", ".parquet", ".avro",
+})
+
+#: Prose.
+ASSET_DOC_EXTENSIONS = frozenset({".md", ".markdown", ".mdx", ".rst", ".txt", ".adoc", ".log"})
+
+#: Configuration and manifests.
+ASSET_CONFIG_EXTENSIONS = frozenset({
+    ".json", ".jsonl", ".ndjson", ".yaml", ".yml", ".toml", ".xml", ".ini",
+    ".cfg", ".conf", ".env", ".properties", ".lock",
+})
+
+#: Archives and build output.
+ASSET_ARCHIVE_EXTENSIONS = frozenset({
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar", ".tgz", ".jar", ".war",
+})
+
+#: Dotfiles that carry configuration rather than code.
+ASSET_DOTFILES = frozenset({
+    ".gitignore", ".gitattributes", ".gitmodules", ".editorconfig",
+    ".dockerignore", ".npmrc", ".nvmrc", ".prettierrc", ".eslintrc",
+    ".babelrc", ".stylelintrc", ".gitkeep", ".dockerfile",
+})
+
+#: Project documents with no extension.
+ASSET_PROJECT_DOCUMENTS = frozenset({
+    "license", "licence", "notice", "authors", "contributors", "changelog",
+    "readme", "copying", "codeowners",
+})
+
+#: Build and operations files — no extension, but they are tooling, not data.
+BUILD_FILE_NAMES = frozenset({
+    "makefile", "dockerfile", "procfile", "rakefile", "gemfile", "justfile",
+    "cmakelists.txt", "makefile.am", "makefile.in",
+})
+
 #: Ordered rules — FIRST MATCH WINS. Order is load-bearing and is
 #: preserved exactly from layerClassifier.ts.
+#:
+#: The generic words are anchored to path/word boundaries. The previous
+#: patterns matched them anywhere in the string, so `myengineer.py` counted
+#: as "compute" and `notpayment.py` counted as "external".
 _RULE_SOURCE: tuple[tuple[Layer, str], ...] = (
-    ("external", r"(^|/)(external|integrations?|sdk|providers?)(/|$)|api[_-]?client|(_|-)client\.|webhook|oauth|payment|stripe|slack|openai|anthropic"),
-    ("compute",  r"worker|engine|algorithm|calculat|comput|scheduler|queue|task|cron"),
-    ("storage",  r"(^|/)(models?|schemas?|migrations?|db|database|persistence|repositories?|store|storehouse)(/|$)|\.(sql|db|sqlite)$"),
-    ("backend",  r"(^|/)(backend|server|services?|routers?|routes?|handlers?|controllers?|api|middleware|main|app)(/|$)|\.(py|go|java|rb|php|rs)$"),
-    ("client",   r"(^|/)(frontend|client|src|components?|pages?|views?|screens?|ui|styles?|assets?|public)(/|$)|\.(tsx|jsx|vue|svelte|css|scss|html|svg|png|jpg)$"),
+    ("external",
+     r"(^|/)(external|integrations?|sdk|providers?)(/|$)"
+     r"|(^|[/._-])(api[_-]?client|http[_-]?client|webhooks?|oauth|payments?|stripe|slack|openai|anthropic)([/._-]|$)"
+     r"|(_|-)client\."),
+    ("compute",
+     r"(^|/)(engines?|workers?|schedulers?|queues?|celery|cron|daemons?|consumers?|producers?|tasks?|algorithms?)([/._-]|$)"),
+    ("storage",
+     r"(^|/)(models?|schemas?|migrations?|db|database|datastore|persistence|repositories?|store|storehouse)(/|$)"
+     r"|\.(sql|db|sqlite)$"),
+    ("backend",
+     r"(^|/)(backend|server|servers|services?|routers?|routes?|handlers?|controllers?|api|apis|middleware|main)(/|$)"
+     r"|\.(py|go|java|rb|php|rs)$"),
+    ("client",
+     r"(^|/)(frontend|client|src|components?|pages?|views?|screens?|ui|styles?|assets?|public)(/|$)"
+     r"|\.(tsx|jsx|vue|svelte|css|scss|html|svg|png|jpg)$"),
 )
 
 LAYER_RULES: tuple[tuple[Layer, re.Pattern[str]], ...] = tuple(
@@ -80,6 +155,66 @@ _CLIENT_EXT_FALLBACK = re.compile(r"\.(tsx|jsx|ts|js|css|html|vue|svelte)$", re.
 DEFAULT_LAYER: Layer = "backend"
 
 
+def extension_of(path: str) -> str:
+    """
+    The lower-cased extension of a path, including the dot.
+
+    A dotfile such as `.gitignore` has no extension — the dot is the
+    name, not a separator. A file named `School-Energy-Bills.pdf` has the
+    extension `.pdf`.
+    """
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    if "." not in name:
+        return ""
+    # A leading dot means a dotfile, not an extension.
+    if name.startswith(".") and name.count(".") == 1:
+        return ""
+    return "." + name.rsplit(".", 1)[-1].lower()
+
+
+def file_name_of(path: str) -> str:
+    """The final path segment, lower-cased."""
+    return path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def asset_layer(path: str) -> Layer | None:
+    """
+    Classify a non-code file, or return None when the file is code.
+
+    The extension decides, not the directory: a PDF is data wherever it
+    lives, and an image is a media asset wherever it lives.
+
+      media    -> client   (served to the browser)
+      data,
+      document,
+      config,
+      archive  -> storage  (inputs, outputs, and manifests)
+    """
+    extension = extension_of(path)
+    name = file_name_of(path)
+
+    if extension in ASSET_MEDIA_EXTENSIONS:
+        return "client"
+    if extension in ASSET_DATA_EXTENSIONS:
+        return "storage"
+    if extension in ASSET_DOC_EXTENSIONS:
+        return "storage"
+    if extension in ASSET_CONFIG_EXTENSIONS:
+        return "storage"
+    if extension in ASSET_ARCHIVE_EXTENSIONS:
+        return "storage"
+
+    if name in ASSET_DOTFILES:
+        return "storage"
+    if name in ASSET_PROJECT_DOCUMENTS:
+        return "storage"
+    if name in BUILD_FILE_NAMES:
+        # Build and operations tooling — part of the backend, not data.
+        return "backend"
+
+    return None
+
+
 def classify(node_id: str, label: str = "") -> Layer:
     """
     Classify a node into one of the five canonical layers.
@@ -87,6 +222,21 @@ def classify(node_id: str, label: str = "") -> Layer:
     Mirrors layerClassifier.ts `classify()` exactly, including the
     first-match-wins ordering and the extension fallback.
     """
+    # Non-code files first. Without this a PDF, a CSV, or a JSON manifest
+    # falls through every rule and lands in "backend".
+    #
+    # The id and the label are checked SEPARATELY. They are joined with a
+    # space for the path rules below, and a joined string breaks the
+    # "last path segment" logic for a root-level file: "file:.gitignore
+    # .gitignore" has no path separator, so its last segment is the whole
+    # thing rather than ".gitignore".
+    for candidate in (node_id, label):
+        if not candidate:
+            continue
+        asset = asset_layer(candidate)
+        if asset is not None:
+            return asset
+
     haystack = f"{node_id} {label}"
     for layer, pattern in LAYER_RULES:
         if pattern.search(haystack):

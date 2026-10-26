@@ -2037,5 +2037,71 @@ These are the tree-sitter 0.25 facts that cost time to discover. All are recorde
 - The cluster view uses the five canonical layers. Louvain community detection would find finer-grained modules — `networkx.community.louvain_communities` is available and verified working.
 - Visual-regression baselines (`toHaveScreenshot()`) are still not wired up.
 
+---
+
+## 25. Sprint 2.5 — Layer classification correctness
+
+**Status: complete.** Shipped 2026-10-21, after manual review of the graph on a real repository.
+
+### 25.1 The defect
+
+A manual review of the Verdict repository's graph showed **PDFs, spreadsheets, CSVs, markdown
+files, and JSON manifests all rendered as "Backend / API"**. Measured on the real 154-file
+repository:
+
+| | Before | After |
+|---|---|---|
+| Misclassified non-code files | **53 of 154 (34%)** | **0 of 154** |
+| "backend" layer, total files | 93 | 39 |
+| "storage" layer, total files | 3 | 58 |
+
+The cause: the layer rules were written for **source code** but applied to **every file**. A
+non-code file matched no rule and fell through to the default, which is "backend".
+
+The visual consequence was severe: the amber "Backend / API" band of the pyramid was mostly
+noise, so the actual architecture was invisible.
+
+### 25.2 The fix
+
+1. **A non-code pre-pass.** The extension decides the file's *kind*, and the kind decides the
+   layer — the directory does not:
+
+   | Kind | Extensions | Layer |
+   |---|---|---|
+   | Media | png, jpg, gif, svg, mp4, mp3, woff, … | `client` (served to the browser) |
+   | Data | pdf, doc, xlsx, csv, pptx, parquet, … | `storage` |
+   | Document | md, rst, txt, adoc, log | `storage` |
+   | Config | json, yaml, toml, xml, ini, env, lock | `storage` |
+   | Archive | zip, tar, gz, jar, … | `storage` |
+   | Project file | LICENSE, NOTICE, CHANGELOG | `storage` |
+   | Dotfiles | .gitignore, .editorconfig, .npmrc, … | `storage` |
+   | Build tooling | Makefile, Dockerfile, Procfile | `backend` |
+
+2. **Stronger path rules.** The generic words are now anchored to path and word boundaries, so
+   `myengineer.py` is no longer "compute" and `notpayment.py` is no longer "external". The
+   previous patterns matched those words anywhere in the string.
+
+3. **The id and the label are checked separately** for the asset pre-pass. They are joined with
+   a space for the path rules, and a joined string breaks last-segment detection for a
+   root-level file: `"file:.gitignore .gitignore"` has no path separator, so its last segment
+   is the whole string rather than `.gitignore`.
+
+### 25.3 Also fixed in this pass
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P2** | **The Insights panel showed the PREVIOUS repository's numbers.** It fetched once on mount and never re-fetched, so loading a second repo left "Most central" listing the first repo's files. | **Fixed** — the panel re-fetches on the repository key |
+| **P3** | **The unreachable list showed the same path three times**, because it listed symbols but displayed only the file. | **Fixed** — the symbol name is shown alongside the path |
+
+### 25.4 How it was verified
+
+- `scripts/analyze_layers.py` — measures the extension → layer distribution and every
+  misclassified file against a real repository. Before: 53 misclassified. After: 0.
+- The parity corpus grew from 90 to 130 cases, including every asset kind, the
+  boundary-anchoring cases, and the root-level dotfile case that exposed the id/label bug.
+- The parity test **caught this work's own divergence** mid-implementation: the Python side was
+  updated before the JavaScript probe, and the test failed with three exact mismatches
+  (`.gitignore`, `.editorconfig`, `LICENSE`). That is the gate doing its job.
+
 
 

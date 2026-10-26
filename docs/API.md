@@ -164,6 +164,11 @@ Kind-specific fields:
 | `pagerank` | file | PageRank score when analysis ran. |
 | `route_count` | file, symbol | Number of routes attached to the file or handler. |
 
+Folder ids are `folder:<pillar>:<repo-relative-folder-path>`, for example
+`folder:backend:backend/api/routers`. Every directory level is a folder. A
+top-level directory that names the pillar is not repeated as a separate level,
+but the full repository-relative path stays in the folder's `path`.
+
 Roles currently include `entry_point`, `api_controller`, `service`,
 `repository`, `model`, `utility`, `ui_component`, `hook`, `test`, `docs`, and
 `config`.

@@ -35,6 +35,13 @@ on a separate marketplace.
 
 ### Fixed
 
+- **CI is hermetic and green on every gate.** Endpoint tests resolve a
+  synthetic provider instead of depending on a developer `.env`; the unit job
+  fetches full history so co-change tests measure real commits; the MCP stdio
+  harness keeps the pipe open until every response; and the QA harness owns
+  the Playwright servers and isolates their process group, so cleanup cannot
+  terminate the CI runner. CI run 40322052797 passes Python 3.11, Python 3.12,
+  L2 contract, L3 journeys, frontend build, and extension.
 - **CI baseline restored.** `backend/requirements.txt` now declares the
   numerical stack (`numpy`, `scipy`), the MCP server (`mcp>=1.29,<2`), the
   CLI/watcher (`typer`, `watchdog`), and `sse-starlette`. The previous

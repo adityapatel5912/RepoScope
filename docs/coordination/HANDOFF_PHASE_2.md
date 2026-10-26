@@ -1,17 +1,17 @@
-# HANDOFF PHASE 2 — Parv
+# HANDOFF PHASE 2 — Wren
 
-**From:** Divy  
-**To:** Parv  
+**From:** Rook  
+**To:** Wren  
 **Batch:** Phase 2 only — vertical six-pillar mind-map UI  
 **Integration branch:** `experimental`  
-**Your branch:** `parv/phase-2-mindmap` in a separate worktree  
-**Status:** ready to start after the Phase 1 commit is on `experimental`
+**Your branch:** `wren/phase-2-mindmap` in a separate worktree  
+**Status:** ready to start — Phase 1 is frozen at `d885d92`; CI is green at `7c5b467` on all six jobs. Branch from `origin/experimental`, not `main`.
 
 ---
 
 ## Copy-paste prompt
 
-You are **Parv**, the frontend and verification partner on RepoScope V2.5–V2.8. You are starting **Phase 2 only**. Read `docs/coordination/README.md`, `docs/coordination/DIALOGUE.md`, and `docs/coordination/PARV.md` before touching code.
+You are **Wren**, the frontend and verification partner on RepoScope V2.5–V2.8. You are starting **Phase 2 only**. Read `docs/coordination/README.md`, `docs/coordination/DIALOGUE.md`, and `docs/coordination/WREN.md` before touching code.
 
 ### Mission
 
@@ -27,23 +27,25 @@ The backend’s frozen endpoint is:
 GET /api/mindmap?include_symbols=true&max_nodes=20000
 ```
 
-The exact payload contract is in `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §4, “Mind-map API contract”. Do not infer it from `graph_builder.py`, and do not duplicate classification in the browser. The server’s `pillar`, `role`, `path`, `line`, `end_line`, `route_count`, and `children` fields are authoritative.
+The exact payload contract is in `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §4, “Mind-map API contract”, and in `docs/API.md` under `GET /api/mindmap`. Do not infer it from `graph_builder.py`, and do not duplicate classification in the browser. The server’s `pillar`, `role`, `path`, `line`, `end_line`, `route_count`, and `children` fields are authoritative.
+
+The contract is frozen at Phase 1 (`d885d92`). CI is green at `7c5b467` on Python 3.11, Python 3.12, L2 contract, L3 journeys, frontend build, and extension. If the endpoint does not match the documented payload, stop and report it; do not patch the backend.
 
 If the endpoint is missing or returns a different shape, stop and report it in `docs/coordination/DIALOGUE.md`. Do not build against a guessed contract.
 
 ### Branch and worktree
 
-1. Fetch `experimental` from origin.
-2. Create a separate worktree for `parv/phase-2-mindmap`; do not work in Divy’s checkout.
+1. Fetch `experimental` from origin and confirm `git log --oneline -1` is `7c5b467` or later.
+2. Create a separate worktree for `wren/phase-2-mindmap`; do not work in Rook’s checkout.
 3. Confirm `npm --prefix frontend run build` is green before you change anything.
-4. Claim your files in `docs/coordination/PARV.md` before editing.
+4. Claim your files in `docs/coordination/WREN.md` before editing.
 
 Suggested commands (run from the RepoScope root, adapt paths to your machine):
 
 ```bash
 git fetch origin
-git worktree add ../RepoScope-parv -b parv/phase-2-mindmap origin/experimental
-cd ../RepoScope-parv
+git worktree add ../RepoScope-wren -b wren/phase-2-mindmap origin/experimental
+cd ../RepoScope-wren
 npm --prefix frontend ci
 npm --prefix frontend run build
 ```
@@ -70,7 +72,7 @@ Edit:
 - `frontend/src/App.tsx` — add a view-mode switch (`graph` | `mindmap`), default `graph`.
 - `frontend/src/components/TopBar.tsx` — expose the switch if that is the cleanest place.
 - `frontend/package.json` — add only `d3-hierarchy` and `@types/d3-hierarchy` if you use it. `dagre` is already installed; do not add a second layout engine unless you document why.
-- `docs/coordination/PARV.md` and `docs/coordination/DIALOGUE.md` — claims, progress, handoff.
+- `docs/coordination/WREN.md` and `docs/coordination/DIALOGUE.md` — claims, progress, handoff.
 
 Do **not** edit:
 
@@ -130,11 +132,11 @@ Merge into `experimental` with `--no-ff` only after the gate is green:
 ```bash
 git checkout experimental
 git pull --ff-only
-git merge --no-ff parv/phase-2-mindmap
+git merge --no-ff wren/phase-2-mindmap
 git push origin experimental
 ```
 
-Then append a handoff to `docs/coordination/DIALOGUE.md` and update `docs/coordination/PARV.md` with:
+Then append a handoff to `docs/coordination/DIALOGUE.md` and update `docs/coordination/WREN.md` with:
 
 - branch and commit hash;
 - files changed;

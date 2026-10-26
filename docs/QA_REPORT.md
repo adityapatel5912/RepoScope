@@ -27,9 +27,28 @@ string against the application endpoint. `mcp` is now pinned to
 `>=1.29,<2`, and both dependency files are checked by
 `backend/tests/test_dependency_contract.py`.
 
-**Still not covered:** the L3 Playwright journeys are not part of the Phase 0
-gate (they run nightly and after the mind-map UI lands); the Python 3.13/3.14
-runs are local confidence checks, not deployment targets.
+**Still not covered at Phase 0:** the L3 Playwright journeys were not part of
+the Phase 0 gate; they now run on every push and are green at Phase 1 (below).
+The Python 3.13/3.14 runs are local confidence checks, not deployment targets.
+
+## Phase 1 CI gate — 2026-10-26
+
+Phase 1 (`d885d92`) adds graph schema v2 and freezes `GET /api/mindmap`. The
+first CI runs exposed test-infrastructure defects, not product regressions.
+Each run below is recorded with the fix that closed it.
+
+| Run | Result | Finding | Fix |
+|---|---|---|---|
+| `40319380840` | **7 failed / 398 passed** on 3.11 and 3.12 | Six endpoint tests required a real AI provider before their stubbed LLM; one churn test saw a one-commit shallow checkout. | `275d66b`: synthetic-provider fixture and `fetch-depth: 0`. |
+| `40320122480` | **1 failed / 404 passed**; L2/L3 skipped | The MCP stdio helper closed stdin before `tools/list` was read. | `25ba011`: hold the pipe open and wait per response. |
+| `40320667722` | L1 and L2 green; L3 failed | Playwright tried to start a second backend on the port `scripts/qa.py` already owned. | `da0e892`: the harness tells Playwright it owns the servers. |
+| `40321455598` | 17/17 journeys passed, job exit 143 | The harness's process-group cleanup terminated the CI runner. | `7c5b467`: start harness servers in their own session. |
+| `40322052797` | **green on all six jobs** | — | Python 3.11, Python 3.12, L2 contract, L3 journeys, frontend build, extension. |
+
+Local verification for Phase 1: **405 passed** on Python 3.11, 3.12, and
+3.14; `pip check` and `compileall` clean; frontend build green; extension
+20/20; 17/17 Playwright journeys under `CI=1`. The golden v1 snapshots were
+not regenerated.
 
 ## Current verification — 2026-10-25
 

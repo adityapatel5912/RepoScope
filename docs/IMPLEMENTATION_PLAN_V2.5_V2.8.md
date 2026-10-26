@@ -46,7 +46,7 @@ Every phase has the same shape:
 | D13 | The npm package `reposcope-mcp` is a launcher/configurator that delegates to the Python package. It is never a second parser or a second config generator. |
 | D14 | The source draft's V2.7 security scope is consolidated into the V2.8 six-engine implementation. There will not be two security rewrites. |
 | D15 | Execution was authorized on 2026-10-26. The first batch is Phase 0 and Phase 1. No phase after Phase 1 starts until its handoff gate is green. |
-| D16 | Divy and Parv work in separate worktrees with a single writer per file. `experimental` is the only integration branch. `main` is merged only by the owner after testing. |
+| D16 | Rook and Wren work in separate worktrees with a single writer per file. `experimental` is the only integration branch. `main` is merged only by the owner after testing. |
 | D17 | The coordination Markdown files are a record, not the source of truth. Git commits, tests, and the graph schema are authoritative. |
 
 ### 0.2 Release map
@@ -339,7 +339,7 @@ Revert the dependency pins and CI changes. No product behavior depends on them. 
 **Release:** V2.5
 **Depends on:** Phase 0
 **Risk:** high — this is the evidence layer every later phase reads
-**Owner:** Divy (contract and backend); Parv consumes the frozen mind-map contract in Phase 2
+**Owner:** Rook (contract and backend); Wren consumes the frozen mind-map contract in Phase 2
 **Branch:** `experimental`
 
 ### Goal
@@ -491,28 +491,37 @@ Response:
             "parent_id": "pillar:backend",
             "children": [
               {
-                "id": "file:backend/api/routers/analysis.py",
-                "kind": "file",
-                "label": "analysis.py",
-                "path": "backend/api/routers/analysis.py",
-                "line": 1,
-                "role": "api_controller",
-                "pillar": "backend",
-                "language": "py",
-                "pagerank": 0.0021,
-                "route_count": 4,
+                "id": "folder:backend:backend/api/routers",
+                "kind": "folder",
+                "label": "routers",
+                "path": "backend/api/routers",
                 "parent_id": "folder:backend:backend/api",
                 "children": [
                   {
-                    "id": "func:backend/api/routers/analysis.py:hotspots",
-                    "kind": "symbol",
-                    "label": "hotspots",
+                    "id": "file:backend/api/routers/analysis.py",
+                    "kind": "file",
+                    "label": "analysis.py",
                     "path": "backend/api/routers/analysis.py",
-                    "line": 66,
-                    "end_line": 88,
+                    "line": 1,
                     "role": "api_controller",
-                    "parent_id": "file:backend/api/routers/analysis.py",
-                    "children": []
+                    "pillar": "backend",
+                    "language": "py",
+                    "pagerank": 0.0021,
+                    "route_count": 4,
+                    "parent_id": "folder:backend:backend/api/routers",
+                    "children": [
+                      {
+                        "id": "func:backend/api/routers/analysis.py:hotspots",
+                        "kind": "symbol",
+                        "label": "hotspots",
+                        "path": "backend/api/routers/analysis.py",
+                        "line": 66,
+                        "end_line": 88,
+                        "role": "api_controller",
+                        "parent_id": "file:backend/api/routers/analysis.py",
+                        "children": []
+                      }
+                    ]
                   }
                 ]
               }
@@ -526,6 +535,8 @@ Response:
 ```
 
 The API is additive and read-only. It returns `503` only when no repository is active; an empty graph returns `200` with an empty pillar tree. `include_symbols=false` truncates at file level. `max_nodes` caps the returned tree deterministically: pillars and folders first, then files by path, then symbols by line. The response always says `truncated: true|false` and the counts that were omitted.
+
+Folder ids are `folder:<pillar>:<repo-relative-folder-path>`, for example `folder:backend:backend/api/routers`. Every directory level is a folder. A top-level directory that names the pillar is not repeated as a separate level, but the full repository-relative path stays in the folder's `path`. File symbols always sit under their file, and handler symbols carry the routes that resolve to them.
 
 ### Implementation steps
 
@@ -570,7 +581,7 @@ The API is additive and read-only. It returns `503` only when no repository is a
 - [ ] `SCHEMA_VERSION == 2`; v1 graphs still load.
 - [ ] Golden v1 snapshots pass without regeneration.
 - [ ] New edge types are evidence-bearing and never dangle.
-- [ ] The mind-map API is documented and frozen; Parv can build against it without reading `graph_builder.py`.
+- [ ] The mind-map API is documented and frozen; Wren can build against it without reading `graph_builder.py`.
 - [ ] Incremental and full graphs are identical.
 - [ ] Python 3.11/3.12 CI green.
 
@@ -586,12 +597,12 @@ Revert the phase commit. The v1 builder and store are unchanged in shape; the on
 
 ---
 
-## 5. Phase 2 — Vertical mind-map UI (Parv, Divy reviews)
+## 5. Phase 2 — Vertical mind-map UI (Wren, Rook reviews)
 
 **Release:** V2.5
 **Depends on:** Phase 1 (frozen `GET /api/mindmap`)
 **Risk:** medium
-**Owner:** Parv; Divy reviews and merges
+**Owner:** Wren; Rook reviews and merges
 
 ### Goal
 
@@ -661,7 +672,7 @@ Hide the mode switch behind `localStorage` / a feature flag and leave `MindMapVi
 **Release:** V2.5
 **Depends on:** Phase 1 (stable MCP tool names) and Phase 2 (a place to surface the modal)
 **Risk:** medium — wrong configs are worse than no configs
-**Owner:** Parv (registry research and fixture validation); Divy (API contract, apply safety, merge)
+**Owner:** Wren (registry research and fixture validation); Rook (API contract, apply safety, merge)
 
 ### Goal
 
@@ -707,7 +718,7 @@ Generate exact, copy-pasteable MCP configuration for all nine targets, preview e
 - [ ] A path-traversal attempt is rejected.
 - [ ] No `apply` writes outside the root.
 - [ ] The modal previews all nine without writing.
-- [ ] Antigravity’s own config is dogfooded against RepoScope (Parv reports whether it works).
+- [ ] Antigravity’s own config is dogfooded against RepoScope (Wren reports whether it works).
 
 ### Commit
 
@@ -722,7 +733,7 @@ feat(harness): generate and safely apply nine agent configs
 **Release:** V2.5
 **Depends on:** Phases 1–3
 **Risk:** medium — token claims must be measured
-**Owner:** Divy (compressor, MCP); Parv (skills copy, panel polish)
+**Owner:** Rook (compressor, MCP); Wren (skills copy, panel polish)
 
 ### Goal
 
@@ -766,7 +777,7 @@ feat(context): add skeleton, context packs, TOON flag, and MCP tools
 **Release:** V2.6
 **Depends on:** Phase 1 (exact node paths, lines, end lines)
 **Risk:** medium
-**Owner:** Divy (verifier, orchestrator); Parv (CitationPill, hover preview)
+**Owner:** Rook (verifier, orchestrator); Wren (CitationPill, hover preview)
 
 ### Goal
 
@@ -832,7 +843,7 @@ feat(citations): verify and snap AST citations
 **Release:** V2.6
 **Depends on:** Phase 1 (evidence), Phase 4 (skeleton/context pack), Phase 5 (citation verifier)
 **Risk:** high — an unverified blueprint is a hallucination factory
-**Owner:** Divy (compiler); Parv (panel)
+**Owner:** Rook (compiler); Wren (panel)
 
 ### Goal
 
@@ -892,7 +903,7 @@ feat(reverse-prompt): compile four deterministic blueprint modes
 **Release:** V2.6
 **Depends on:** Phase 4 (skeleton), Phase 6 (blueprint conventions)
 **Risk:** medium — a broken starter kit is a bad first impression
-**Owner:** Divy (generator); Parv (file tree preview, zip UX)
+**Owner:** Rook (generator); Wren (file tree preview, zip UX)
 
 ### Goal
 
@@ -936,7 +947,7 @@ feat(scaffold): generate executable multi-file starter kits
 **Release:** V2.7
 **Depends on:** Phase 1 (roles, routes, API edges), Phase 5 (citations)
 **Risk:** medium
-**Owner:** Parv (tour UI); Divy (generator contract and merge)
+**Owner:** Wren (tour UI); Rook (generator contract and merge)
 
 ### Goal
 
@@ -985,7 +996,7 @@ feat(tour): add four deterministic guided tracks
 **Release:** V2.7
 **Depends on:** Phase 1 (roles), Phase 8 (routes/tour ordering)
 **Risk:** medium
-**Owner:** Parv (curriculum UI); Divy (ranking and verification)
+**Owner:** Wren (curriculum UI); Rook (ranking and verification)
 
 ### Goal
 
@@ -1024,7 +1035,7 @@ feat(onboarding): build a verified topological curriculum
 **Release:** V2.7
 **Depends on:** Phase 1 (evidence), Phase 8 (tour ordering)
 **Risk:** medium
-**Owner:** Divy (metrics engine); Parv (Tracker panel)
+**Owner:** Rook (metrics engine); Wren (Tracker panel)
 
 ### Goal
 
@@ -1072,7 +1083,7 @@ feat(metrics): add churn, hotspots, bus factor, and history compare
 **Release:** V2.7
 **Depends on:** Phase 1 (symbols, routes, api_calls), Phase 5 (ranges)
 **Risk:** high — this is a release gate
-**Owner:** Divy (engine, CI gate); Parv (PR panel)
+**Owner:** Rook (engine, CI gate); Wren (PR panel)
 
 ### Goal
 
@@ -1139,7 +1150,7 @@ feat(pr-impact): analyze symbol-level contract breaks without a file cap
 **Release:** V2.7
 **Depends on:** Phase 11 (symbol-level diff), Phase 1 (api_calls, inherits)
 **Risk:** medium
-**Owner:** Parv (simulator UI); Divy (scoring contract)
+**Owner:** Wren (simulator UI); Rook (scoring contract)
 
 ### Goal
 
@@ -1178,7 +1189,7 @@ feat(impact): add a three-hop explainable impact simulator
 **Release:** V2.8
 **Depends on:** Phase 1 (cross-file calls, routes), Phase 11 (symbol/contract diffs), Phase 10 (history)
 **Risk:** high — false positives destroy trust
-**Owner:** Divy (engines, scoring, SARIF); Parv (security panel, adversarial tests)
+**Owner:** Rook (engines, scoring, SARIF); Wren (security panel, adversarial tests)
 
 ### Goal
 
@@ -1238,7 +1249,7 @@ feat(security): add six graph-contextual security engines
 **Release:** V2.8 / release train
 **Depends on:** Phases 0–13
 **Risk:** medium
-**Owner:** Divy; Parv runs adversarial verification
+**Owner:** Rook; Wren runs adversarial verification
 
 ### Goal
 
@@ -1276,7 +1287,7 @@ chore(release): harden, package, and verify the v2.5–v2.8 train
 
 ## Appendix A — File ownership matrix
 
-| Area | Divy | Parv |
+| Area | Rook | Wren |
 |---|---|---|
 | Graph schema, resolver, store, parser facts | owner | read-only |
 | Mind-map API contract | owner | consumer |
@@ -1378,9 +1389,9 @@ Every tool response carries `path` and `line` where applicable. A tool that cann
 5. **The MD is a record.** Git commits and tests are authoritative. If the MD and the code disagree, the code wins and the MD is corrected.
 6. **No force-push, no rebase of shared branches, no simultaneous edits.**
 7. **Independent verification.** The reviewer runs the gate on a clean checkout; the author does not self-certify a merge.
-8. **Names.** The coordination files use only the aliases Divy and Parv. Do not expose the underlying harness names.
+8. **Names.** The coordination files use only the aliases Rook and Wren. Do not expose the underlying harness names.
 
-The working files are `docs/coordination/README.md` (rules), `DIALOGUE.md` (conversation and handoffs), `DIVY.md` (Divy claims/results), and `PARV.md` (Parv claims/results).
+The working files are `docs/coordination/README.md` (rules), `DIALOGUE.md` (conversation and handoffs), `ROOK.md` (Rook claims/results), and `WREN.md` (Wren claims/results).
 
 ## Appendix I — Source-draft corrections
 

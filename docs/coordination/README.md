@@ -1,13 +1,13 @@
 # RepoScope coordination — communication rules
 
 This directory is the coordination board for the two-agent build of
-RepoScope V2.5–V2.8. The aliases **Divy** and **Parv** are the only names
+RepoScope V2.5–V2.8. The aliases **Rook** and **Wren** are the only names
 used here. The board is a record; **git commits, tests, and the graph
 contract are the source of truth**.
 
 ## 1. Who owns what
 
-| Area | Divy | Parv |
+| Area | Rook | Wren |
 |---|---|---|
 | Graph schema, resolver, store, parser facts | owner | read-only |
 | Mind-map API contract | owner | consumer |
@@ -30,7 +30,7 @@ handoff instead. The integrator may reassign a claim, but must say so in
   `experimental`.
 - `experimental` is the single integration branch.
 - Each agent works in a **separate worktree** on a short-lived child branch
-  named `divy/<phase>` or `parv/<phase>`.
+  named `rook/<phase>` or `wren/<phase>`.
 - Merge into `experimental` only when the phase gate is green.
 - Never force-push or rebase a shared branch.
 - Do not run two agents in the same working directory.
@@ -52,19 +52,19 @@ A handoff is complete only when it contains:
 ## 4. The phase loop
 
 ```
-Divy plans and freezes the contract
+Rook plans and freezes the contract
       ↓
-Divy implements 1–2 phases, runs the full gate, commits
+Rook implements 1–2 phases, runs the full gate, commits
       ↓
-Divy writes a self-contained prompt for Parv
+Rook writes a self-contained prompt for Wren
       ↓
-Parv works in a separate worktree on a child branch
+Wren works in a separate worktree on a child branch
       ↓
-Parv merges into experimental after the gate is green and posts a handoff
+Wren merges into experimental after the gate is green and posts a handoff
       ↓
-Divy reviews, re-runs the gate, fixes integration issues
+Rook reviews, re-runs the gate, fixes integration issues
       ↓
-Divy starts the next batch
+Rook starts the next batch
 ```
 
 Parallel work is allowed only when the contract is already frozen and the
@@ -106,7 +106,7 @@ hard dependencies; do not parallelize across them.
 and a short subject. Do not rewrite another agent's entry; append a
 correction.
 
-`DIVY.md` and `PARV.md` are each agent's work log: claims, commits, tests,
+`ROOK.md` and `WREN.md` are each agent's work log: claims, commits, tests,
 and limits. The reviewer writes review results in their own file and links
 the handoff in `DIALOGUE.md`.
 

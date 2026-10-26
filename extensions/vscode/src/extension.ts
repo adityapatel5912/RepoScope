@@ -21,6 +21,7 @@ import * as vscode from "vscode";
 import { CallerCodeLensProvider, relativePath } from "./codeLens";
 import { GraphClient } from "./graphClient";
 import { MiniGraphView } from "./miniGraph";
+import { parseOpenUri } from "./model";
 import { StatusBarController } from "./statusBar";
 
 /** The web app's URL, for the "open the canvas" command. */
@@ -37,7 +38,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const miniGraph = new MiniGraphView(async (nodeId) => {
     await focusInCanvas(nodeId);
   });
-  context.subscriptions.push(miniGraph);
+  context.subscriptions.push(
+    miniGraph,
+    vscode.window.registerWebviewViewProvider("reposcope.graph", miniGraph, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
 
   // ── 2. The status bar ──────────────────────────────────────────────────
   let statusBar: StatusBarController | undefined;
@@ -72,11 +78,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.window.registerUriHandler({
       handleUri(uri: vscode.Uri) {
-        const params = new URLSearchParams(uri.query);
-        const path = params.get("path");
-        const line = Number(params.get("line") ?? 1) || 1;
-        if (!path) return;
-        openFileAtLine(path, line);
+        const target = parseOpenUri(uri.query);
+        if (!target) return;
+        void openFileAtLine(target.path, target.line).catch((err) => {
+          // The link points at a file this workspace does not have — a
+          // tour from another repository, or a link shared in chat. Say
+          // so instead of failing silently.
+          vscode.window.showInformationMessage(
+            `RepoScope: ${target.path} is not in this workspace.`,
+          );
+          console.warn("RepoScope could not open the file:", err);
+        });
       },
     }),
   );
@@ -91,6 +103,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     vscode.commands.registerCommand("reposcope.openCanvas", async () => {
       await vscode.env.openExternal(vscode.Uri.parse(canvasUrl));
+    }),
+
+    vscode.commands.registerCommand("reposcope.showGraph", async () => {
+      // Bring the Activity Bar map to the front. The view is registered
+      // as `reposcope.graph`, and VS Code gives every view a focus
+      // command with that id.
+      await vscode.commands.executeCommand("reposcope.graph.focus");
     }),
 
     vscode.commands.registerCommand(
@@ -190,7 +209,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // The first paint.
-  await refreshEverything(client, miniGraph, statusBar);
+  let backendAlive = await refreshEverything(client, miniGraph, statusBar);
+
+  // ── Keep trying ─────────────────────────────────────────────────────────
+  //
+  // A developer usually starts the editor and the backend at the same
+  // time, and the backend needs a moment to build its index. The
+  // extension used to decide once — "the backend is not there" — and then
+  // say "offline" for the rest of the session, even after the backend
+  // came up two seconds later. This retries until it is there.
+  const retry = setInterval(async () => {
+    if (backendAlive) return;
+    const alive = await client.isAlive();
+    if (!alive) return;
+    backendAlive = true;
+    codeLensProvider.refresh();
+    await refreshEverything(client, miniGraph, statusBar);
+  }, 10_000);
+  context.subscriptions.push({ dispose: () => clearInterval(retry) });
 }
 
 /** Refresh the index, the status bar and the mini-graph. */
@@ -198,11 +234,11 @@ async function refreshEverything(
   client: GraphClient,
   miniGraph: MiniGraphView,
   statusBar: StatusBarController | undefined,
-): Promise<void> {
+): Promise<boolean> {
   const alive = await client.isAlive();
   if (!alive) {
-    await statusBar?.update(null);
-    return;
+    statusBar?.offline();
+    return false;
   }
   try {
     const graph = await client.getGraph();
@@ -214,6 +250,7 @@ async function refreshEverything(
   if (editor) {
     await statusBar?.update(relativePath(editor.document));
   }
+  return true;
 }
 
 /** Open a repo-relative file at a line. */

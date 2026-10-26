@@ -44,35 +44,45 @@ export class CallerCodeLensProvider implements vscode.CodeLensProvider {
     const relative = relativePath(document);
     if (!relative) return [];
 
-    const lenses: vscode.CodeLens[] = [];
-
+    // Collect the definitions first, then ask for ALL of them at once.
+    // One request per file, not one per symbol: a file with fifty
+    // definitions used to fire fifty round trips, and the lens took
+    // seconds to appear.
+    const wanted: Array<{ name: string; line: number }> = [];
     for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
       const line = document.lineAt(lineNumber).text;
       if (!isDefinitionLine(line)) continue;
-
       const names = candidateSymbols(line);
       if (names.length === 0) continue;
+      wanted.push({ name: names[0], line: lineNumber });
+    }
+    if (wanted.length === 0) return [];
 
-      for (const name of names) {
-        let result;
-        try {
-          result = await this.client.getCallers(relative, name);
-        } catch {
-          // The backend is down. Showing no lens is the honest answer;
-          // showing "0 callers" would be a lie.
-          return lenses;
-        }
-        if (!result.available || !result.found) continue;
+    let results;
+    try {
+      const batch = await this.client.getCallersBatch(
+        relative,
+        wanted.map((w) => w.name),
+      );
+      results = batch.results ?? {};
+    } catch {
+      // The backend is down. Showing no lens is the honest answer;
+      // showing "0 callers" would be a lie.
+      return [];
+    }
 
-        lenses.push(
-          new vscode.CodeLens(new vscode.Range(lineNumber, 0, lineNumber, 0), {
-            title: callersLensText(result.count),
-            command: "reposcope.showCallers",
-            arguments: [relative, name, result.count],
-          }),
-        );
-        break;  // one lens per definition line
-      }
+    const lenses: vscode.CodeLens[] = [];
+    for (const { name, line } of wanted) {
+      const result = results[name];
+      if (!result || !result.found) continue;
+
+      lenses.push(
+        new vscode.CodeLens(new vscode.Range(line, 0, line, 0), {
+          title: callersLensText(result.count),
+          command: "reposcope.showCallers",
+          arguments: [relative, name, result.count],
+        }),
+      );
     }
 
     return lenses;

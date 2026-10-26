@@ -146,6 +146,23 @@ export class GraphClient {
     );
   }
 
+  /**
+   * The callers of EVERY symbol in a file, in one request.
+   *
+   * A file with fifty definitions used to mean fifty round trips — the
+   * CodeLens took seconds to appear. One request, one answer.
+   */
+  async getCallersBatch(
+    file: string,
+    symbols: string[],
+  ): Promise<{ available: boolean; results: Record<string, { found: boolean; count: number; callers: Caller[] }> }> {
+    const params = new URLSearchParams({ file, symbols: symbols.join(",") });
+    return getJson(
+      `${this.baseUrl}/api/analysis/callers-batch?${params.toString()}`,
+      this.timeoutMs,
+    );
+  }
+
   /** What depends on this file? */
   async getDependents(file: string): Promise<DependentsResult> {
     const params = new URLSearchParams({ file });

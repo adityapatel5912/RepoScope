@@ -17,10 +17,13 @@
  */
 import * as vscode from "vscode";
 import { Graph } from "./graphClient";
-import { escapeXml, renderSvg } from "./model";
+import { escapeXml, renderLegend, renderSvg } from "./model";
 
 /** The HTML shell for the webview. */
-export function webviewHtml(svg: string, summary: string): string {
+export function webviewHtml(svg: string, summary: string, legend = "", focus?: string): string {
+  const focusLine = focus
+    ? `<div class="focus" title="${escapeXml(focus)}">${escapeXml(focus)}</div>`
+    : "";
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -28,19 +31,53 @@ export function webviewHtml(svg: string, summary: string): string {
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;" />
 <style>
-  body { margin: 0; background: #0f172a; color: #cbd5e1;
-         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-  .header { padding: 8px 10px 4px; font-size: 11px; color: #64748b;
-            font-family: monospace; }
-  .header b { color: #38bdf8; font-weight: 600; }
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: #0b1220;
+    color: #cbd5e1;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+  }
+  .header {
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 10px 12px 6px;
+    border-bottom: 1px solid #1e293b;
+  }
+  .header b { color: #38bdf8; font-weight: 600; letter-spacing: 0.01em; }
+  .header .summary {
+    margin-left: auto; color: #64748b; font-size: 10px; font-family: monospace;
+  }
+  .focus {
+    padding: 6px 12px 8px;
+    color: #e2e8f0;
+    font-family: monospace; font-size: 11px;
+    border-bottom: 1px solid #1e293b;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .focus::before { content: "● "; color: #38bdf8; }
+  .map { padding: 6px 0 2px; }
   svg { display: block; width: 100%; height: auto; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 4px 10px;
+    padding: 8px 12px 12px;
+    border-top: 1px solid #1e293b;
+    color: #64748b; font-size: 10px;
+  }
+  .legend-item { display: inline-flex; align-items: center; gap: 4px; }
+  .legend-dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+  }
   circle { cursor: pointer; }
-  circle:hover { stroke: #e2e8f0; stroke-width: 1; }
+  circle:hover { stroke: #e2e8f0; stroke-width: 1.5; }
+  .empty { padding: 18px 12px; color: #64748b; font-family: monospace; font-size: 11px; }
 </style>
 </head>
 <body>
-<div class="header"><b>RepoScope</b> · ${escapeXml(summary)}</div>
-${svg}
+<div class="header"><b>RepoScope</b><span class="summary">${escapeXml(summary)}</span></div>
+${focusLine}
+<div class="map">${svg}</div>
+${legend}
 <script>
   const vscode = acquireVsCodeApi();
   document.addEventListener('click', (event) => {
@@ -54,33 +91,58 @@ ${svg}
 </html>`;
 }
 
-/** The webview panel that hosts the mini-graph. */
-export class MiniGraphView {
-  private panel: vscode.WebviewPanel | undefined;
+/**
+ * The Activity Bar mini-graph.
+ *
+ * It lives in the Activity Bar view the package declares
+ * (`reposcope.graph`) — NOT in an editor tab. An earlier version opened a
+ * webview PANEL and revealed it on every file switch, which took the
+ * editor away from the developer mid-keystroke and left the status bar
+ * claiming "no file" while they were looking at one. A side panel that
+ * updates itself cannot do that.
+ */
+export class MiniGraphView implements vscode.WebviewViewProvider, vscode.Disposable {
+  private view: vscode.WebviewView | undefined;
+  private graph: Graph | undefined;
+  private focusId: string | undefined;
 
   constructor(private readonly onSelect: (nodeId: string) => void) {}
 
-  /** Show (or reveal) the panel, centred on the focused node. */
+  /** The Activity Bar asks for the view when the user opens the container. */
+  resolveWebviewView(webviewView: vscode.WebviewView): void {
+    this.view = webviewView;
+    webviewView.webview.options = { enableScripts: true };
+    webviewView.webview.onDidReceiveMessage((message) => {
+      if (message?.type === "select" && typeof message.id === "string") {
+        this.onSelect(message.id);
+      }
+    });
+    webviewView.onDidDispose(() => { this.view = undefined; });
+    this.render();
+  }
+
+  /** Show (or refresh) the graph, centred on the focused node. */
   show(graph: Graph, focusId?: string): void {
-    if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel(
-        "reposcope.graph",
-        "Architecture",
-        vscode.ViewColumn.One,
-        { enableScripts: true, retainContextWhenHidden: true },
-      );
-      this.panel.onDidDispose(() => { this.panel = undefined; });
-      this.panel.webview.onDidReceiveMessage((message) => {
-        if (message?.type === "select" && typeof message.id === "string") {
-          this.onSelect(message.id);
-        }
-      });
-    }
-    this.panel.webview.html = webviewHtml(renderSvg(graph, focusId), graph.summary);
-    this.panel.reveal(vscode.ViewColumn.One);
+    this.graph = graph;
+    this.focusId = focusId;
+    this.render();
+  }
+
+  /** Paint the latest graph into the view, if the view exists yet. */
+  private render(): void {
+    if (!this.view || !this.graph) return;
+    const focusLabel = this.focusId
+      ? this.focusId.replace(/^file:/, "")
+      : undefined;
+    this.view.webview.html = webviewHtml(
+      renderSvg(this.graph, this.focusId),
+      this.graph.summary,
+      renderLegend(this.graph),
+      focusLabel,
+    );
   }
 
   dispose(): void {
-    this.panel?.dispose();
+    this.view = undefined;
   }
 }

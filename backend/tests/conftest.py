@@ -86,6 +86,29 @@ def golden_snapshot():
 
 
 @pytest.fixture
+def fake_ai_provider(monkeypatch):
+    """
+    Resolve a synthetic provider for endpoint tests that stub the LLM call.
+
+    The endpoint resolves a provider from the environment *before* it calls
+    the stubbed LLM. CI deliberately has no `.env`, so without this fixture
+    those tests fail with "No AI provider configured" before reaching the
+    stub. No test may depend on a real key or reach a real provider.
+    """
+    import main
+
+    provider = {
+        "provider": "test",
+        "base_url": "https://example.invalid/v1",
+        "api_key": "test-key",
+        "model": "test-model",
+        "source": "test",
+    }
+    monkeypatch.setattr(main, "resolve_provider", lambda *a, **k: dict(provider))
+    return provider
+
+
+@pytest.fixture
 def served_graph():
     """
     Make the endpoints answer about a FIXTURE, not about whatever

@@ -91,7 +91,7 @@ def test_build_onboarding_llm_failure_falls_back(graph_repo, monkeypatch):
     assert out["good_first_issues"]                    # heuristic GFIs
 
 
-def test_onboard_endpoint(client, graph_repo, monkeypatch):
+def test_onboard_endpoint(client, graph_repo, fake_ai_provider, monkeypatch):
     def fake_ask(system, prompt, graph_context="", provider=None):
         return GFI_JSON if "Good First Issues" in prompt else LEVEL_JSON
     monkeypatch.setattr(onboarding, "ask_llm", fake_ask)

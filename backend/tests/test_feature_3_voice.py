@@ -94,7 +94,7 @@ def test_tts_all_routes_fail(monkeypatch):
 
 # ── Tour regression (voice rides on tours) ──────────────────────────────────
 
-def test_tour_generate_still_works(client, tmp_path, monkeypatch):
+def test_tour_generate_still_works(client, tmp_path, fake_ai_provider, monkeypatch):
     (tmp_path / "auth_router.py").write_text("def check():\n    return 1\n")
     (tmp_path / "auth.py").write_text("import auth_router\n\ndef gate():\n    return auth_router.check()\n")
     state = {"repo": "octo/tiny", "local_path": str(tmp_path), "readme": "# x"}

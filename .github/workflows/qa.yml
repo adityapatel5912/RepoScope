@@ -39,6 +39,11 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The churn tests read this repository's real history. A shallow
+          # checkout has one commit, so it cannot measure co-change coupling
+          # and would fail for the wrong reason.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

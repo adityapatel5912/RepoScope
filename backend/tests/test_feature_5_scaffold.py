@@ -10,6 +10,11 @@ from fastapi.testclient import TestClient
 import main
 
 
+# Every endpoint test in this module stubs the LLM. The endpoint still
+# resolves a provider first, so give it a synthetic one: CI has no `.env`.
+pytestmark = pytest.mark.usefixtures("fake_ai_provider")
+
+
 @pytest.fixture()
 def client():
     return TestClient(main.app)

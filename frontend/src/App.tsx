@@ -10,6 +10,7 @@ import { useKeyboard } from "./hooks/useKeyboard";
 import { useRepoLoader } from "./hooks/useRepoLoader";
 import type { TourGraphState } from "./components/GraphView";
 import { FolderTree, MessageSquare, ChevronDown } from "lucide-react";
+import { getGraph } from "./api/client";
 import type { ContextPayload } from "./api/client";
 
 type Mode = "understanding" | "tracking" | "incident";
@@ -111,7 +112,16 @@ export default function App() {
     setTokenCount(0);
     setTourState(null);
     setHighlightNode(null);
-    clearHighlights();
+    setImpactTarget(null);
+    setImpactDirect([]);
+    setImpactTransitive([]);
+    // Eagerly fetch the graph so it renders immediately without needing a chat query
+    getGraph().then((g) => {
+      if (g?.nodes?.length) {
+        setRawNodes(g.nodes);
+        setRawEdges(g.edges ?? []);
+      }
+    }).catch(() => { /* graph fetch failed — will populate on first chat query instead */ });
   }, []);
 
   const loader = useRepoLoader(handleLoaded);

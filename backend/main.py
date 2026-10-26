@@ -261,7 +261,17 @@ async def repo_check(x_session_id: str = Header(None)):
 @app.get("/api/repo/graph")
 async def repo_graph():
     from orchestrator import get_cached_graph
-    return get_cached_graph()
+    graph = get_cached_graph()
+    # If cache is empty (e.g. first load before any chat), build it now
+    if not graph.get("nodes"):
+        state = load_state()
+        local_path = state.get("local_path")
+        if local_path:
+            built = await asyncio.to_thread(build_graph_from_repo, local_path)
+            from orchestrator import _graph_cache
+            _graph_cache.update(built)
+            return built
+    return graph
 
 
 # ── Demo repositories (one-click examples) ───────────────────────────────────

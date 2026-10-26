@@ -402,20 +402,30 @@
   margin: 0.5rem 0;
 }
 
+/* Scrollable wrapper so wide tables don't overflow the panel */
+.md-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.6rem 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-muted);
+}
+
 .md-body table {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.75rem;
-  margin: 0.6rem 0;
-  display: block;
-  overflow-x: auto;
+  margin: 0;
+  display: table;
+  min-width: 100%;
 }
 
 .md-body th, .md-body td {
   border: 1px solid var(--border-muted);
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.65rem;
   text-align: left;
   vertical-align: top;
+  word-break: break-word;
 }
 
 .md-body th {
@@ -428,7 +438,17 @@
   white-space: nowrap;
 }
 
-.md-body td code { white-space: nowrap; }
+/* Code inside table cells — plain mono, no chip styling */
+.md-body td code, .md-body th code {
+  white-space: nowrap;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  background: var(--bg-panel);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid var(--border-muted);
+  color: var(--text);
+}
 
 .md-body a {
   color: var(--accent-hover);

@@ -49,7 +49,7 @@ export default function GraphControls({
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
   return (
-    <div className="graph-toolbar absolute bottom-4 left-4 z-10 flex flex-col gap-2 items-start max-w-[calc(100%-2rem)]">
+    <div className="graph-toolbar absolute bottom-4 left-4 z-10 flex flex-wrap items-center gap-2 max-w-[calc(100%-2rem)]">
       {/* Action row */}
       <div className="flex items-center gap-0.5 p-1 rounded-lg bg-bg-panel border border-border-hairline max-w-full overflow-x-auto shadow-sm">
         <button onClick={onRelayout} title="Re-run layout" aria-label="Re-run layout" className={btn()}>
@@ -152,8 +152,9 @@ export default function GraphControls({
         </button>
       </div>
 
-      {/* Vertical zoom stack */}
-      <div className="flex flex-col p-1 rounded-lg bg-bg-panel border border-border-hairline">
+      {/* Zoom stack sits beside the actions, not under them: the vertical
+          stack made the toolbar 148px tall and the fit reserved all of it. */}
+      <div className="flex flex-row p-1 rounded-lg bg-bg-panel border border-border-hairline">
         <button onClick={() => zoomIn({ duration: 200 })} title="Zoom in" aria-label="Zoom in" className={btn()}>
           <Plus size={14} />
         </button>

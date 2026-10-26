@@ -16,6 +16,7 @@ import type { ContextPayload } from "./api/client";
 import { streamLocalEvents } from "./api/local";
 import { openInEditor } from "./utils/openInEditor";
 import { loadIdePrefs, type IdePrefs } from "./utils/ideLinks";
+import type { BrowserGraph } from "./api/localBrowser";
 
 type Mode = "understanding" | "tracking" | "incident";
 
@@ -113,6 +114,15 @@ export default function App() {
    * configuration at all.
    */
   const [localRoot, setLocalRoot] = useState<string | null>(null);
+  /**
+   * A folder the user opened through the browser's File System Access API.
+   *
+   * This is a PREVIEW, not the loaded repository: the graph was parsed in
+   * the browser and the server knows nothing about it. The flag is what
+   * labels the canvas and disables the server-backed actions in the
+   * drawer, so a preview can never masquerade as a full analysis.
+   */
+  const [browserPreview, setBrowserPreview] = useState<{ name: string } | null>(null);
   /** The editor settings modal. */
   const [showEditorSettings, setShowEditorSettings] = useState(false);
   const [idePrefs, setIdePrefs] = useState<IdePrefs>(() => loadIdePrefs());
@@ -140,6 +150,7 @@ export default function App() {
 
   // ── Repo loading (TopBar input) ──
   const handleLoaded = useCallback((info: RepoInfo) => {
+    setBrowserPreview(null);
     setRepo(`${info.owner}/${info.repo}`);
     setRepoInfo(info);
     setRawNodes([]);
@@ -170,6 +181,39 @@ export default function App() {
         );
       }
     }).catch(() => { /* graph fetch failed — will populate on first chat query instead */ });
+  }, []);
+
+  /**
+   * Show a folder the browser parsed.
+   *
+   * The canvas gets the graph immediately. Everything server-backed —
+   * chat, tracking, impact, tours — still refers to the loaded
+   * repository, so the preview is labelled and those actions are hidden
+   * in the drawer. This is a map, not a second backend.
+   */
+  const handleBrowserGraph = useCallback((graph: BrowserGraph) => {
+    setBrowserPreview({ name: graph.name });
+    setRawNodes(graph.nodes);
+    setRawEdges(graph.edges);
+    setRepo(graph.name);
+    setRepoInfo({
+      owner: "",
+      repo: graph.name,
+      file_count: graph.files,
+      node_count: graph.nodes.length,
+      edge_count: graph.edges.length,
+    });
+    setTracking(null);
+    setContextInfo(null);
+    setTokenCount(0);
+    setLiveUpdate(null);
+    setIsLocal(false);
+    setLocalRoot(null);
+    setTourState(null);
+    setHighlightNode(null);
+    setImpactTarget(null);
+    setImpactDirect([]);
+    setImpactTransitive([]);
   }, []);
 
   const loader = useRepoLoader(handleLoaded);
@@ -222,6 +266,7 @@ export default function App() {
   }, []);
 
   const clearRepo = useCallback(() => {
+    setBrowserPreview(null);
     setRepo(null);
     setRepoInfo(null);
     setRawNodes([]);
@@ -434,6 +479,7 @@ export default function App() {
               onTourState={setTourState}
               onShowShortcuts={() => setShowShortcuts(true)}
               onToggleDebug={() => setDebugMode((v) => !v)}
+              onBrowserGraph={handleBrowserGraph}
               onClose={() => { setSidebarCollapsed(true); persistLayout({ sidebarCollapsed: true }); }}
             />
           </aside>
@@ -450,6 +496,7 @@ export default function App() {
               onAnalyzeImpact={(label) => setImpactRequest({ target: label, ts: Date.now() })}
               onStartTour={(label) => setTourRequest({ topic: label, ts: Date.now() })}
               repoTitle={repo ?? "Repository"}
+              previewName={browserPreview?.name}
               onOpenInEditor={handleOpenInEditor}
               localRoot={localRoot}
               highlightNode={highlightNode}

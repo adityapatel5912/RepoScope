@@ -12,6 +12,7 @@ import OnboardingPath from "./OnboardingPath";
 import InsightsPanel from "./InsightsPanel";
 import RepoMapPanel from "./RepoMapPanel";
 import LocalFolderPanel from "./LocalFolderPanel";
+import type { BrowserGraph } from "../api/localBrowser";
 import { toast } from "./Toasts";
 import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
@@ -40,6 +41,8 @@ interface Props {
   onShowShortcuts?: () => void;
   onToggleDebug?: () => void;
   onClose?: () => void;
+  /** The browser parsed a folder. App shows it on the canvas as a preview. */
+  onBrowserGraph?: (graph: BrowserGraph) => void;
 }
 
 // Sidebar card shell — white panel, black border, label-caps header
@@ -65,7 +68,7 @@ function Card({
 export default function LeftPanel({
   onLoaded, repoInfo, trackingData, contextInfo, rawNodes = [], loader, studentMode = false,
   onHighlightNode, onHighlightImpact, tourRequest, impactRequest, onTourState,
-  onShowShortcuts, onToggleDebug, onClose,
+  onShowShortcuts, onToggleDebug, onClose, onBrowserGraph,
 }: Props) {
   const [byokToken, setByokToken]   = useState("");
   const [byokSaved, setByokSaved]   = useState(false);
@@ -198,7 +201,7 @@ export default function LeftPanel({
       )}
 
       {/* ── Experimental: parse a folder in the browser, upload nothing ── */}
-      <LocalFolderPanel />
+      <LocalFolderPanel onGraph={onBrowserGraph} />
 
       {/* ── Student Mode: guided learning path (pyramid-ranked) ── */}
       {studentMode && (

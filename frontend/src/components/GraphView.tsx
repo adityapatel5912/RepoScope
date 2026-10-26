@@ -123,11 +123,11 @@ const FIT_VIEW_OPTIONS = {
 /**
  * The space the floating toolbar occupies at the bottom-left of the canvas.
  *
- * The toolbar is roughly 520px wide and 170px tall. The fit reserves its
- * height across the bottom of the canvas so the graph is never drawn
- * underneath it.
+ * The toolbar is one row now — actions and zoom side by side — so it is
+ * about 48px tall. The fit reserves 80px, which includes the 16px gutter
+ * below it.
  */
-const TOOLBAR_INSET = { width: 520, height: 170 };
+const TOOLBAR_INSET = { width: 640, height: 80 };
 
 /**
  * The space the floating pieces of the canvas need, so the fit keeps the
@@ -154,6 +154,12 @@ const DOT_COLOR  = "#D9D2C0";
 
 // ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
 const RANK_Y          = 280;
+/**
+ * The grouped map has at most one card per module, not one per file, so
+ * the wide sub-row spacing of the file pyramid would just make the whole
+ * map smaller. The compact pitch keeps an 11-13 card map readable.
+ */
+const RANK_Y_GROUPED  = 112;
 const SIBLING_X       = 280;
 const SIBLING_X_TIGHT = 220;
 const MAX_ROW_WIDTH   = 6000;
@@ -199,14 +205,85 @@ function basename(p: string): string {
 }
 
 /**
- * The directory a file lives in — "" for a file at the repository root.
+ * The directory a file belongs to on the grouped map.
  *
- * This is the grouping key for the "group by directory" map: two files
- * are in the same place when their paths share a directory.
+ * The immediate parent is the wrong granularity for a large repository:
+ * this one has 347 files in 70 directories, so "grouped" still drew 70
+ * nodes and the fit shrank them to unreadable dots. The map groups by
+ * MODULE — the top-level directory — and only splits a module further
+ * when it is too large to read as one card. A 13-card map fits the canvas
+ * at a readable zoom; the drawer still lists every file in the card.
  */
 function directoryOf(path: string): string {
   const idx = path.lastIndexOf("/");
   return idx === -1 ? "" : path.slice(0, idx);
+}
+
+/** Above this many files, a module is split into its subdirectories. */
+const MAX_MODULE_FILES = 200;
+
+interface DirectoryTree {
+  path: string;
+  files: string[];
+  children: Map<string, DirectoryTree>;
+  total: number;
+}
+
+/**
+ * Assign every file to the module card that will represent it.
+ *
+ * The tree is built from the paths, then walked top-down. A directory
+ * with at most MAX_MODULE_FILES files becomes one card; a larger one is
+ * split into its children, with the files that live directly in it kept
+ * on a card of their own. That gives small repositories one card per
+ * top-level directory and large ones a card per package.
+ */
+function buildModuleGroups(paths: string[]): Map<string, string> {
+  const root: DirectoryTree = { path: "", files: [], children: new Map(), total: 0 };
+
+  for (const path of paths) {
+    const parts = path.split("/");
+    let node = root;
+    for (const part of parts.slice(0, -1)) {
+      let child = node.children.get(part);
+      if (!child) {
+        child = {
+          path: node.path ? `${node.path}/${part}` : part,
+          files: [],
+          children: new Map(),
+          total: 0,
+        };
+        node.children.set(part, child);
+      }
+      node = child;
+    }
+    node.files.push(path);
+  }
+
+  const count = (node: DirectoryTree): number => {
+    node.total = node.files.length;
+    for (const child of node.children.values()) node.total += count(child);
+    return node.total;
+  };
+  count(root);
+
+  const groups = new Map<string, string>();
+  const collect = (node: DirectoryTree, groupPath: string): void => {
+    for (const file of node.files) groups.set(file, groupPath);
+    for (const child of node.children.values()) collect(child, groupPath);
+  };
+  const assign = (node: DirectoryTree): void => {
+    if (node.total <= MAX_MODULE_FILES || node.children.size === 0) {
+      collect(node, node.path);
+      return;
+    }
+    // The files sitting directly in this directory keep their own card;
+    // the subdirectories are considered separately.
+    for (const file of node.files) groups.set(file, node.path);
+    for (const child of node.children.values()) assign(child);
+  };
+  assign(root);
+  return groups;
 }
 
 /**
@@ -541,12 +618,13 @@ function buildPyramidGraph(
       category: number;
       rank: number;
     }>();
+    const moduleOf = buildModuleGroups(fileNodes.map((n) => String(n.label)));
 
     for (let r = 1; r <= 6; r++) {
       for (const item of rankBuckets.get(r) || []) {
         const fileId = String(item.node.id);
         const path = String(item.node.label);
-        const dir = directoryOf(path);
+        const dir = moduleOf.get(path) ?? directoryOf(path);
         const gid = `dir:${dir || "."}`;
         groupOfFile.set(fileId, gid);
 
@@ -610,9 +688,20 @@ function buildPyramidGraph(
   placedIds.add("repo:root");
 
   // Ranks 1..6 — file nodes, or folder nodes when the map is grouped.
+  const rankY = grouped ? RANK_Y_GROUPED : RANK_Y;
+  // Empty ranks are common once modules are grouped (a repository may have
+  // no group whose best file sits in rank 3 or 4). Leaving those rows in
+  // the layout pushes the lower ranks off the canvas and forces the fit to
+  // zoom out for rows that contain nothing.
+  const visualRow = new Map<number, number>();
+  let occupiedRows = 0;
+  for (let r = 1; r <= 6; r++) {
+    if ((buckets.get(r) || []).length > 0) visualRow.set(r, ++occupiedRows);
+  }
   for (let r = 1; r <= 6; r++) {
     const items = buckets.get(r) || [];
     if (items.length === 0) continue;
+    const row = visualRow.get(r) ?? r;
 
     const cfg = RANK_CONFIGS[r] ?? RANK_CONFIGS[2];
     const pitch = Math.max(cfg.width + MIN_CLEAR_X, items.length > 12 ? SIBLING_X_TIGHT : SIBLING_X);
@@ -632,7 +721,7 @@ function buildPyramidGraph(
           width: cfg.width,
           height: cfg.height,
           data: {
-            label: dir === "" ? "(root)" : dir.split("/").pop() ?? dir,
+            label: dir === "" ? "(root)" : dir,
             kind: "folder",
             layer: classify(String(item.node.id), path),
             subtitle: `${files.length} file${files.length === 1 ? "" : "s"}`,
@@ -668,7 +757,7 @@ function buildPyramidGraph(
       const maxPerRow = Math.max(1, Math.floor(MAX_ROW_WIDTH / pitch));
       const subRowCount = Math.ceil(items.length / maxPerRow);
       const rowStepY = cfg.height + 40;
-      const startBaseY = r * RANK_Y - ((subRowCount - 1) * rowStepY) / 2;
+      const startBaseY = row * rankY - ((subRowCount - 1) * rowStepY) / 2;
 
       for (let sIdx = 0; sIdx < subRowCount; sIdx++) {
         const subItems = items.slice(sIdx * maxPerRow, (sIdx + 1) * maxPerRow);
@@ -685,7 +774,7 @@ function buildPyramidGraph(
     } else {
       const startX = -totalRowWidth / 2;
       items.forEach((item, i) => {
-        const node = makeNode(item, startX + i * pitch, r * RANK_Y);
+        const node = makeNode(item, startX + i * pitch, row * rankY);
         out.push(node);
         placedIds.add(node.id);
       });
@@ -711,7 +800,7 @@ function buildPyramidGraph(
       out.push({
         id: `rank-label-${r}`,
         type: "rankLabel",
-        position: { x: leftEdgeX, y: r * RANK_Y + 16 },
+        position: { x: leftEdgeX, y: (visualRow.get(r) ?? r) * rankY + 16 },
         width: 140,
         height: 50,
         data: { rank: r, label: RANK_TITLES[r] },
@@ -967,16 +1056,21 @@ interface NodeDrawerProps {
    */
   onOpenInEditor?: (path: string, line: number) => void;
   localRoot?: string | null;
+  /** True when the node belongs to a browser-parsed preview. */
+  preview?: boolean;
 }
 
 function NodeDrawer({
   node, edges, onClose, onAskAbout, onAnalyzeImpact, onStartTour,
-  onOpenInEditor, localRoot,
+  onOpenInEditor, localRoot, preview = false,
 }: NodeDrawerProps) {
   const data = node.data as LayerNodeData;
   const style = LAYER_STYLE[data.layer];
   const incoming = edges.filter((e) => e.target === node.id).length;
   const outgoing = edges.filter((e) => e.source === node.id).length;
+  // A folder card groups files from a whole subtree, so show each file
+  // relative to that card ("api/routers/local.py"), not just its basename.
+  const groupDir = data.kind === "folder" ? String(data.fullPath ?? "") : "";
 
   return (
     <div className="
@@ -1081,8 +1175,8 @@ function NodeDrawer({
             <p className="label-caps !text-[10px] mb-1.5">
               Files ({data.files.length})
             </p>
-            <ul className="flex flex-col gap-0.5">
-              {data.files.slice(0, 12).map((file) => (
+            <ul className="flex flex-col gap-0.5 max-h-52 overflow-y-auto pr-1">
+              {data.files.map((file) => (
                 <li key={file}>
                   <button
                     onClick={() => onOpenInEditor?.(file, 1)}
@@ -1091,16 +1185,11 @@ function NodeDrawer({
                     title={`Open ${file} in your editor`}
                     data-testid="open-folder-file-in-editor"
                   >
-                    {basename(file)}
+                    {groupDir && file.startsWith(`${groupDir}/`) ? file.slice(groupDir.length + 1) : basename(file)}
                   </button>
                 </li>
               ))}
             </ul>
-            {data.files.length > 12 && (
-              <p className="text-[10px] text-text-secondary mt-1">
-                +{data.files.length - 12} more
-              </p>
-            )}
           </div>
         )}
         {data.symbolRefs && data.symbolRefs.length > 0 && data.fullPath && (
@@ -1131,35 +1220,43 @@ function NodeDrawer({
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-2">
-        {data.kind === "file" && data.fullPath && (
-          <button
-            onClick={() => void onOpenInEditor?.(data.fullPath!, data.line ?? 0)}
-            className="btn-secondary w-full !text-xs"
-            title={
-              localRoot
-                ? `Open ${data.fullPath}${data.line ? `:${data.line}` : ""} in your editor`
-                : "Copy the path — set a workspace root in Settings to open it directly"
-            }
-            data-testid="open-in-editor"
-          >
-            <ExternalLink size={12} />
-            Open in editor
+      {preview ? (
+        <p className="text-[10px] text-text-muted leading-relaxed border-t border-border-hairline pt-2">
+          Browser preview. The assistant, impact analysis, and tours need the
+          server-side index — run <code className="font-mono">reposcope run .</code>{" "}
+          for those.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {data.kind === "file" && data.fullPath && (
+            <button
+              onClick={() => void onOpenInEditor?.(data.fullPath!, data.line ?? 0)}
+              className="btn-secondary w-full !text-xs"
+              title={
+                localRoot
+                  ? `Open ${data.fullPath}${data.line ? `:${data.line}` : ""} in your editor`
+                  : "Copy the path — set a workspace root in Settings to open it directly"
+              }
+              data-testid="open-in-editor"
+            >
+              <ExternalLink size={12} />
+              Open in editor
+            </button>
+          )}
+          <button onClick={() => onAskAbout(data.label)} className="btn-secondary w-full !text-xs">
+            <MessageSquare size={12} />
+            Ask about this
           </button>
-        )}
-        <button onClick={() => onAskAbout(data.label)} className="btn-secondary w-full !text-xs">
-          <MessageSquare size={12} />
-          Ask about this
-        </button>
-        <button onClick={() => onAnalyzeImpact?.(data.label)} className="btn-primary w-full !text-xs">
-          <Zap size={12} />
-          Analyze impact
-        </button>
-        <button onClick={() => onStartTour?.(data.label)} className="btn-secondary w-full !text-xs">
-          <MapIcon size={12} />
-          Start tour from here
-        </button>
-      </div>
+          <button onClick={() => onAnalyzeImpact?.(data.label)} className="btn-primary w-full !text-xs">
+            <Zap size={12} />
+            Analyze impact
+          </button>
+          <button onClick={() => onStartTour?.(data.label)} className="btn-secondary w-full !text-xs">
+            <MapIcon size={12} />
+            Start tour from here
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1176,6 +1273,8 @@ interface InnerProps {
   /** The absolute path of the repository on this machine, in local mode. */
   localRoot?: string | null;
   repoTitle?: string;
+  /** Set when the graph was parsed in the browser, not by the server. */
+  previewName?: string;
   highlightNode?: string | null;
   impactTarget?: string | null;
   impactDirect?: string[];
@@ -1185,7 +1284,7 @@ interface InnerProps {
 
 function GraphInner({
   rawNodes, rawEdges, onAskAbout, onAnalyzeImpact, onStartTour, repoTitle,
-  onOpenInEditor, localRoot,
+  onOpenInEditor, localRoot, previewName,
   highlightNode = null, impactTarget = null,
   impactDirect = [], impactTransitive = [],
   tourState = null,
@@ -1605,7 +1704,10 @@ function GraphInner({
       const d = n.data as LayerNodeData;
       if (d.kind === "root") return "#141414";
       if (d.child) return "#D4AF37";
-      return LAYER_STYLE[d.layer]?.fill ?? "#DDD7C8";
+      // The fill colours are intentionally pale (they carry the card's
+      // background). A pale minimap on a pale canvas is invisible, so the
+      // miniature uses the saturated layer border instead.
+      return LAYER_STYLE[d.layer]?.border ?? "#A8A29E";
     };
   }, []);
 
@@ -1628,6 +1730,15 @@ function GraphInner({
         <h2 className="text-sm font-extrabold tracking-[-0.01em] text-text-primary">
           {repoTitle ?? "Repository"} <span className="text-text-muted font-semibold">· Architecture</span>
         </h2>
+        {previewName && (
+          <span
+            className="mt-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider
+              px-1.5 py-0.5 rounded border border-accent-amber/40 text-accent-amber bg-bg-panel/80"
+            title="This graph was parsed in the browser. The assistant and tracking still refer to the server-loaded repository."
+          >
+            Browser preview · {previewName}
+          </span>
+        )}
       </div>
 
       <Legend visible={legendVisible} churn={churnShown} />
@@ -1705,9 +1816,16 @@ function GraphInner({
         />
         <MiniMap
           position="bottom-right"
-          style={{ width: 200, height: 140 }}
+          style={{
+            width: 176,
+            height: 112,
+            background: "#F6F2E8",
+            border: "1px solid #E2DCCB",
+            borderRadius: 10,
+            boxShadow: "0 2px 10px rgba(28, 25, 20, 0.06)",
+          }}
           nodeColor={minimapColor}
-          maskColor="rgba(250, 248, 255, 0.8)"
+          maskColor="rgba(246, 242, 232, 0.55)"
           nodeStrokeWidth={0}
           pannable
           zoomable
@@ -1772,6 +1890,7 @@ function GraphInner({
           }}
           onOpenInEditor={onOpenInEditor}
           localRoot={localRoot}
+          preview={Boolean(previewName)}
         />
       )}
     </div>
@@ -1790,6 +1909,8 @@ interface Props {
   /** The absolute path of the repository on this machine, in local mode. */
   localRoot?: string | null;
   repoTitle?: string;
+  /** Set when the graph was parsed in the browser, not by the server. */
+  previewName?: string;
   highlightNode?: string | null;
   impactTarget?: string | null;
   impactDirect?: string[];
@@ -1799,7 +1920,7 @@ interface Props {
 
 export default function GraphCanvas({
   rawNodes, rawEdges, onAskAbout, onAnalyzeImpact, onStartTour, repoTitle,
-  onOpenInEditor, localRoot,
+  onOpenInEditor, localRoot, previewName,
   highlightNode, impactTarget, impactDirect, impactTransitive, tourState,
 }: Props) {
   return (
@@ -1812,6 +1933,7 @@ export default function GraphCanvas({
         onStartTour={onStartTour}
         onOpenInEditor={onOpenInEditor}
         localRoot={localRoot}
+        previewName={previewName}
         repoTitle={repoTitle}
         highlightNode={highlightNode}
         impactTarget={impactTarget}

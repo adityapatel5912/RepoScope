@@ -95,6 +95,8 @@ export interface BrowserGraph {
   nodes: BrowserNode[];
   edges: BrowserEdge[];
   summary: string;
+  /** The folder the user picked, for the preview label. */
+  name: string;
   files: number;
   /** The languages that were actually parsed. */
   languages: string[];
@@ -374,7 +376,7 @@ export async function buildGraphInBrowser(
   if (!ts) {
     return {
       nodes: [], edges: [], summary: "the in-browser parser could not be loaded",
-      files: 0, languages: [], skipped: 0,
+      name: root.name, files: 0, languages: [], skipped: 0,
     };
   }
 
@@ -453,6 +455,7 @@ export async function buildGraphInBrowser(
     nodes,
     edges: uniqueEdges,
     summary: `${nodes.length} nodes, ${uniqueEdges.length} edges`,
+    name: root.name,
     files: sourceFiles.length,
     languages: [...parsedLanguages],
     skipped,

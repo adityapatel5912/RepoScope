@@ -1,0 +1,31 @@
+# The benchmark corpus.
+#
+# One repository per line. A line may be a local path or a git URL.
+# Blank lines and lines starting with `#` are ignored.
+#
+# The public repositories below were chosen for one reason: they are
+# SMALL, they are PERMISSIVELY LICENSED (MIT / BSD-3 / Apache-2.0), and
+# they span several languages, so the measurement covers the parser
+# rather than one language's happy path.
+#
+# Clone them shallowly — `benchmarks/run.py` does that for you, into a
+# temporary directory that is deleted afterwards. Nothing is written into
+# the repositories themselves.
+
+# ── Local fixtures (always available, no network) ──────────────────────────
+backend/tests/fixtures/multilang
+backend/tests/fixtures/nested
+backend/tests/fixtures/circular
+backend/tests/fixtures/real_small
+
+# ── Public repositories ────────────────────────────────────────────────────
+https://github.com/pallets/click
+https://github.com/pallets/itsdangerous
+https://github.com/pallets/markupsafe
+https://github.com/pallets/werkzeug
+https://github.com/pallets/jinja
+https://github.com/tiangolo/typer
+https://github.com/psf/requests
+https://github.com/encode/httpx
+https://github.com/Textualize/rich
+https://github.com/psf/black

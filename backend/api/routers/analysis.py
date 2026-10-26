@@ -162,3 +162,38 @@ async def hubs(limit: int = 15):
         "hubs": top_hubs(graph, limit=max(1, min(limit, 100))),
         "total_nodes": len(scores),
     }
+
+
+@router.get("/repo-map")
+async def repo_map(budget: int = 8000):
+    """
+    The repo map, and what it saves.
+
+    Milestone 8.1. The map is the graph rendered for a reader that is
+    not looking at a canvas: the files that matter, the symbols they
+    define, and the architectural layer each belongs to.
+
+    The number that matters is the reduction. `full_context_tokens` is
+    what an agent pays to read the whole repository; `tokens` is what it
+    pays to read this map instead.
+    """
+    state = load_state()
+    local_path = state.get("local_path")
+    graph = await asyncio.to_thread(_current_graph)
+    if not graph:
+        return {
+            "available": False,
+            "reason": "no repository loaded",
+            "text": "",
+            "entries": [],
+            "tokens": 0,
+            "full_context_tokens": 0,
+            "reduction_pct": 0.0,
+        }
+
+    from repo_map import build_repo_map_with_metrics
+
+    result = await asyncio.to_thread(
+        build_repo_map_with_metrics, graph, local_path, max(500, min(budget, 100_000))
+    )
+    return {"available": True, **result}

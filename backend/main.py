@@ -12,6 +12,7 @@ import os
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -57,7 +58,52 @@ logging.basicConfig(
 )
 log = logging.getLogger("reposcope")
 
-app = FastAPI(title="RepoScope API")
+
+# ── Startup / shutdown ──────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """
+    Resume a local session that was already running, and release it on the
+    way out.
+
+    `reposcope run .` loads the repository and then starts the server.
+    But the server may also be restarted while a local repository is the
+    active one — the state file remembers it. Re-attaching here means the
+    live watcher comes back with the server instead of the user having to
+    reload the page.
+
+    Only a LOCAL repository is resumed. A repository cloned from GitHub
+    lives in a temp directory; watching it would be pointless, and the
+    guard is what keeps local mode free of any outbound request.
+    """
+    state = load_state()
+    if state.get("is_local"):
+        local_path = state.get("local_path")
+        if local_path and Path(local_path).is_dir():
+            try:
+                from live_events import bus
+                from watcher import session
+
+                # The watcher publishes from its own thread; binding the
+                # loop here is what lets that publish reach the SSE
+                # subscribers.
+                bus.bind_loop(asyncio.get_running_loop())
+                session.attach(local_path)
+                log.info("Resumed local session on %s", local_path)
+            except Exception as exc:  # noqa: BLE001 - a failed resume must not kill the server
+                log.warning("Could not resume the local session: %s", exc)
+
+    yield
+
+    try:
+        from watcher import session
+
+        session.detach()
+    except Exception:  # noqa: BLE001 - best effort
+        pass
+
+
+app = FastAPI(title="RepoScope API", lifespan=lifespan)
 
 # Allowed origins: localhost for dev, plus any Vercel deployment (preview + prod).
 # Set ALLOWED_ORIGINS env var on Render to override (comma-separated list).
@@ -223,9 +269,9 @@ class ScanReq(BaseModel):
 
 # ── SSE helpers ────────────────────────────────────────────────────────────
 
-def _sse(event: str, data: object) -> str:
-    """Format a single SSE frame as a plain string."""
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+# One definition, shared with the live-graph stream, so both streams
+# speak the same dialect.
+from sse import sse_frame as _sse  # noqa: E402
 
 
 # Setup-relevant README sections are preferred over raw truncation; fall
@@ -358,11 +404,6 @@ async def repo_load(req: LoadReq, x_session_id: str = Header(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/repo/status")
-async def repo_status():
-    return load_state()
-
-
 @app.get("/api/repo/check")
 async def repo_check(x_session_id: str = Header(None)):
     s = load_state()
@@ -379,6 +420,14 @@ async def repo_check(x_session_id: str = Header(None)):
 @app.get("/api/repo/graph")
 async def repo_graph():
     from orchestrator import get_cached_graph
+
+    # A live local session owns the graph: it is the only thing that
+    # knows about edits made since the last full build.
+    from watcher import session
+
+    if session.indexer is not None:
+        return session.indexer.graph
+
     graph = get_cached_graph()
     # If cache is empty (e.g. first load before any chat), build it now
     if not graph.get("nodes"):

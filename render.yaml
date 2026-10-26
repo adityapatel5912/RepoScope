@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: reposcope-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: OPENROUTER_API_KEYS
+        sync: false
+      - key: GROQ_API_KEYS
+        sync: false
+      - key: NVIDIA_API_KEYS
+        sync: false
+      - key: GITHUB_TOKENS
+        sync: false
+      - key: CODEBASE_MEMORY_PATH
+        value: codebase-memory-mcp

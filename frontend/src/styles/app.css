@@ -1,0 +1,561 @@
+/* ── Tailwind directives ──────────────────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens live in tokens.css (imported from main.tsx, before this file). */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base — editorial style (FILE 1): cream paper, black ink, coral accent.
+   No gradients. No glassmorphism. No glows. Hard offset shadows only.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Text selection — coral wash */
+  ::selection {
+    background: rgba(240, 80, 60, 0.18);
+    color: var(--text);
+  }
+
+  /* Visible focus rings on every interactive element — coral */
+  input:focus-visible, textarea:focus-visible, button:focus-visible,
+  [role="tab"]:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbars hidden — areas stay fully scrollable, chrome stays clean */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar { width: 0; height: 0; display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Components — cards, buttons, typography scale
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* ── Card: white surface, black border, hard offset shadow ── */
+  .card {
+    background: var(--panel);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-flat {
+    background: var(--panel);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* ── Buttons ── */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    user-select: none;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--shadow-color);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translate(0, 0);
+    box-shadow: 0 0 0 var(--shadow-color);
+  }
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--panel);
+    color: var(--text);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    user-select: none;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--panel-cream);
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--shadow-color);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: translate(0, 0);
+    box-shadow: 0 0 0 var(--shadow-color);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 13px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+    user-select: none;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--panel-hover);
+    color: var(--text);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ── Inputs & textareas: white bg, black border, coral focus ring ── */
+  .input {
+    width: 100%;
+    background: var(--panel);
+    color: var(--text);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+    padding: 8px 10px;
+    transition: box-shadow 120ms ease;
+  }
+  .input::placeholder { color: var(--text-muted); }
+  .input:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(240, 80, 60, 0.25);
+  }
+  .input:disabled { opacity: 0.5; }
+
+  textarea.input { resize: none; font-family: inherit; }
+
+  /* ── Typography scale ── */
+  h1, .h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  h2, .h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
+  h3, .h3 { font-size: 16px; font-weight: 700; line-height: 1.3; }
+  h4, .h4 {
+    font-size: 13px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .label-caps {
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+  .mono { font-family: var(--font-mono); font-size: 12.5px; }
+
+  /* ── Micro-animations ── */
+  .dot-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dotBounce 1.2s infinite ease-in-out;
+    display: inline-block;
+  }
+  .dot-pulse:nth-child(1) { animation-delay: 0s; }
+  .dot-pulse:nth-child(2) { animation-delay: 0.2s; }
+  .dot-pulse:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dotBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40%            { transform: scale(1);   opacity: 1; }
+  }
+
+  .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  .btn-spinner-ink {
+    border-color: rgba(20, 20, 20, 0.2);
+    border-top-color: var(--text);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.85); }
+  }
+  .pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
+
+  .step-spin {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+
+  /* Skeleton shimmer — cream */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--panel-cream) 0%,
+      var(--panel-hover) 50%,
+      var(--panel-cream) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.5s infinite;
+    border-radius: 6px;
+  }
+  @keyframes skeletonShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .skeleton-line {
+    height: 11px;
+    margin-bottom: 7px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ReactFlow chrome — white cards, black borders, hard shadows
+   ═══════════════════════════════════════════════════════════════════════════ */
+.react-flow__controls {
+  background: var(--panel) !important;
+  border: var(--border-width) solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-sm) !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border-muted) !important;
+  color: var(--text-secondary) !important;
+  fill: var(--text-secondary) !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--panel-cream) !important;
+  color: var(--text) !important;
+  fill: var(--text) !important;
+}
+
+.react-flow__minimap {
+  background: var(--panel) !important;
+  border: var(--border-width) solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow-sm) !important;
+  overflow: hidden;
+}
+
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 1.5;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from { stroke-dashoffset: 10; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Markdown inside chat — editorial light theme, dark code blocks (FILE 2)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.md-body {
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.md-body > *:first-child { margin-top: 0; }
+.md-body > *:last-child  { margin-bottom: 0; }
+
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.md-body h1 {
+  font-size: 1.05rem;
+  margin: 1.1rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-muted);
+}
+.md-body h2 { font-size: 0.95rem; margin: 1rem 0 0.4rem; }
+.md-body h3 { font-size: 0.875rem; margin: 0.85rem 0 0.35rem; }
+.md-body h4 {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0.75rem 0 0.3rem;
+}
+
+.md-body p {
+  margin: 0.4rem 0;
+  color: var(--text-secondary);
+}
+
+.md-body ul, .md-body ol {
+  padding-left: 1.4rem;
+  margin: 0.4rem 0;
+}
+
+.md-body li {
+  margin: 0.2rem 0;
+  color: var(--text-secondary);
+}
+
+.md-body li::marker { color: var(--accent); }
+
+/* Inline code — cream chip, black border (citation pills included) */
+.md-body code {
+  font-family: var(--font-mono);
+  background: var(--panel-cream);
+  border: 1px solid var(--border);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Fenced code blocks — dark bg, white mono text */
+.md-body pre {
+  background: #1E1B16;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 0.6rem 0;
+  overflow: hidden;
+}
+
+.md-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #F5F1E8;
+  white-space: pre;
+}
+
+.md-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0;
+}
+
+.md-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.75rem;
+  margin: 0.6rem 0;
+  display: block;
+  overflow-x: auto;
+}
+
+.md-body th, .md-body td {
+  border: 1px solid var(--border-muted);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-body th {
+  background: var(--panel-cream);
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+.md-body td code { white-space: nowrap; }
+
+.md-body a {
+  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-body strong { color: var(--text); font-weight: 700; }
+.md-body em { color: var(--text-muted); }
+
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--border-muted);
+  margin: 0.75rem 0;
+}
+
+/* Citation chip — mono pill for `path:line` inline code in assistant bubbles */
+.citation-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--panel-cream);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Micro-interactions
+   ═══════════════════════════════════════════════════════════════════════════ */
+button {
+  transition-property: all;
+  transition-duration: 150ms;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Resizable panel handles
+   ═══════════════════════════════════════════════════════════════════════════ */
+.resize-handle-v {
+  width: 6px;
+  background: transparent;
+  cursor: col-resize;
+  transition: background 0.15s;
+  position: relative;
+  flex: 0 0 6px;
+}
+.resize-handle-v:hover,
+.resize-handle-v[data-resize-handle-active] {
+  background: var(--accent-soft);
+}
+.resize-handle-v::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px; height: 32px;
+  background: var(--border);
+  border-radius: 2px;
+  opacity: 0.35;
+  transition: background 0.15s, opacity 0.15s;
+}
+.resize-handle-v:hover::before,
+.resize-handle-v[data-resize-handle-active]::before {
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* Horizontal handle for the graph/chat split */
+.resize-handle-h {
+  height: 6px;
+  background: transparent;
+  cursor: row-resize;
+  transition: background 0.15s;
+  position: relative;
+  flex: 0 0 6px;
+}
+.resize-handle-h:hover,
+.resize-handle-h[data-resize-handle-active] {
+  background: var(--accent-soft);
+}
+.resize-handle-h::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px; height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  opacity: 0.35;
+  transition: background 0.15s, opacity 0.15s;
+}
+.resize-handle-h:hover::before,
+.resize-handle-h[data-resize-handle-active]::before {
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Collapsed panel rail
+   ═══════════════════════════════════════════════════════════════════════════ */
+.rail-vertical-label {
+  writing-mode: vertical-rl;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Drawer / popover slide-in
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.drawer-slide-in {
+  animation: drawerIn 0.25s ease-out;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pop-in {
+  animation: popIn 0.18s ease-out;
+}

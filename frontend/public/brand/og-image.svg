@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#F3EEE3"/>
+  <rect x="24" y="24" width="1152" height="582" fill="none" stroke="#141414" stroke-width="3"/>
+  <g transform="translate(90,150) scale(0.62)"><g>
+    <circle cx="256" cy="256" r="170" fill="none" stroke="#10B981" stroke-width="36"/>
+    <circle cx="256" cy="256" r="134" fill="#FAF7F0"/>
+    <line x1="370" y1="370" x2="452" y2="452" stroke="#1A1A1A" stroke-width="44" stroke-linecap="round"/>
+    <line x1="256" y1="205" x2="212" y2="290" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <line x1="256" y1="205" x2="305" y2="285" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <line x1="212" y1="290" x2="305" y2="285" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="256" cy="205" r="26" fill="#D4AF37"/>
+    <circle cx="212" cy="290" r="26" fill="#D4AF37"/>
+    <circle cx="305" cy="285" r="26" fill="#D4AF37"/>
+  </g></g>
+  <text x="420" y="270" font-family="Inter, Segoe UI, sans-serif" font-size="88" font-weight="800" letter-spacing="-3" fill="#141414">RepoScope</text>
+  <text x="422" y="340" font-family="Inter, Segoe UI, sans-serif" font-size="34" font-weight="600" fill="#45413A">See your repo. Understand it. Track it.</text>
+  <text x="422" y="430" font-family="JetBrains Mono, Consolas, monospace" font-size="22" fill="#837D6E">graph · chat with citations · tours · impact · tracking</text>
+  <rect x="422" y="480" width="330" height="54" fill="#F0503C" stroke="#141414" stroke-width="3"/>
+  <text x="452" y="516" font-family="Inter, sans-serif" font-size="24" font-weight="800" fill="#FFFFFF">Built with IBM Bob</text>
+</svg>

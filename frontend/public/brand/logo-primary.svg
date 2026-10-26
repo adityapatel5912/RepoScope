@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 160"><rect width="512" height="160" fill="#FAF7F0"/><g transform="scale(0.27) translate(10,10)"><g>
+    <circle cx="256" cy="256" r="170" fill="none" stroke="#10B981" stroke-width="36"/>
+    <circle cx="256" cy="256" r="134" fill="#FAF7F0"/>
+    <line x1="370" y1="370" x2="452" y2="452" stroke="#1A1A1A" stroke-width="44" stroke-linecap="round"/>
+    <line x1="256" y1="205" x2="212" y2="290" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <line x1="256" y1="205" x2="305" y2="285" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <line x1="212" y1="290" x2="305" y2="285" stroke="#D4AF37" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="256" cy="205" r="26" fill="#D4AF37"/>
+    <circle cx="212" cy="290" r="26" fill="#D4AF37"/>
+    <circle cx="305" cy="285" r="26" fill="#D4AF37"/>
+  </g></g><g transform="translate(150,44) scale(1.02)"><text x="8" y="78" font-family="Inter, Segoe UI, sans-serif" font-size="72" font-weight="800" letter-spacing="-2" fill="#1A1A1A">RepoScope</text></g></svg>

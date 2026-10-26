@@ -1,0 +1,13 @@
+{
+  "alerts": [
+    {
+      "id": "ALT-001",
+      "service": "payment",
+      "metric": "p99_latency",
+      "value": 2500,
+      "threshold": 2000,
+      "timestamp": "2026-09-25T10:00:00Z"
+    }
+  ],
+  "affected_services": ["payment", "checkout", "order-service"]
+}

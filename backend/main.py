@@ -1,0 +1,501 @@
+"""
+main.py
+FastAPI application — all HTTP and SSE endpoints for RepoScope.
+SSE events use StreamingResponse so every chunk is a single-line
+JSON payload; no sse-starlette dependency needed on the streaming path.
+"""
+import asyncio
+import json
+import logging
+import logging.handlers
+import os
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from pydantic import BaseModel
+
+from byok_manager import get_user_token, set_user_token
+from graph_builder import build_graph_from_repo
+from graph_utils import find_node_by_label
+from impact_analyzer import compute_blast_radius, generate_impact_narrative
+from key_rotator import OPENROUTER_ROTATOR, GROQ_ROTATOR, NVIDIA_ROTATOR, GITHUB_ROTATOR
+from mcp_client import query_github
+from orchestrator import build_context
+from repo_loader import load_repo
+from repo_tracker import diff_changes, load_state, mark_checked
+from runtime_config import ask_llm
+from tour_generator import build_tour
+
+START_TIME = time.time()
+
+# ── Logging setup ──────────────────────────────────────────────────────────
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+_handler = logging.handlers.RotatingFileHandler(
+    LOG_DIR / "app.log", maxBytes=5_000_000, backupCount=3
+)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    handlers=[_handler, logging.StreamHandler()],
+)
+log = logging.getLogger("reposcope")
+
+app = FastAPI(title="RepoScope API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-Id"],
+)
+
+
+# ── Security headers, request IDs, and access logging on every response ─────
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    req_id = str(uuid.uuid4())[:8]
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - t0) * 1000
+    response.headers["X-Request-Id"] = req_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"
+    )
+    # Access log: method, path, status, duration
+    log.info("%s %s -> %s (%.1fms) [%s]",
+             request.method, request.url.path, response.status_code, duration_ms, req_id)
+    return response
+
+
+# ── Global exception handler: JSON errors, never stack traces ───────────────
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    log.exception(
+        "Unhandled error on %s %s: %s", request.method, request.url.path, exc
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Check backend logs."},
+    )
+
+
+SYSTEM_PROMPT = (
+    "You are RepoScope, a senior software architect analyzing the loaded "
+    "GitHub repository. Answer questions about the loaded repository. "
+    "Use the provided README and code graph as ground truth. "
+    "Cite file paths, function names, and line numbers where relevant. "
+    "If the answer is not in the context, say so clearly. "
+    "Never fabricate paths, SHAs, or PR numbers.\n\n"
+    "RESPONSE FORMAT (strict):\n"
+    "1. Open with ONE bold one-line summary of the answer.\n"
+    "2. Organize the body with '##' section headings (2-4 sections max).\n"
+    "3. Present files/functions in a markdown table with columns: "
+    "`Path | Role | Key symbols`.\n"
+    "4. Cite code locations as `path/to/file.py:LINE` in backticks.\n"
+    "5. Close with a '### Next steps' section listing 2-3 actionable "
+    "bullets for the developer.\n"
+    "6. No greetings, no filler phrases, no self-references "
+    "(never start with 'Sure' or 'Great question').\n"
+    "7. Keep the whole answer under 350 words.\n\n"
+    "In TRACKING mode, report changes grouped by type in a table and flag "
+    "breaking changes with a warning line first. "
+    "In INCIDENT mode, report blast radius first, then ranked hypotheses "
+    "ordered by likelihood with evidence for each."
+)
+
+
+# ── Request / Response models ──────────────────────────────────────────────
+
+class LoadReq(BaseModel):
+    url: str
+
+class Query(BaseModel):
+    mode: str
+    message: str
+    repo: str | None = None
+
+class BYOKReq(BaseModel):
+    token: str
+
+class CommitReq(BaseModel):
+    message: str
+    files: list[str] = []
+
+class TourReq(BaseModel):
+    topic: str
+
+class ImpactReq(BaseModel):
+    target: str
+    max_depth: int = 3
+
+
+# ── SSE helpers ────────────────────────────────────────────────────────────
+
+def _sse(event: str, data: object) -> str:
+    """Format a single SSE frame as a plain string."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _build_user_prompt(message: str, ctx: dict) -> str:
+    parts = [f"USER QUESTION: {message}"]
+    if ctx.get("readme"):
+        parts.append(f"\n--- README (first 4000 chars) ---\n{ctx['readme'][:4000]}")
+    nodes = ctx.get("nodes", [])
+    if nodes:
+        files = [n for n in nodes if n.get("type") == "file"]
+        symbols = [n for n in nodes if n.get("type") != "file"]
+        # Full file tree (compact) so the LLM can reference any file,
+        # plus a JSON sample of functions/classes with line numbers
+        file_lines = [f"- {n.get('label', n.get('id', '?'))}" for n in files[:250]]
+        parts.append(
+            f"\n--- FILE TREE ({len(files)} files) ---\n" + "\n".join(file_lines)
+        )
+        parts.append(
+            f"\n--- CODE SYMBOLS SAMPLE ({len(symbols)} total functions/classes) ---\n"
+            + json.dumps(symbols[:60], indent=2)[:3500]
+        )
+    return "\n".join(parts)
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health_simple():
+    """Minimal liveness probe for platform health checks."""
+    return {"status": "ok"}
+
+
+@app.get("/api/health")
+async def health():
+    """Full health snapshot: uptime, memory, configured key counts."""
+    uptime = int(time.time() - START_TIME)
+    try:
+        import psutil
+        memory_mb = round(psutil.Process().memory_info().rss / 1024 / 1024, 1)
+    except Exception:
+        memory_mb = 0.0
+    return {
+        "status": "healthy",
+        "service": "reposcope-api",
+        "version": "1.0.0",
+        "uptime_seconds": uptime,
+        "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m",
+        "memory_mb": memory_mb,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "checks": {
+            "openrouter_keys": OPENROUTER_ROTATOR.count(),
+            "groq_keys": GROQ_ROTATOR.count(),
+            "nvidia_keys": NVIDIA_ROTATOR.count(),
+            "github_keys": GITHUB_ROTATOR.count(),
+        },
+    }
+
+
+@app.post("/api/repo/load")
+async def repo_load(req: LoadReq, x_session_id: str = Header(None)):
+    req_id = str(uuid.uuid4())[:8]
+    log.info("[%s] repo/load url=%s", req_id, req.url)
+    try:
+        user_token = get_user_token(x_session_id) if x_session_id else None
+        info = load_repo(req.url, user_token)
+        mark_checked(f"{info['owner']}/{info['repo']}")
+        log.info("[%s] repo/load OK files=%s nodes=%s", req_id,
+                 info.get("file_count"), info.get("node_count"))
+        return {"ok": True, **info}
+    except Exception as e:
+        log.error("[%s] repo/load FAILED: %s", req_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/repo/status")
+async def repo_status():
+    return load_state()
+
+
+@app.get("/api/repo/check")
+async def repo_check(x_session_id: str = Header(None)):
+    s = load_state()
+    if not s.get("repo"):
+        raise HTTPException(status_code=400, detail="No repo loaded")
+    owner, name = s["repo"].split("/", 1)
+    user_token = get_user_token(x_session_id) if x_session_id else None
+    gh = await query_github(owner, name, s.get("last_check"), user_token)
+    diff = diff_changes(gh, s)
+    mark_checked(s["repo"])
+    return diff
+
+
+@app.get("/api/repo/graph")
+async def repo_graph():
+    from orchestrator import get_cached_graph
+    return get_cached_graph()
+
+
+# ── Demo repositories (one-click examples) ───────────────────────────────────
+DEMO_REPOS = {
+    "verdict": {
+        "name": "Verdict",
+        "url": "https://github.com/adityapatel5912/Verdict",
+        "description": "Decision stress-test lab — full-stack Python + React",
+    },
+    "studyrot": {
+        "name": "StudyRot",
+        "url": "https://github.com/adityapatel5912/StudyRot",
+        "description": "Study rotation scheduler",
+    },
+}
+
+
+@app.get("/api/repo/demos")
+async def list_demos():
+    return DEMO_REPOS
+
+
+@app.post("/api/repo/load-demo/{demo_id}")
+async def load_demo(demo_id: str, x_session_id: str = Header(None)):
+    if demo_id not in DEMO_REPOS:
+        raise HTTPException(404, "Demo not found")
+    demo = DEMO_REPOS[demo_id]
+    req_id = str(uuid.uuid4())[:8]
+    log.info("[%s] repo/load-demo id=%s url=%s", req_id, demo_id, demo["url"])
+    try:
+        user_token = get_user_token(x_session_id) if x_session_id else None
+        info = load_repo(demo["url"], user_token)
+        mark_checked(f"{info['owner']}/{info['repo']}")
+        return {"ok": True, **info}
+    except Exception as e:
+        log.error("[%s] repo/load-demo FAILED: %s", req_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to load demo repo: {e}")
+
+
+@app.post("/api/byok/set")
+async def byok_set(req: BYOKReq, x_session_id: str = Header(None)):
+    if not x_session_id:
+        raise HTTPException(status_code=400, detail="Missing X-Session-Id header")
+    set_user_token(x_session_id, req.token)
+    return {"ok": True}
+
+
+@app.post("/api/repo/commit")
+async def repo_commit(req: CommitReq, x_session_id: str = Header(None)):
+    token = get_user_token(x_session_id) if x_session_id else None
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="BYOK GitHub PAT required to commit. Set it in the BYOK panel.",
+        )
+    return {
+        "ok": True,
+        "message": "Commit simulated (BYOK active)",
+        "commit_message": req.message,
+        "files": req.files,
+    }
+
+
+@app.get("/api/repo/file")
+async def repo_file(path: str):
+    """Serve a single file from the loaded repo (FileTree downloads).
+
+    Rejects absolute paths and any path that escapes the repo root.
+    """
+    rel = (path or "").strip().replace("\\", "/").lstrip("/")
+    if not rel or rel.startswith("~") or ":" in rel.split("/")[0]:
+        raise HTTPException(400, "Invalid file path")
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+
+    repo_root = Path(local_path).resolve()
+    target = (repo_root / rel).resolve()
+    if not target.is_relative_to(repo_root):
+        log.warning("Blocked path traversal attempt: %s", path)
+        raise HTTPException(403, "Path escapes the repository root")
+    if not target.is_file():
+        raise HTTPException(404, f"File not found: {rel}")
+
+    return FileResponse(target, filename=target.name)
+
+
+REVERSE_SYSTEM_PROMPT = (
+    "You reverse-engineer an agent-ready build prompt from a repository.\n"
+    "Rules (strict):\n"
+    "1. Write in plain English, second person, starting with 'Build me a...'.\n"
+    "2. Include: purpose, stack, architecture, key features, data flow, UI feel.\n"
+    "3. EXCLUDE implementation trivia, exact file names, and any code.\n"
+    "4. Keep it under 400 words.\n"
+    "5. End with the exact sentence: Make it feel fast and polished.\n"
+    "6. Output ONLY the prompt text — no preamble, no markdown fences."
+)
+
+
+@app.post("/api/repo/reverse-prompt")
+async def reverse_prompt():
+    """Generate a single agent-ready prompt that would rebuild this repo."""
+    req_id = str(uuid.uuid4())[:8]
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    try:
+        graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+        files = sorted({
+            n.get("label", "")
+            for n in graph.get("nodes", [])
+            if n.get("type") == "file" and n.get("label")
+        })
+        readme = state.get("readme", "")[:2500]
+        user_prompt = (
+            "Repository to reverse-engineer:\n\n"
+            f"SUMMARY: {graph.get('summary', 'no summary')}\n\n"
+            f"FILES ({len(files)}):\n" + "\n".join(files[:200]) + "\n\n"
+            f"README (excerpt):\n{readme}"
+        )
+        text = await asyncio.to_thread(ask_llm, REVERSE_SYSTEM_PROMPT, user_prompt)
+        # Strip any markdown fences the model may have added
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
+            if cleaned.rstrip().endswith("```"):
+                cleaned = cleaned.rstrip()[:-3]
+        cleaned = cleaned.strip()
+        if not cleaned:
+            raise HTTPException(502, "Model returned an empty build prompt")
+        log.info("[%s] reverse-prompt OK %d chars from %d files", req_id, len(cleaned), len(files))
+        return {"prompt": cleaned}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("[%s] reverse-prompt FAILED: %s", req_id, e)
+        raise HTTPException(500, "Failed to generate build prompt. Is an LLM key configured?")
+
+
+@app.post("/api/tour/generate")
+async def tour_generate(req: TourReq):
+    req_id = str(uuid.uuid4())[:8]
+    log.info("[%s] tour/generate topic=%s", req_id, req.topic)
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    try:
+        # Offload the (sync) graph build + LLM calls so the event loop stays free
+        graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+        tour = await asyncio.to_thread(build_tour, graph, req.topic)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("[%s] tour/generate FAILED: %s", req_id, e)
+        raise HTTPException(500, str(e))
+    if "error" in tour:
+        raise HTTPException(404, tour["error"])
+    log.info("[%s] tour/generate OK steps=%s", req_id, tour.get("total_steps"))
+    return tour
+
+
+@app.post("/api/impact/analyze")
+async def impact_analyze(req: ImpactReq):
+    req_id = str(uuid.uuid4())[:8]
+    log.info("[%s] impact/analyze target=%s depth=%s", req_id, req.target, req.max_depth)
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    try:
+        graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+
+        target = find_node_by_label(graph, req.target)
+        if not target:
+            raise HTTPException(404, f"No node found matching: {req.target}")
+
+        impact = await asyncio.to_thread(
+            compute_blast_radius, graph, target["id"], req.max_depth
+        )
+        impact["narrative"] = await asyncio.to_thread(generate_impact_narrative, impact)
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("[%s] impact/analyze FAILED: %s", req_id, e)
+        raise HTTPException(500, str(e))
+    log.info("[%s] impact/analyze OK risk=%s (%s/%s)", req_id,
+             impact.get("risk_level"), impact.get("risk_score"),
+             impact.get("total_impacted"))
+    return impact
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(q: Query, request: Request, x_session_id: str = Header(None)):
+    req_id = str(uuid.uuid4())[:8]
+    log.info("[%s] chat/stream mode=%s repo=%s", req_id, q.mode, q.repo)
+
+    async def event_generator():
+        try:
+            # Build graph + README context
+            ctx = await build_context(q.mode, q.message, q.repo, x_session_id)
+            log.info("[%s] context built: %s nodes, %s edges",
+                     req_id, len(ctx.get("nodes", [])), len(ctx.get("edges", [])))
+            yield _sse("context", {
+                "nodes": ctx.get("nodes", []),
+                "edges": ctx.get("edges", []),
+                "graph_summary": ctx.get("graph_summary", ""),
+                "file_count": ctx.get("file_count", 0),
+                "node_count": len(ctx.get("nodes", [])),
+                "edge_count": len(ctx.get("edges", [])),
+                "readme_length": len(ctx.get("readme", "")),
+            })
+
+            user_prompt = _build_user_prompt(q.message, ctx)
+            answer = ask_llm(SYSTEM_PROMPT, user_prompt)
+            log.info("[%s] LLM answered %d chars", req_id, len(answer))
+
+            # Stream in small chunks (~4 words) for smooth UX, but preserve
+            # line structure — markdown headings/tables/lists need newlines
+            # to render, so never flatten the answer into one line.
+            for line in answer.split("\n"):
+                if await request.is_disconnected():
+                    log.info("[%s] client disconnected", req_id)
+                    break
+                words = line.split(" ")
+                for i in range(0, len(words), 4):
+                    yield _sse("token", {"t": " ".join(words[i : i + 4]) + " "})
+                    await asyncio.sleep(0.015)
+                yield _sse("token", {"t": "\n"})
+
+            if "tracking" in ctx:
+                yield _sse("tracking", ctx["tracking"])
+
+            yield _sse("done", {"ok": True, "req_id": req_id})
+            log.info("[%s] stream complete", req_id)
+
+        except Exception as exc:
+            log.error("[%s] stream error: %s", req_id, exc, exc_info=True)
+            yield _sse("error", {"message": str(exc)})
+            yield _sse("done", {"ok": False})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+            "X-Request-Id": req_id,
+            "Content-Security-Policy": "default-src 'none'",
+        },
+    )

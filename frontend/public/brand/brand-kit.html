@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RepoScope — Brand Kit</title>
+<style>
+  body { font-family: 'Segoe UI', Inter, system-ui, sans-serif; background: #F3EEE3; color: #141414; margin: 0; padding: 48px; }
+  h1 { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .sub { color: #837D6E; margin-bottom: 40px; }
+  h2 { font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: #837D6E; margin: 40px 0 16px; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .card { background: #fff; border: 1.5px solid #141414; border-radius: 10px; box-shadow: 4px 4px 0 #141414; padding: 20px; width: 260px; }
+  .card img, .card object { display: block; margin-bottom: 12px; }
+  .swatches { display: flex; gap: 14px; flex-wrap: wrap; }
+  .sw { width: 130px; }
+  .sw .chip { height: 64px; border: 1.5px solid #141414; border-radius: 8px; }
+  .sw p { font-size: 12px; font-weight: 700; margin: 8px 0 2px; }
+  .sw span { font-size: 11px; color: #837D6E; font-family: Consolas, monospace; }
+  code { background: #F8F3E7; border: 1px solid #141414; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>RepoScope Brand Kit</h1>
+  <p class="sub">Editorial brand: cream paper, solid ink, green lens, gold nodes. v1.0 — 2026-09-26</p>
+
+  <h2>Logo</h2>
+  <div class="row">
+    <div class="card"><img src="logo-primary.svg" width="240" alt="Primary logo"><p>logo-primary.svg — primary lockup</p></div>
+    <div class="card"><img src="logo-icon.svg" width="120" alt="Icon"><p>logo-icon.svg — app icon</p></div>
+    <div class="card"><img src="wordmark.svg" width="220" alt="Wordmark"><p>wordmark.svg — wordmark only</p></div>
+    <div class="card"><img src="logo-mono-black.svg" width="220" alt="Mono black"><p>logo-mono-black.svg</p></div>
+    <div class="card"><img src="logo-mono-white.svg" width="220" style="background:#141414" alt="Mono white"><p>logo-mono-white.svg</p></div>
+  </div>
+
+  <h2>Color</h2>
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#FAF7F0"></div><p>Paper</p><span>#FAF7F0</span></div>
+    <div class="sw"><div class="chip" style="background:#1A1A1A"></div><p>Ink</p><span>#1A1A1A</span></div>
+    <div class="sw"><div class="chip" style="background:#10B981"></div><p>Lens Green</p><span>#10B981</span></div>
+    <div class="sw"><div class="chip" style="background:#D4AF37"></div><p>Node Gold</p><span>#D4AF37</span></div>
+    <div class="sw"><div class="chip" style="background:#F0503C"></div><p>Action Coral</p><span>#F0503C</span></div>
+    <div class="sw"><div class="chip" style="background:#837D6E"></div><p>Muted</p><span>#837D6E</span></div>
+  </div>
+
+  <h2>Social</h2>
+  <div class="row">
+    <div class="card" style="width:520px"><img src="og-image.svg" width="460" alt="OG image"><p>og-image.svg — 1200×630 social card</p></div>
+  </div>
+
+  <h2>Usage</h2>
+  <p>Favicon: <code>/brand/favicon.svg</code> · App icon: <code>/brand/app-icon.svg</code> · OG: <code>/brand/og-image.svg</code>.
+  Keep clear space equal to the lens radius. Never recolor the lens or nodes.</p>
+</body>
+</html>

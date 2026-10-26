@@ -1,0 +1,21 @@
+{
+  "mcp": {
+    "servers": {
+      "reposcope": {
+        "type": "local",
+        "command": [
+          "python",
+          "-m",
+          "mcp_server.server",
+          "--root",
+          "D:\\path\\to\\RepoScope"
+        ],
+        "cwd": "backend",
+        "timeout": {
+          "startup": 120000,
+          "catalog": 60000
+        }
+      }
+    }
+  }
+}

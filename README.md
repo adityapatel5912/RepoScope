@@ -1,330 +1,330 @@
 # RepoScope
 
-![RepoScope 3.0 Thumbnail](./Thumbnail.png)
+> **One code graph. Four ways in: the canvas, the CLI, an MCP server, and your editor.**
 
-> See your repo. Understand it. Track it.
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB)
+![React](https://img.shields.io/badge/React-18-61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
+![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20Streamable%20HTTP-6E56CF)
 
-**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/h1Fh6I6Yxac](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-) · **📊 Pitch Deck:** [RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)
+RepoScope builds a **Tree-sitter code graph** from a local folder or a GitHub
+repository and serves that one index to humans and agents:
 
-![License](https://img.shields.io/badge/License-MIT-yellow) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688) ![IBM%20Bob](https://img.shields.io/badge/Built%20with-IBM%20Bob%20%2B%20Z%20Code-F0503C)
+- an interactive **architecture canvas**;
+- a **local CLI** that watches a folder and rebuilds as you edit;
+- an **MCP server** with 8 tools and 5 resources for Claude, Cursor, OpenCode,
+  and any other MCP client;
+- a **VS Code / Cursor / VSCodium extension** that puts the graph in the
+  Activity Bar.
 
-RepoScope turns any GitHub repository into an interactive architecture graph,
-answers questions about it in plain English with citations, and tracks changes
-over time. Built with **IBM Bob** (most tasks) and **Z Code** (complex tasks)
-for the IBM Bob 2.0 Hackathon.
+In local mode **nothing from the repository is uploaded**. No GitHub account,
+no personal access token, no clone.
 
----
+![RepoScope — one code graph, four ways in](docs/assets/readme-hero.png)
 
-## 📸 Screenshots
-
-All screenshots are captured at **1600×900 (16:9)** and live in [`docs/screenshots/`](docs/screenshots/).
-
-### Full workspace
-![RepoScope hero](docs/screenshots/hero.png)
-*File tree, layered architecture graph, cited chat answers, and stats in one view — custom RepoScope icon in the top bar.*
-
-### Architecture graph
-![Graph](docs/screenshots/graph.png)
-*Connectivity pyramid — the repo at the top, the most-imported files in the rows below. Layer colors: client, backend, storage, external, compute.*
-
-### Chat with citations
-![Chat](docs/screenshots/chat.png)
-*Ask anything — every answer cites files, functions, and line numbers pulled from the real code graph, with Next-steps guidance.*
-
-### Code tours + voice narration
-![Tour](docs/screenshots/tour.png)
-*Guided walkthroughs step through any module — the graph pans to each stop with numbered badges. Press **▶ Play Tour** to hear it narrated (OpenRouter TTS, browser speech fallback).*
-
-### Impact analysis
-![Impact](docs/screenshots/impact.png)
-*See the blast radius of a change before you make it — target, direct, transitive, and unaffected states on the graph.*
-
-### PR Bot — impact report on every pull request
-![PR Bot](docs/screenshots/prbot.png)
-*One click renders a GitHub-ready comment: risk score, affected files, suggested tests, and a mermaid impact graph. The included GitHub Action posts it automatically.*
-
-### Student Mode — pyramid-ranked learning path
-![Student Mode](docs/screenshots/student.png)
-*Toggle **Student** in the top bar: a 3-level curriculum (entry points → core → utils) with per-file "why it matters" notes, checkpoint quizzes, and Good First Issues from the low-traffic rows.*
-
-### Security Scan — secrets, breaking changes, CVEs
-![Security Scan](docs/screenshots/security.png)
-*The Tracking card gains a Security tab: committed API keys (redacted), leaked `.env` files, breaking signature changes, and vulnerable dependency pins — with Nord Security–backed remediation tips.*
-
-### Scaffold — CodeCrafters-style starter
-![Scaffold](docs/screenshots/scaffold.png)
-*From the graph toolbar: a Stage 1/2/3 starter scaffold with boilerplate + TODOs. Download as ZIP or open in StackBlitz — never the full codebase.*
-
-### Tracking
-![Tracking](docs/screenshots/tracking.png)
-*Commits, PRs, issues, and releases — checked on demand, grouped by change type.*
-
-### One-click demo repos
-![Demo repos](docs/screenshots/demo-repos.png)
-*Click either button in the sidebar to load a real repository instantly.*
+*Generated brand hero. The product screenshots below are captured from the
+running app.*
 
 ---
 
-## 🎬 Demo
+## Why it exists
 
-**[🎬 Demo Video](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-)** · **[📊 Pitch Deck](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** ([PDF](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf))
+Understanding a repository usually means reading it. An agent that wants to
+answer "what breaks if I change this?" reads the whole tree, guesses at the
+edges, and pays for the context every time.
 
-[![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)
-
-### One-click demo repos
-Click either button in the sidebar to load a real repository instantly:
-
-- **[Verdict](https://github.com/adityapatel5912/Verdict)** — Decision stress-test lab (Python + React)
-- **[StudyRot](https://github.com/adityapatel5912/StudyRot)** — Study rotation scheduler
-
-![Demo repos](docs/screenshots/demo-repos.png)
-
-### Or load your own
-Paste any public GitHub URL in the top bar. For private repos, add a GitHub
-PAT in the sidebar (BYOK — stored in memory only, never written to disk).
+RepoScope already has the graph. The canvas renders it; the MCP server hands it
+to an agent; the extension shows the neighbourhood of the file you are editing.
+Every surface reads the **same index**, so the answer a human sees and the
+answer an agent quotes are the same answer.
 
 ---
 
-## 🎥 Pitch Deck
+## Screenshots
 
-- 📊 **[RepoScope — Pitch Deck v3.0.pdf](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf)** — 10 slides (PDF)
-- 🎞️ **[RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** — editable presentation (PPTX)
-- 🎬 **[Demo Video](https://youtu.be/h1Fh6I6Yxac?si=0rlU2MaRd5zwoYo-)** — full walkthrough video
-- 🖼️ **[Thumbnail.png](./Thumbnail.png)** — video thumbnail
+App screenshots are **1600×900** from the local-mode build; the two OpenCode
+client captures keep their native panel size. The full index — including the
+older feature gallery — is in
+[`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md).
 
-[![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)
+### The workspace
 
----
+The RepoScope repository itself. Large repositories open grouped by top-level
+module; every file remains reachable in the drawer.
 
-## 🤖 Built with IBM Bob + Z Code
+![RepoScope local mode: architecture graph, file tree, insights, and chat](docs/screenshots/v2/readme-hero.png)
 
-RepoScope's primary build was driven through **IBM Bob 2.0** across 8 guided
-sessions. **Z Code (GLM)** paired on the complex tasks: the editorial UI
-redesign, the dagre graph layout diagnosis and camera fix, the hardening and
-regression passes, and the submission assets.
+Click a module card to see its files, incoming/outgoing edges, and the actions
+that apply to that module.
 
-| Session | Task | Screenshot |
-|---|---|---|
-| 1 | Full build — all Bob-owned tasks complete | ![s1](docs/bob_sessions/session-01-build-complete.png) |
-| 2 | Frontend + graph renderer (Aurora UI) | ![s2](docs/bob_sessions/session-02-frontend-ui.png) |
-| 3 | Critical bug fixes (SSE · graph · README) | ![s3](docs/bob_sessions/session-03-critical-bugfixes.png) |
+![Module drawer](docs/screenshots/v2/readme-module-drawer.png)
 
-Full session log: [docs/bob_sessions/bob-session-export.md](docs/bob_sessions/bob-session-export.md) ·
-Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
+### Graph modes
 
----
+**Grouped by module** keeps a large repository readable.
 
-## ✨ Features
+![Grouped architecture graph](docs/screenshots/v2/readme-graph-grouped.png)
 
-- **Architecture Graph (Visual Overhaul)** — deterministic 6-tier connectivity pyramid
-  - Ranks 0..6 size hierarchy (320×80 repo node down to 160×40 docs nodes)
-  - Explicit top-to-bottom handle routing (`out` at bottom → `in` at top)
-  - Strict parent-to-child edge filtering (`t === s + 1`)
-  - Canvas rank labels on the left edge with editorial typography
-  - Lineage hover path highlighting in emerald green (`#10B981`)
-  - `#FAF8FF` warm canvas with `#D9D2C0` dot grid and repo radial halo
-  - Guaranteed 2D collision resolution pass with zero node overlaps
-  - Export to PNG and SVG
-- **Conversational Q&A & Code Rendering** — SSE-streamed answers with file/function/line
-  citations, rich Markdown tables, lists, and high-contrast dark code blocks
-  (`#F5F1E8` text on `#1E1B16` charcoal) with bash command auto-detection, copy buttons, and voice input
-- **AI Provider BYOK** — Bring Your Own Key support for Groq, NVIDIA NIM, OpenAI, Anthropic,
-  and Custom OpenAI-compatible endpoints; saved exclusively in `sessionStorage` (cleared on tab close)
-- **Responsive Workspace** — Adaptive across desktop (1440px), tablet (1024px, 768px), and mobile (375px)
-  with mobile drawer overlay, top bar toggle, and flexible layout
-- **Code Tours** — guided step-by-step walkthroughs of any module, numbered
-  badges on the graph, progress bar, auto-pan camera
-- **What-If Impact Analysis** — blast radius (direct + transitive) with
-  risk score, narrative, suggested tests, and on-graph highlighting
-- **Repo Tracking** — new commits, PRs, issues, releases on demand, grouped
-  by change type with breaking-change flags
-- **Reverse Build Prompt** — one click turns any repo into an agent-ready
-  "Build me a…" prompt (copy or save as .md)
-- **File Tree** — GitIngest-style tree, search filter, single-file download
-- **GitHub PAT BYOK** — GitHub PAT for private repos; memory-only storage
-- **Multi-key rotation** — comma-separated keys per LLM provider; 429s rotate
-  automatically, providers chain OpenRouter → Groq → NVIDIA NIM
-- **PR Bot** — blast-radius report on every pull request: risk score, affected
-  files, suggested tests, and a mermaid impact graph that renders live in the
-  PR comment; one-click preview in the Impact panel, GitHub Action included
-- **Student Onboarding Mode** — pyramid-ranked 3-level learning path (entry
-  points → core modules → utils) with per-file "why it matters" notes, 3
-  checkpoint quizzes per level, and Good First Issues mined from the
-  low-traffic bottom rows
-- **Voice Code Tours** — narrated walkthroughs via OpenRouter TTS
-  (Fish Audio S2.1 Pro → Deepgram Flux) with browser speech fallback; auto-pan
-  and highlight stay synced with the audio — built for accessibility
-- **Security Scan** — Breaking Change + Secret + CVE detection with Nord
-  Security–backed remediation tips: committed API keys, leaked `.env` files,
-  function signature changes, major version bumps, and known-vulnerable pins
-- **Reverse Prompt → Scaffold** — turn the reverse-engineered build prompt
-  into a CodeCrafters-style starter scaffold: Stage 1/2/3 README stub,
-  boilerplate files with TODOs, ZIP download, one-click StackBlitz
-- **Health system** — `GET /api/health` reports uptime, memory, key counts
+**Architecture clusters** group by layer: Client/UI, Backend/API, Storage/Data,
+External/Integrations, and Compute/Workers.
 
----
+![Architecture cluster view](docs/screenshots/v2/readme-graph-clusters.png)
 
-## ⚡ NEW in 3.0: Student Mode, PR Bot & Scaffold
+**Flat inspection** renders every file node. It is useful for checking the
+inventory, not for a first read of a large repository.
 
-Five features landed in the 3.0 sprint — all additive, no breaking changes:
+![Flat graph mode](docs/screenshots/v2/readme-graph-flat.png)
 
-| Feature | What it does | Try it |
-|---|---|---|
-| 🎓 **Student Mode** | Connectivity-pyramid-ranked learning path with quizzes + Good First Issues | Toggle **Student** in the top bar, load a repo |
-| 🤖 **PR Bot** | Posts a blast-radius report (risk, files, tests, mermaid graph) on every PR | Impact panel → *Generate PR Comment Preview*, or add `pr-impact.yml` |
-| 🔊 **Voice Tours** | Narrated code tours with auto-pan + highlight sync | Code Tour → **▶ Play Tour** |
-| 🛡 **Security Scan** | Breaking changes, leaked secrets, vulnerable deps — Nord Security tips | Tracking card → **Security** tab → *Run Security Scan* |
-| ⚡ **Scaffold** | CodeCrafters-style starter (Stage 1/2/3) from any repo — ZIP or StackBlitz | Graph toolbar → **Scaffold** (or the Build Prompt modal) |
+**Churn overlay** adds the git-history heat signal without replacing the layer
+colours.
 
-New endpoints: `POST /api/scaffold` · `POST /api/impact/pr` ·
-`POST /api/onboard` · `POST /api/tts` · `POST /api/security/scan` — all covered
-by pytest in [`backend/tests/`](backend/tests/).
+![Churn heatmap](docs/screenshots/v2/readme-graph-churn.png)
 
----
+**Small repositories** still use the full connectivity pyramid rather than
+module cards.
 
-## 📐 How the Graph Reads
+![Small repository graph](docs/screenshots/v2/readme-graph-small.png)
 
-The graph is a deterministic **connectivity pyramid** with 6 rank tiers:
+### Side panels
 
-- **Rank 0 (320×80)** — The repository root node with an emerald radial glow (`.repo-halo`)
-- **Rank 1 (260×64)** — Backbone files (top entry points by import connectivity)
-- **Rank 2 (240×56)** — Core modules and foundational logic
-- **Rank 3 (220×52)** — Routers, services, and state management
-- **Rank 4 (200×48)** — UI components and view layers
-- **Rank 5 (180×44)** — Configuration files, build configs, and environment specs
-- **Rank 6 (160×40)** — Documentation, tests, demo datasets, and static assets
+Code Tour, What-If Impact, PR Bot, Quick Actions, and the AI assistant share the
+left rail.
 
-### Layout & Connection Rules
-- **Explicit Handle Routing**: All edges emerge strictly from the bottom handle (`out`) of the parent and enter the top handle (`in`) of the child.
-- **Parent-to-Child Edge Filtering**: Edges only render between adjacent tiers (`targetRank === sourceRank + 1`), eliminating horizontal criss-crossing.
-- **Lineage Hover Highlighting**: Hovering over any node dynamically traces its complete ancestor chain up to the repository node in `#10B981` emerald.
-- **Zero-Overlap Collision Pass**: Rows wider than 6000px automatically wrap into sub-rows separated by a 40px vertical gap, followed by a 2D bounding-box collision sweep that enforces a minimum 24px horizontal clearance.
+![Side panels](docs/screenshots/v2/readme-side-panels.png)
 
-### Student Mode & Row Ranking
-**Student Mode** turns the same ranking into a curriculum: **Row 1** files
-become **Level 1 — Entry Points** (where execution begins), **Rows 2–3** become
-**Level 2 — Core Modules** (the engine room), and **Rows 4–5** become
-**Level 3 — Utils & Leaves**. Because Rows 4–5 hold the least-imported files,
-they're the safest to read — and to change — which is exactly where the Good
-First Issue generator mines its beginner-friendly contributions.
+Guided code tours walk a module step by step and keep the graph in sync.
+
+![Code tour panel](docs/screenshots/v2/readme-tour.png)
+
+What-If Impact asks for a target and a depth, then highlights the blast radius.
+
+![What-If Impact panel](docs/screenshots/v2/readme-impact.png)
+
+The PR Bot form previews the comment and the risk summary before anything is
+posted.
+
+![PR Bot panel](docs/screenshots/v2/readme-prbot.png)
+
+BYOK keeps GitHub and provider keys in the browser tab, not on disk.
+
+![BYOK panel](docs/screenshots/v2/readme-byok.png)
+
+Tracking and Security are two modes of the same repository panel.
+
+![Tracking panel](docs/screenshots/v2/readme-tracking.png)
+
+![Security panel](docs/screenshots/v2/readme-security.png)
+
+Student Mode turns the graph into a three-level onboarding path.
+
+![Student Mode](docs/screenshots/v2/readme-student.png)
+
+The demo picker loads a public repository through the normal GitHub path.
+
+![Demo repositories](docs/screenshots/v2/readme-demo.png)
+
+### MCP in OpenCode
+
+The RepoScope MCP server is connected as a local server in OpenCode. The same
+8 tools and 5 resources are available to any MCP client.
+
+![OpenCode MCP servers with RepoScope connected](docs/screenshots/v2/opencode-mcp.png)
+
+The status list confirms the connection:
+
+![OpenCode MCP status](docs/screenshots/v2/opencode-mcp-status.png)
+
+### Local folder preview
+
+**Open a local folder** parses a folder in the browser with Tree-sitter
+WebAssembly. The panel labels the result as a browser preview, because this
+graph has no cross-file symbol resolution and the server never sees it.
+
+![Local folder panel](docs/screenshots/v2/readme-local-panel.png)
 
 ---
 
-## 🚀 Quick Start
+## Quick start
 
-### The fast way — point it at a folder, nothing leaves your machine
+### 1. Local mode (recommended)
 
 ```bash
-pip install reposcope
+git clone https://github.com/adityapatel5912/RepoScope.git
+cd RepoScope
+pip install -e .
 
 cd /path/to/your/repo
 reposcope run .
 ```
 
-That is the whole thing. No GitHub account, no personal access token, no push, no
-upload — the repository is parsed on your machine and the map is served on
-`http://127.0.0.1:4100`. **Edit a file and the graph updates on its own.**
+Open <http://127.0.0.1:4100>. The CLI prints the file count, the graph counts,
+and whether the watcher is on. Edit a file and the graph updates without a
+reload. Nothing is uploaded.
 
-```
-RepoScope - local mode
-  repository : /path/to/your/repo
-  files      : 384
-  serving on : http://127.0.0.1:4100
-  watching   : on (the graph updates as you edit)
-  nothing from this repository leaves your machine.
-```
+> Install from this checkout. The `reposcope` name on PyPI currently resolves
+> to an unrelated older package, so `pip install reposcope` is not the
+> supported path for this codebase.
 
 Other commands:
 
 ```bash
-reposcope index .              # write the index, no server
-reposcope index . --format sqlite
-reposcope mcp .                # serve the graph over MCP (stdio)
+reposcope index .                 # write the index, do not start a server
+reposcope index . --format sqlite # alternate store format
+reposcope mcp .                   # serve the index over MCP (stdio)
 ```
 
-### The full stack
+From a checkout, the same commands run as modules:
 
 ```bash
-# 1. Clone
+python -m cli.main run . --port 4100 --no-open
+python -m mcp_server.server --root .
+```
+
+### 2. Full stack (GitHub loading, chat, PR bot)
+
+```bash
 git clone https://github.com/adityapatel5912/RepoScope.git
 cd RepoScope
-
-# 2. Configure environment
 cp .env.example .env
-# Edit .env — add at least one LLM key (OpenRouter / Groq / NVIDIA)
+# Add at least one LLM key to .env.
 
-# 3. Backend
-pip install -r backend/requirements.txt
-cd backend && uvicorn main:app --reload --port 8000
+pip install -e ".[dev]"
 
-# 4. Frontend (new terminal)
+# Terminal 1
+cd backend
+uvicorn main:app --reload --port 8000
+
+# Terminal 2
 cd frontend
 npm install
 npm run dev
-
-# 5. Open http://localhost:5173 and click a demo repo
 ```
 
----
+Open <http://localhost:5173>. The full stack adds GitHub loading, cited chat,
+impact analysis, code tours, tracking, Student Mode, security scans, scaffolds,
+and the PR Bot. Those features need LLM keys; the graph and local mode do not.
 
-## 🤖 RepoScope as an MCP server
-
-RepoScope is not just a map you look at — it is an index an agent can
-query. The same graph the canvas draws is served over the Model Context
-Protocol, so Cursor, Claude Code and Claude Desktop can ask it
-questions directly.
+### 3. MCP server
 
 ```bash
-pip install reposcope
+# From a checkout, with the backend package installed:
+python -m mcp_server.server --root /absolute/path/to/repo
 
-# Register with your client — the root is the repository to index.
-reposcope-mcp --root /path/to/your/repo
+# Or, after `pip install reposcope`:
+reposcope-mcp --root /absolute/path/to/repo
+
+# Streamable HTTP instead of stdio:
+reposcope-mcp --root /absolute/path/to/repo --http --port 8765
 ```
+
+Example client configuration:
 
 ```json
 {
   "mcpServers": {
     "reposcope": {
       "command": "reposcope-mcp",
-      "args": ["--root", "/path/to/your/repository"]
+      "args": ["--root", "/absolute/path/to/repo"]
     }
   }
 }
 ```
 
-**Tools** — every one deterministic, so the agent quotes the graph rather
-than guessing:
+For OpenCode, the same server can be run from the checkout. The working
+configuration is committed at [`opencode.json`](opencode.json); a portable
+copy is in [`docs/opencode-mcp.json`](docs/opencode-mcp.json):
 
-| Tool | What it answers |
-|---|---|
-| `get_architecture_overview` | The layers, the central files, the entry points |
-| `calculate_blast_radius` | What breaks if this file or symbol changes |
-| `get_dependency_lineage` | What a file needs, and what needs it |
-| `explain_architectural_rule` | Does this import cross a declared boundary? |
-| `get_repo_map` | The budgeted map, and the context it saves |
-| `find_dependency_cycles` | The dependency loops, and the layers they span |
-| `get_hotspots` | The files that change often AND are widely depended upon |
-| `find_unreachable_symbols` | The symbols no entry point can reach (a static estimate) |
+```json
+{
+  "mcp": {
+    "servers": {
+      "reposcope": {
+        "type": "local",
+        "command": ["python", "-m", "mcp_server.server", "--root", "/absolute/path/to/repo"],
+        "cwd": "backend"
+      }
+    }
+  }
+}
+```
 
-**Resources** — the read side, no tool call needed:
+The connection is verified: `opencode mcp list` reports
+`✓ reposcope connected`, and the client panel is shown in
+[Screenshots → MCP in OpenCode](#mcp-in-opencode).
 
-`reposcope://graph/summary` · `reposcope://hotspots` ·
-`reposcope://repo-map` · `reposcope://dead-code` · `reposcope://cycles`
+The server speaks **stdio** and **Streamable HTTP**. SSE is not offered.
 
-Transports are **stdio** (the default) and **Streamable HTTP**
-(`reposcope-mcp --http`). SSE is deprecated by the MCP spec and is not
-offered.
+**Tools:** `get_architecture_overview`, `calculate_blast_radius`,
+`get_dependency_lineage`, `explain_architectural_rule`, `get_repo_map`,
+`find_dependency_cycles`, `get_hotspots`, `find_unreachable_symbols`.
+
+**Resources:** `reposcope://graph/summary`, `reposcope://hotspots`,
+`reposcope://repo-map`, `reposcope://dead-code`, `reposcope://cycles`.
+
+### 4. VS Code / Cursor / VSCodium
+
+Install the VSIX from the release or build it locally:
+
+```bash
+code --install-extension extensions/vscode/reposcope-2.0.1.vsix
+# or: cursor --install-extension extensions/vscode/reposcope-2.0.1.vsix
+```
+
+The extension adds:
+
+- the **RepoScope** Activity Bar view, a focus-first mini-graph centred on the
+  open file;
+- a status-bar blast-radius indicator;
+- a **View Callers** CodeLens above exported symbols;
+- **Visualize in RepoScope Canvas** in the Explorer context menu;
+- the `reposcope://open` URI handler.
+
+The extension never parses code. It reads the RepoScope backend over HTTP; set
+`reposcope.backendUrl` if the backend is not on `http://127.0.0.1:4100`.
+
+The extension is version **2.0.1**. It is published to Open VSX; the listing
+stays hidden from search until the publisher namespace email is verified. See
+[`extensions/vscode/README.md`](extensions/vscode/README.md).
 
 ---
 
-## 📉 What RepoScope saves an agent
+## What the graph contains
 
-An agent that wants to understand a repository normally reads the whole thing. RepoScope
-already has the answer — it has parsed every file, resolved every symbol, and computed a
-PageRank over the dependency graph — so it can hand the agent a map instead.
+RepoScope parses Python, TypeScript, TSX, JavaScript, Go, and Rust with
+Tree-sitter. It builds:
 
-**Measured, not claimed.** The numbers below come from `benchmarks/run.py` over 14
-repositories (4 local fixtures and 10 public ones); the raw output is committed under
+- **file nodes** for every indexed file;
+- **symbol nodes** for functions, methods, and classes;
+- **`imports` edges** resolved against a module index, including relative and
+  alias imports;
+- **`calls` edges** resolved across files where the parser can see the target;
+- **`contains` edges** between a file and its symbols.
+
+On top of the graph:
+
+- **PageRank centrality** ranks files;
+- **dependency cycles** are detected with strongly connected components;
+- **unreachable symbols** are a static reachability estimate;
+- **git churn** feeds the hotspot overlay;
+- **architecture rules** live in `.reposcope.yml` and are checked per import;
+- **blast radius** is a reverse BFS over the dependency graph.
+
+The canvas groups a large repository by top-level module, keeps the rank rows
+compact, and gives every file a row in the drawer. A small repository still
+uses the full connectivity pyramid.
+
+---
+
+## Measured context savings
+
+An agent that reads the whole repository pays for the whole repository.
+RepoScope's repo map is ranked by the same PageRank score and stops at a token
+budget.
+
+The numbers below are from `benchmarks/run.py` over 14 repositories (4 local
+fixtures and 10 public ones). The raw output is committed under
 `benchmarks/results/`.
 
 | Repository | Files | Nodes | Full context | RepoScope map | Reduction |
@@ -335,110 +335,180 @@ repositories (4 local fixtures and 10 public ones); the raw output is committed 
 | `pallets/click` | 207 | 2,256 | 537,806 | 7,840 | **98.5%** |
 | `encode/httpx` | 154 | 1,365 | 348,904 | 5,192 | **98.5%** |
 
-Reproduce them yourself:
+Reproduce them:
 
 ```bash
 python benchmarks/run.py
 ```
 
-The map is ranked by the same PageRank score the pyramid uses, so the files that matter
-come first, and the token budget drops the least useful files first.
+On this repository the repo-map endpoint is now roughly **2–5 seconds** after
+the index is warm, down from 14–24 seconds before the walk was pruned.
 
 ---
 
-## ⚙️ Configuration
+## Architecture at a glance
+
+```
+Local folder ──► CLI / watcher ──┐
+                                 ├─► Tree-sitter parsers ──► graph builder
+GitHub repo ──► repo loader ─────┘                              │
+                                                                ▼
+                                                     .reposcope/graph.json
+                                                                │
+              ┌─────────────────────────────────────────────────┼──────────────────┐
+              ▼                                                 ▼                  ▼
+       FastAPI + SSE                                      MCP server         VS Code extension
+              │                                                 │                  │
+              ▼                                                 ▼                  ▼
+       React canvas                                     Claude / Cursor /     Activity Bar
+       chat, impact, tours,                             OpenCode / agents     mini-graph
+       PR bot, Student Mode
+```
+
+![One index, four ways in: canvas, CLI, MCP, and editor](docs/assets/one-index-diagram.png)
+
+*The same index serves every surface; no surface has its own copy of the
+graph.*
+
+- **Backend:** Python 3.11, FastAPI, Tree-sitter, NetworkX, GitPython.
+- **Frontend:** React 18, Vite, TypeScript (strict), React Flow, Tailwind.
+- **Storage:** `.reposcope/graph.json` and `.reposcope/parse-cache.json`.
+- **LLM chain (optional):** OpenRouter → Groq → NVIDIA NIM, multi-key rotation.
+- **MCP:** the official Python SDK, stdio and Streamable HTTP.
+- **Extension:** TypeScript, VS Code WebviewViewProvider, CodeLens, status bar.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full reference.
+
+---
+
+## Configuration
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `OPENROUTER_API_KEYS` | Yes* | Primary LLM — comma-separate for rotation |
-| `GROQ_API_KEYS` | Yes* | Secondary LLM — comma-separate for rotation |
-| `NVIDIA_API_KEYS` | Fallback | Tertiary LLM — comma-separate for rotation |
-| `Models_OPENROUTER` / `Models_GROQ` / `Models_NVIDIA` | No | Model overrides (first entry wins) |
+| `OPENROUTER_API_KEYS` | Yes* | Primary LLM; comma-separate for rotation |
+| `GROQ_API_KEYS` | Yes* | Secondary LLM; comma-separate |
+| `NVIDIA_API_KEYS` | Fallback | Tertiary LLM; comma-separate |
+| `Models_OPENROUTER` / `Models_GROQ` / `Models_NVIDIA` | No | Model overrides |
 | `Base_URL_OPENROUTER` / `Base_URL_GROQ` / `Base_URL_NVIDIA` | No | OpenAI-compatible endpoints |
-| `GITHUB_TOKENS` | Optional | Raises GitHub API limits — comma-separate |
-| `CODEBASE_MEMORY_PATH` | No | Codebase memory index binary (graph fallback) |
+| `GITHUB_TOKENS` | Optional | Raises GitHub API limits; comma-separate |
+| `OVSX_TOKEN` | Publish only | Open VSX publisher token; keep it in the gitignored `.env` |
 
-\* At least one provider needs a key. Legacy single-key variables
-(`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `NVIDIA_API_KEY`, `GITHUB_PAT`) are
-still supported as fallbacks. See [.env.example](.env.example).
+\* At least one provider needs a key for the LLM-backed features. The graph,
+local mode, CLI, and MCP server run without any key.
 
----
-
-## 🏗️ Architecture
-
-```
-React UI (Vite + TS)
-   │  SSE: context → token → tracking → done | error
-   ▼
-FastAPI (Python 3.11)
-   ├─ repo_loader      clone + README + state
-   ├─ graph_builder    AST/regex → nodes + edges
-   ├─ orchestrator     graph + README → LLM context
-   ├─ key_rotator      multi-key round-robin per provider
-   ├─ runtime_config   OpenRouter → Groq → NVIDIA NIM chain
-   ├─ repo_client      GitHub REST + codebase memory client
-   ├─ tour_generator / impact_analyzer / repo_tracker
-   ├─ pr_impact        PR blast radius → GitHub comment
-   ├─ onboarding       Student Mode rows + quizzes + GFIs
-   ├─ security_scanner secrets / breaking / CVE heuristics
-   └─ tts_service      OpenRouter TTS chain for Voice Tours
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reference.
+Legacy single-key variables (`OPENROUTER_API_KEY`, `GROQ_API_KEY`,
+`NVIDIA_API_KEY`, `GITHUB_PAT`) are still accepted. See
+[`.env.example`](.env.example).
 
 ---
 
-## ☁️ Deployment
+## Verification status
 
-| | URL |
+Verified in this session:
+
+- `cd backend && python -m pytest -q` → **333 passed**;
+- `cd frontend && npx tsc --noEmit` → clean;
+- `cd frontend && npm run build` → **built successfully**;
+- local mode → health 200, watcher on; the live file/node/edge counts are
+  printed by the CLI and shown in the sidebar (they change as files are added);
+- real MCP stdio sweep → **8 tools, 5 resources, 3 read rounds, clean ping**;
+- OpenCode MCP status → `✓ reposcope connected`.
+
+Manual verification still required:
+
+- the native folder picker (the OS dialog cannot be driven by Playwright);
+- the VS Code extension in a real editor window;
+- Open VSX listing visibility after publisher email verification;
+- a live PR Bot comment against a real pull request.
+
+The living checklist is
+[`docs/VERIFICATION_CHECKLIST.md`](docs/VERIFICATION_CHECKLIST.md). It is
+deliberately separate from the docs so it can stay unchecked until a human
+confirms each item.
+
+---
+
+## Known limitations
+
+- **The native folder picker is manual.** The browser path uses
+  `window.showDirectoryPicker`; Playwright can verify the button and the
+  panel, but it cannot select a folder in the OS dialog.
+- **The browser preview is lighter than the server.** It has imports and
+  symbols, but no cross-file symbol resolution. The UI says so.
+- **Some MCP clients have resource-read bridge issues.** The RepoScope server
+  answers `reposcope://graph/summary` in 0.0s over stdio; one OpenCode bridge
+  stalled for several minutes and then reported an unknown message ID. Tool
+  calls continued to work. This is tracked in the checklist.
+- **Open VSX search visibility is pending publisher email verification.**
+  The VSIX is published and installable.
+- **The VS Code Marketplace needs an Azure DevOps PAT.** It is not published
+  there yet.
+- **Test fixtures are indexed as production code.** A "tests are not
+  architecture" mode is still open.
+- **The WebGL tier, the `kuzu` flag, monorepo cross-package edges, the
+  ownership overlay, the critical-path panel, and the visual-regression
+  baselines are still open.** These are carried in the roadmap.
+- **LLM-backed features need provider keys.** Without a key, the graph and
+  local mode work; chat, tours, Student Mode, security narrative, and PR Bot
+  do not.
+
+---
+
+## Documentation
+
+| Document | What it covers |
 |---|---|
-| **Frontend** | [https://repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) |
-| **Backend API** | [https://reposope.onrender.com](https://reposope.onrender.com) |
-| **Health check** | [https://reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) |
+| [Documentation index](docs/README.md) | Which docs are current, reference, or historical |
+| [Architecture](docs/ARCHITECTURE.md) | Modules, data flow, endpoints, graph layout, MCP |
+| [Features](docs/FEATURES.md) | Every feature, how to use it, and its limits |
+| [Development](docs/DEVELOPMENT.md) | Setup, tests, extension, QA |
+| [Deployment](docs/DEPLOYMENT.md) | Render + Vercel + Open VSX |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Failures we have actually seen |
+| [QA report](docs/QA_REPORT.md) | What is verified and what is not |
+| [v2.0 roadmap](docs/ROADMAP_V2.md) | The plan, the delivered sprints, the honest gaps |
+| [Verification checklist](docs/VERIFICATION_CHECKLIST.md) | The manual checks still pending |
+| [Screenshots](docs/SCREENSHOTS.md) | Screenshot index and capture notes |
+| [Knowledge graph schema](docs/KNOWLEDGE_GRAPH_SCHEMA.md) | Node and edge ids |
+| [OpenCode MCP config](docs/opencode-mcp.json) | Portable local-server config verified in OpenCode |
+| [Contributing](CONTRIBUTING.md) | Setup and commit conventions |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards |
 
-Deployed via [`render.yaml`](render.yaml) (backend) and [`frontend/vercel.json`](frontend/vercel.json) (frontend). All `/api/*` calls are proxied from Vercel to Render.
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-
----
-
-## 📚 Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Features](docs/FEATURES.md)
-- [v2.0 Roadmap & Plan](docs/ROADMAP_V2.md)
-- [Demo Script](docs/DEMO.md)
-- [Development](docs/DEVELOPMENT.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Screenshots](docs/SCREENSHOTS.md)
-- [Bob Sessions](docs/BOB_SESSIONS.md)
-- [Knowledge Graph Schema](docs/KNOWLEDGE_GRAPH_SCHEMA.md)
-- [Runbooks](docs/RUNBOOKS.md)
-- [Contributing](CONTRIBUTING.md)
+[Demo script](docs/DEMO.md) — a current 3-minute walkthrough.
 
 ---
 
-## 🛠️ Tech Stack
+## Brand assets
+
+The existing logo and brand kit are unchanged. The generated hero, social
+card, and one-index diagram use the same cream/ink/coral palette.
+
+- [Brand kit and logo](frontend/public/brand/brand-kit.html)
+- [Social card](frontend/public/brand/og-image.png) — 2192×1152
+- [README hero](docs/assets/readme-hero.png) — 2048×1152
+- [One-index diagram](docs/assets/one-index-diagram.png) — 2048×1152
+
+---
+
+## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, Vite 6, TypeScript (strict), React Flow (custom pyramid layout), Tailwind |
-| Backend | Python 3.11, FastAPI, SSE (StreamingResponse), httpx, GitPython |
-| LLM | OpenRouter (primary) → Groq → NVIDIA NIM, multi-key rotation |
-| Code graph | AST (Python) + regex (JS/TS) via graph_builder |
-| Repo data | GitHub REST API v3 |
+| Frontend | React 18, Vite 6, TypeScript (strict), React Flow, Tailwind |
+| Backend | Python 3.11, FastAPI, SSE, httpx, GitPython, NetworkX |
+| Parsing | Tree-sitter: Python, TypeScript, TSX, JavaScript, Go, Rust |
+| Graph | PageRank, SCC cycles, reverse-BFS blast radius, git churn |
+| LLM | OpenRouter → Groq → NVIDIA NIM, multi-key rotation, BYOK |
+| MCP | Python MCP SDK, stdio + Streamable HTTP |
+| Extension | VS Code API, WebviewViewProvider, CodeLens, status bar |
+| Deployment | Render (API), Vercel (frontend), Open VSX (extension) |
 
 ---
 
-## 📄 License
+## License
 
 MIT — see [LICENSE](LICENSE).
 
----
+## Acknowledgments
 
-## 🙏 Acknowledgments
-
-Built with **IBM Bob 2.0** and **Z Code**. Graph aesthetic inspired by
-GitDiagram. Reverse prompt inspired by GitReverse. Repo structure format
-inspired by Gitingest.
+Graph aesthetic inspired by GitDiagram; reverse-prompt idea inspired by
+GitReverse; repository-tree format inspired by Gitingest.

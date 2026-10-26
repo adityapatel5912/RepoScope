@@ -59,12 +59,43 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-the repository's issue tracker (tag the repository owner).
-All complaints will be reviewed and investigated promptly and fairly.
+reported privately to the project maintainer, **Aditya Patel**
+([@adityapatel5912](https://github.com/adityapatel5912)), through the contact
+options on that GitHub profile. If a private channel is not available, use
+GitHub's report-abuse flow. Please do **not** open a public issue for a conduct
+report.
+
+Reports should include what happened, where it happened, and any links or
+screenshots that help review it. All complaints will be reviewed and
+investigated promptly and fairly. The maintainer will:
+
+1. acknowledge the report within a reasonable time;
+2. review the available evidence and any response from the people involved;
+3. take proportionate action, which may include a private warning, a request
+   to stop the behaviour, removal of content, or a temporary or permanent ban
+   from the project's spaces; and
+4. keep the reporter informed of the outcome as far as privacy allows.
 
 All community leaders are obligated to respect the privacy and security of the
-reporter of any incident.
+reporter of any incident. Retaliation against anyone who reports a concern in
+good faith is itself a violation of this Code of Conduct.
+
+## Enforcement Guidelines
+
+Community leaders will follow these guidelines when determining consequences:
+
+1. **Correction** — a private, written warning that explains the impact and
+   asks for a change in behaviour.
+2. **Warning** — a warning with consequences for continued behaviour,
+   including a period without interaction with the people involved.
+3. **Temporary ban** — a temporary ban from any interaction with the project's
+   spaces.
+4. **Permanent ban** — a permanent ban from public interaction with the
+   project.
+
+The response should be proportionate to the behaviour, its impact, and the
+reporter's safety. A maintainer who is involved in an incident should recuse
+themselves from handling it.
 
 ## Attribution
 

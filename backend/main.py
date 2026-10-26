@@ -9,6 +9,7 @@ import json
 import logging
 import logging.handlers
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -107,12 +108,40 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 SYSTEM_PROMPT = (
-    "You are RepoScope, a senior software architect analyzing the loaded "
-    "GitHub repository. Answer questions about the loaded repository. "
-    "Use the provided README and code graph as ground truth. "
-    "Cite file paths, function names, and line numbers where relevant. "
-    "If the answer is not in the context, say so clearly. "
-    "Never fabricate paths, SHAs, or PR numbers.\n\n"
+    "You are RepoScope. You answer questions about the loaded repository "
+    "using the code graph and the file context provided.\n\n"
+    "When the user asks about setup, installation, running, or getting "
+    "started:\n\n"
+    "1. First check for an explicit Setup, Install, Quickstart, Getting "
+    "Started, or Usage section in the README context. If one exists, use "
+    "it. Cite the section name.\n"
+    "2. If no explicit section exists, look at build.sh, render.yaml, "
+    "vercel.json, package.json scripts, and requirements.txt. Extract "
+    "commands from those files.\n"
+    "3. If neither exists, synthesize the setup steps from the detected "
+    "stack. For example, if you see backend/requirements.txt and "
+    "frontend/package.json, produce:\n"
+    "     Backend:\n"
+    "       cd backend\n"
+    "       pip install -r requirements.txt\n"
+    "       uvicorn main:app --reload --port 8000\n"
+    "     Frontend (new terminal):\n"
+    "       cd frontend\n"
+    "       npm install\n"
+    "       npm run dev\n"
+    "4. Never say \"not in the provided excerpt.\" Never give up when the "
+    "answer can be inferred from the repo structure.\n"
+    "5. Always cite the file or section that supports each step — e.g. "
+    "`[README Quick Start]`, `[build.sh]`, `[render.yaml startCommand]`, "
+    "`[package.json scripts.dev]` — or, for a synthesized step, the source "
+    "of the inference: `[inferred from backend/requirements.txt + "
+    "frontend/package.json]`.\n"
+    "6. For setup/install questions, answer with the steps only — no "
+    "markdown tables, no key-files listing.\n\n"
+    "For every other question, follow the existing rules: cite files, "
+    "functions, and commits. Do not hallucinate. If the answer is not in "
+    "the context, say so clearly. Never fabricate paths, SHAs, or PR "
+    "numbers.\n\n"
     "RESPONSE FORMAT (strict):\n"
     "1. Open with ONE bold one-line summary of the answer.\n"
     "2. Organize the body with '##' section headings (2-4 sections max).\n"
@@ -163,10 +192,36 @@ def _sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+# Setup-relevant README sections are preferred over raw truncation; fall
+# back to the first 20000 chars when nothing matches.
+_README_LIMIT = 20000
+_SETUP_SECTION_RE = re.compile(
+    r"setup|install|quick\s?start|getting\s+started|run|requirements|usage|"
+    r"prerequisites?|local(development|ly)?|environment|configuration",
+    re.I,
+)
+
+
+def _extract_readme_sections(readme: str) -> str:
+    """Prefer markdown sections about setup/running; else first 20000 chars."""
+    if len(readme) <= _README_LIMIT:
+        return readme
+    # Split on ATX headings of levels 1-3, keeping the body under each.
+    sections = re.split(r"\n#{1,3}\s", readme)
+    hits = [s for s in sections if _SETUP_SECTION_RE.search(s)]
+    if hits:
+        # Re-attach a heading marker so the model can cite section names.
+        joined = "\n\n".join(f"## {s.strip()}" for s in hits if s.strip())
+        if joined:
+            return joined[:_README_LIMIT]
+    return readme[:_README_LIMIT]
+
+
 def _build_user_prompt(message: str, ctx: dict) -> str:
     parts = [f"USER QUESTION: {message}"]
     if ctx.get("readme"):
-        parts.append(f"\n--- README (first 4000 chars) ---\n{ctx['readme'][:4000]}")
+        readme_text = _extract_readme_sections(ctx["readme"])
+        parts.append(f"\n--- README (setup-relevant sections) ---\n{readme_text}")
     nodes = ctx.get("nodes", [])
     if nodes:
         files = [n for n in nodes if n.get("type") == "file"]
@@ -180,6 +235,33 @@ def _build_user_prompt(message: str, ctx: dict) -> str:
         parts.append(
             f"\n--- CODE SYMBOLS SAMPLE ({len(symbols)} total functions/classes) ---\n"
             + json.dumps(symbols[:60], indent=2)[:3500]
+        )
+    # Setup-intent questions: raw setup files as labeled blocks
+    for label, content in (ctx.get("setup_files") or {}).items():
+        parts.append(f"\n[{label}]\n{content}")
+    # Tracking mode: recent GitHub activity so the LLM can summarize changes
+    tracking = ctx.get("tracking") or {}
+    if any(tracking.get(k) for k in ("commits", "pulls", "issues", "releases")):
+        def _brief(items, keys):
+            out = []
+            for it in (items or [])[:10]:
+                if not isinstance(it, dict):
+                    continue
+                out.append({k: it.get(k) for k in keys if it.get(k) is not None})
+            return out
+        payload = {
+            "commits": _brief(tracking.get("commits"),
+                              ["sha", "message", "date", "author"]),
+            "pulls": _brief(tracking.get("pulls"),
+                            ["number", "title", "state", "user", "merged_at"]),
+            "issues": _brief(tracking.get("issues"),
+                             ["number", "title", "state", "user"]),
+            "releases": _brief(tracking.get("releases"),
+                               ["tag_name", "name", "published_at"]),
+        }
+        parts.append(
+            "\n--- GITHUB TRACKING (latest activity) ---\n"
+            + json.dumps(payload, indent=1)[:6000]
         )
     return "\n".join(parts)
 

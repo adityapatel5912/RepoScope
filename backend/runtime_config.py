@@ -100,7 +100,13 @@ def ask_llm(system_prompt: str, user_query: str, graph_context: str = "") -> str
                     temperature=0.3,
                     max_tokens=1024,
                 )
-                return r.choices[0].message.content
+                content = r.choices[0].message.content
+                if content and content.strip():
+                    return content
+                # HTTP 200 but empty content (filter/refusal) → treat as a
+                # provider failure and fall through to the next key/provider.
+                last_exc = RuntimeError(f"empty response content from provider")
+                continue
             except Exception as exc:
                 last_exc = exc
                 if is_rate_limit_error(exc) or _is_eol_error(exc):

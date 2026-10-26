@@ -9,6 +9,8 @@ export interface LayerNodeData {
   layer: Layer;
   subtitle?: string;         // file path or role — muted mono line
   line?: number;
+  size?: number;             // file size in bytes (files only) — shown in the drawer
+  symbols?: string[];        // key function/class names (files only) — shown in the drawer
   child?: boolean;           // expanded function/class child — small card
   // Impact analysis state (FILE 3 emphasis language)
   impactState?: "target" | "direct" | "transitive" | "dim";

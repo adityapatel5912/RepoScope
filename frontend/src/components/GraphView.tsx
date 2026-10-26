@@ -49,8 +49,13 @@ function RankLabelNode({ data }: { data: { rank: number; label: string } }) {
   // LEFTWARDS (transform-origin: right center) so they never overlap a
   // node, and the scale is capped so a very zoomed-out graph does not
   // produce giant overlapping labels.
+  //
+  // The cap is 2.6, not 3.2: a label scaled 3.2x is about 125px wide on
+  // screen, which reaches past the gutter the fit reserves for it and
+  // gets clipped by the canvas edge. At 2.6x the longest label
+  // ("Routers and services") is 100px and stays inside its lane.
   const { zoom } = useViewport();
-  const scale = Math.min(1 / Math.max(zoom, 0.18), 3.2);
+  const scale = Math.min(1 / Math.max(zoom, 0.18), 2.6);
 
   return (
     <div
@@ -123,6 +128,28 @@ const FIT_VIEW_OPTIONS = {
  * underneath it.
  */
 const TOOLBAR_INSET = { width: 520, height: 170 };
+
+/**
+ * The space the floating pieces of the canvas need, so the fit keeps the
+ * graph clear of them.
+ *
+ * The LEGEND floats in the top-right corner and the RANK LABELS sit to
+ * the left of the leftmost column. Neither is part of the graph's
+ * bounding box in the way a reader expects:
+ *
+ *   - the legend is an overlay, so the fitted content used to slide
+ *     underneath it and two nodes were hidden behind the card;
+ *   - the rank labels are counter-scaled so they stay readable at a
+ *     0.2 zoom, which means they are WIDER on screen than the node box
+ *     the fit measures. The label "Routers and services" grows about 90px
+ *     to the left of the graph's own edge and was clipped by the canvas.
+ *
+ * Both are reserved here, so the fit lands the graph in the space that
+ * is actually free.
+ */
+const LEGEND_INSET = { width: 196, height: 0 };
+const RANK_LABEL_INSET = { width: 132, height: 0 };
+
 const DOT_COLOR  = "#D9D2C0";
 
 // ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
@@ -131,6 +158,14 @@ const SIBLING_X       = 280;
 const SIBLING_X_TIGHT = 220;
 const MAX_ROW_WIDTH   = 6000;
 const MIN_CLEAR_X     = 24;
+
+/**
+ * The number of files above which the map groups by directory.
+ *
+ * Below it, the flat list is the clearer view: nine files are nine
+ * nodes, and grouping them would hide the very thing the map is for.
+ */
+const GROUPING_THRESHOLD = 40;
 
 const RANK_TITLES: Record<number, string> = {
   1: "Backbone files",
@@ -161,6 +196,17 @@ interface RawNode {
 function basename(p: string): string {
   const parts = p.split("/");
   return parts[parts.length - 1] || p;
+}
+
+/**
+ * The directory a file lives in — "" for a file at the repository root.
+ *
+ * This is the grouping key for the "group by directory" map: two files
+ * are in the same place when their paths share a directory.
+ */
+function directoryOf(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx === -1 ? "" : path.slice(0, idx);
 }
 
 /**
@@ -381,7 +427,7 @@ function buildPyramidGraph(
   raw: unknown[],
   rawEdges: unknown[],
   repoTitle: string,
-  _expandFuncs: boolean,
+  grouped: boolean,
   _invert: boolean,
   churnScores?: Map<string, number>,
 ): { nodes: Node[]; edges: Edge[] } {
@@ -468,6 +514,83 @@ function buildPyramidGraph(
   const out: Node[] = [];
   const placedIds = new Set<string>();
 
+  // ── Grouping ────────────────────────────────────────────────────────────
+  //
+  // "Group by directory" is the difference between a map you can read and
+  // a wall of dots. A repository with 450 files has about 60
+  // directories; the pyramid draws 60 nodes instead of 450, and each one
+  // says how many files it holds.
+  //
+  // The RANKS do not change: a group sits in the rank of its most
+  // important member, so the shape of the map still means "how central is
+  // this, and how central is that".
+  const groupOfFile = new Map<string, string>();
+  const groupedItems = new Map<number, Array<{
+    node: RawNode;
+    score: number;
+    category: number;
+    files?: string[];
+  }>>();
+
+  if (grouped) {
+    const byDir = new Map<string, {
+      path: string;
+      files: string[];
+      size: number;
+      score: number;
+      category: number;
+      rank: number;
+    }>();
+
+    for (let r = 1; r <= 6; r++) {
+      for (const item of rankBuckets.get(r) || []) {
+        const fileId = String(item.node.id);
+        const path = String(item.node.label);
+        const dir = directoryOf(path);
+        const gid = `dir:${dir || "."}`;
+        groupOfFile.set(fileId, gid);
+
+        let group = byDir.get(gid);
+        if (!group) {
+          group = {
+            path: dir,
+            files: [],
+            size: 0,
+            score: 0,
+            category: item.category,
+            rank: r,
+          };
+          byDir.set(gid, group);
+        }
+        group.files.push(path);
+        group.size += Number(item.node.size ?? 0);
+        if (item.score > group.score) {
+          group.score = item.score;
+          group.category = item.category;
+        }
+        if (r < group.rank) group.rank = r;
+      }
+    }
+
+    for (const group of byDir.values()) {
+      const list = groupedItems.get(group.rank) ?? [];
+      list.push({
+        node: {
+          id: `dir:${group.path || "."}`,
+          label: group.path || "(repository root)",
+          size: group.size,
+        } as RawNode,
+        score: group.score,
+        category: group.category,
+        files: group.files,
+      });
+      groupedItems.set(group.rank, list);
+    }
+  }
+
+  const buckets: Map<number, Array<{ node: RawNode; score: number; category: number; files?: string[] }>> =
+    grouped ? groupedItems : rankBuckets;
+
   // Rank 0 — repo node (320x80)
   const repoCfg = RANK_CONFIGS[0];
   out.push({
@@ -486,14 +609,59 @@ function buildPyramidGraph(
   });
   placedIds.add("repo:root");
 
-  // Ranks 1..6 — file nodes
+  // Ranks 1..6 — file nodes, or folder nodes when the map is grouped.
   for (let r = 1; r <= 6; r++) {
-    const items = rankBuckets.get(r) || [];
+    const items = buckets.get(r) || [];
     if (items.length === 0) continue;
 
     const cfg = RANK_CONFIGS[r] ?? RANK_CONFIGS[2];
     const pitch = Math.max(cfg.width + MIN_CLEAR_X, items.length > 12 ? SIBLING_X_TIGHT : SIBLING_X);
     const totalRowWidth = (items.length - 1) * pitch;
+
+    // One node, whether it is a file or a directory.
+    const makeNode = (item: { node: RawNode; files?: string[] }, x: number, y: number): Node => {
+      const path = String(item.node.label);
+      const isGroup = Boolean(item.files);
+      if (isGroup) {
+        const files = item.files!;
+        const dir = path === "(repository root)" ? "" : path;
+        return {
+          id: String(item.node.id),
+          type: "folder",
+          position: { x, y },
+          width: cfg.width,
+          height: cfg.height,
+          data: {
+            label: dir === "" ? "(root)" : dir.split("/").pop() ?? dir,
+            kind: "folder",
+            layer: classify(String(item.node.id), path),
+            subtitle: `${files.length} file${files.length === 1 ? "" : "s"}`,
+            fullPath: dir,
+            size: item.node.size,
+            rank: r,
+            files,
+          } satisfies LayerNodeData,
+        };
+      }
+      return {
+        id: String(item.node.id),
+        type: "file",
+        position: { x, y },
+        width: cfg.width,
+        height: cfg.height,
+        data: {
+          label: labelFor(path),
+          kind: "file",
+          layer: classify(String(item.node.id), path),
+          subtitle: path,
+          fullPath: path,
+          size: item.node.size,
+          rank: r,
+          churn: churnScores?.get(path) ?? 0,
+          symbolRefs: symbolsByFile.get(path)?.slice(0, 8),
+        } satisfies LayerNodeData,
+      };
+    };
 
     if (totalRowWidth > MAX_ROW_WIDTH) {
       // Wrap into sub-rows with a 40px vertical gap between node edges (A6)
@@ -509,26 +677,7 @@ function buildPyramidGraph(
         const subY = startBaseY + sIdx * rowStepY;
 
         subItems.forEach((item, i) => {
-          const x = subStartX + i * pitch;
-          const y = subY;
-          const node: Node = {
-            id: String(item.node.id),
-            type: "file",
-            position: { x, y },
-            width: cfg.width,
-            height: cfg.height,
-            data: {
-              label: labelFor(String(item.node.label)),
-              kind: "file",
-              layer: classify(String(item.node.id), String(item.node.label)),
-              subtitle: String(item.node.label),
-              fullPath: String(item.node.label),
-              size: item.node.size,
-              rank: r,
-              churn: churnScores?.get(String(item.node.label)) ?? 0,
-              symbolRefs: symbolsByFile.get(String(item.node.label))?.slice(0, 8),
-            } satisfies LayerNodeData,
-          };
+          const node = makeNode(item, subStartX + i * pitch, subY);
           out.push(node);
           placedIds.add(node.id);
         });
@@ -536,26 +685,7 @@ function buildPyramidGraph(
     } else {
       const startX = -totalRowWidth / 2;
       items.forEach((item, i) => {
-        const x = startX + i * pitch;
-        const y = r * RANK_Y;
-        const node: Node = {
-          id: String(item.node.id),
-          type: "file",
-          position: { x, y },
-          width: cfg.width,
-          height: cfg.height,
-          data: {
-            label: labelFor(String(item.node.label)),
-            kind: "file",
-            layer: classify(String(item.node.id), String(item.node.label)),
-            subtitle: String(item.node.label),
-            fullPath: String(item.node.label),
-            size: item.node.size,
-            rank: r,
-            churn: churnScores?.get(String(item.node.label)) ?? 0,
-            symbolRefs: symbolsByFile.get(String(item.node.label))?.slice(0, 8),
-          } satisfies LayerNodeData,
-        };
+        const node = makeNode(item, startX + i * pitch, r * RANK_Y);
         out.push(node);
         placedIds.add(node.id);
       });
@@ -577,7 +707,7 @@ function buildPyramidGraph(
   const centeredXs = out.map((n) => n.position.x);
   const leftEdgeX = Math.min(...centeredXs) - 180;
   for (let r = 1; r <= 6; r++) {
-    if ((rankBuckets.get(r) || []).length > 0) {
+    if ((buckets.get(r) || []).length > 0) {
       out.push({
         id: `rank-label-${r}`,
         type: "rankLabel",
@@ -594,16 +724,26 @@ function buildPyramidGraph(
 
   // Synthesize containment edges: repo root → rank 1
   const validEdges: Array<{ source: string; target: string; type?: string }> = [];
-  const rank1Nodes = rankBuckets.get(1) || [];
+  const rank1Nodes = buckets.get(1) || [];
   for (const item of rank1Nodes) {
     validEdges.push({ source: "repo:root", target: String(item.node.id), type: "groups" });
   }
 
-  // Real edges from imports/calls
+  // Real edges from imports/calls.
+  //
+  // In a GROUPED map the drawn nodes are directories, so a file-level
+  // edge is lifted to the edge between the two directories. The lift
+  // loses the file detail — that is what the "flat" view is for — but it
+  // keeps the dependency STRUCTURE, which is the thing the map is for.
+  const seenEdges = new Set<string>();
   for (const e of edgeList) {
-    if (placedIds.has(e.source) && placedIds.has(e.target) && e.source !== e.target) {
-      validEdges.push(e);
-    }
+    const source = grouped ? (groupOfFile.get(e.source) ?? e.source) : e.source;
+    const target = grouped ? (groupOfFile.get(e.target) ?? e.target) : e.target;
+    if (!placedIds.has(source) || !placedIds.has(target) || source === target) continue;
+    const key = `${source}->${target}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    validEdges.push({ source, target, type: e.type });
   }
 
   // Ensure every node in rank r (r >= 2) has a connection from rank r - 1
@@ -936,6 +1076,33 @@ function NodeDrawer({
             </div>
           </div>
         )}
+        {data.files && data.files.length > 0 && (
+          <div className="pt-1.5 border-t border-border-hairline">
+            <p className="label-caps !text-[10px] mb-1.5">
+              Files ({data.files.length})
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {data.files.slice(0, 12).map((file) => (
+                <li key={file}>
+                  <button
+                    onClick={() => onOpenInEditor?.(file, 1)}
+                    className="text-[10px] font-mono text-text-secondary hover:text-accent-cyan
+                      transition-colors text-left truncate max-w-full"
+                    title={`Open ${file} in your editor`}
+                    data-testid="open-folder-file-in-editor"
+                  >
+                    {basename(file)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {data.files.length > 12 && (
+              <p className="text-[10px] text-text-secondary mt-1">
+                +{data.files.length - 12} more
+              </p>
+            )}
+          </div>
+        )}
         {data.symbolRefs && data.symbolRefs.length > 0 && data.fullPath && (
           <div className="pt-1.5 border-t border-border-hairline">
             <p className="label-caps !text-[10px] mb-1.5">Symbols</p>
@@ -1028,8 +1195,23 @@ function GraphInner({
   const [selected, setSelected]          = useState<Node | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [expandFuncs, setExpandFuncs]    = useState(true);
+  /**
+   * Whether the user has chosen the grouping themselves.
+   *
+   * Until they do, the default follows the SIZE of the repository: nine
+   * files read better as nine files, and four hundred read better as
+   * sixty directories. Once they choose, their choice is the default
+   * forever.
+   */
+  const groupedTouched = useRef(false);
   const [invert, setInvert]              = useState(false);
   const [legendShown, setLegendShown]    = useState(true);
+  // The fit reads the legend through a ref, not through the state
+  // directly: putting the state in the callback's dependencies would
+  // re-fit the graph every time the legend is toggled, and a user who
+  // has panned to somewhere would lose their place.
+  const legendShownRef = useRef(legendShown);
+  legendShownRef.current = legendShown;
   const [churnShown, setChurnShown]      = useState(false);
   // Architecture-cluster view (Milestone 1.2) — the pyramid collapses to
   // the five canonical layers.
@@ -1079,8 +1261,17 @@ function GraphInner({
 
     const contentW = Math.max(1, bounds.width);
     const contentH = Math.max(1, bounds.height);
-    const availableW = width * 0.94;
-    const availableH = Math.max(120, height - TOOLBAR_INSET.height) * 0.94;
+
+    // The region of the canvas the graph is allowed to occupy: clear of
+    // the rank labels on the left, the legend on the right, and the
+    // toolbar at the bottom.
+    const leftInset = RANK_LABEL_INSET.width;
+    const rightInset = legendShownRef.current ? LEGEND_INSET.width : 16;
+    const topInset = 12;
+    const bottomInset = TOOLBAR_INSET.height;
+
+    const availableW = Math.max(160, width - leftInset - rightInset);
+    const availableH = Math.max(120, height - topInset - bottomInset);
 
     const zoom = Math.min(
       availableW / contentW,
@@ -1092,9 +1283,9 @@ function GraphInner({
       return;
     }
 
-    // Centre the content in the region above the toolbar.
-    const nextX = (width - contentW * zoom) / 2 - bounds.x * zoom;
-    const nextY = (height - TOOLBAR_INSET.height - contentH * zoom) / 2 - bounds.y * zoom;
+    // Centre the content in the FREE region — not in the raw container.
+    const nextX = leftInset + (availableW - contentW * zoom) / 2 - bounds.x * zoom;
+    const nextY = topInset + (availableH - contentH * zoom) / 2 - bounds.y * zoom;
     setViewport({ x: nextX, y: nextY, zoom }, { duration });
   }, [fitView, setViewport, getNodes, getNodesBounds]);
   const { zoom } = useViewport();
@@ -1213,7 +1404,7 @@ function GraphInner({
   useEffect(() => {
     buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawNodes, rawEdges, repoTitle]);
+  }, [rawNodes, rawEdges, repoTitle, expandFuncs]);
 
   // ── Churn heatmap (Milestone 1.3) ────────────────────────────────────────
   // The churn metrics come from `git log --numstat`, which is not free on
@@ -1249,6 +1440,21 @@ function GraphInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [churnScores]);
 
+  // The default view follows the size of the repository.
+  //
+  // A small repository reads better as a flat list of files — grouping
+  // nine files into one folder hides everything the map exists to show.
+  // A large one reads better grouped: 450 files is a wall of dots, and
+  // 60 directories is a map you can actually look at.
+  useEffect(() => {
+    if (groupedTouched.current) return;
+    const fileCount = rawNodes.filter(
+      (n) => (n as RawNode)?.type === "file",
+    ).length;
+    const wanted = fileCount > GROUPING_THRESHOLD;
+    setExpandFuncs((v) => (v === wanted ? v : wanted));
+  }, [rawNodes]);
+
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelected(node);
   }, []);
@@ -1265,11 +1471,11 @@ function GraphInner({
   }, [rawNodes, rawEdges, repoTitle, expandFuncs, buildGraph]);
 
   const toggleGrouped = useCallback(() => {
-    setExpandFuncs((v) => {
-      buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", !v, invert);
-      return !v;
-    });
-  }, [rawNodes, rawEdges, repoTitle, invert, buildGraph]);
+    // The graph is rebuilt by the effect that watches `expandFuncs`, so
+    // the toggle and the rebuild can never disagree about what is drawn.
+    groupedTouched.current = true;
+    setExpandFuncs((v) => !v);
+  }, []);
 
   // Switch between the file pyramid and the architecture-cluster view.
   const toggleClustered = useCallback(() => {

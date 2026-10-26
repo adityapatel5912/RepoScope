@@ -21,6 +21,13 @@ export interface LayerNodeData {
    * the top of the file (Milestone 2.1).
    */
   symbolRefs?: { name: string; line: number }[];
+  /**
+   * The files a FOLDER node holds.
+   *
+   * A grouped pyramid draws one node per directory, so the drawer has to
+   * say what is inside it — otherwise a folder node is a dead end.
+   */
+  files?: string[];
   child?: boolean;           // expanded function/class child — small card
   // Impact analysis state (FILE 3 emphasis language)
   impactState?: "target" | "direct" | "transitive" | "dim";
@@ -224,7 +231,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
         >
           {isRoot ? data.label : isCluster ? data.label : filename}
         </div>
-        {isCluster && data.subtitle && (
+        {(isCluster || isFolder) && data.subtitle && (
           <div
             className="rs-node-subtitle font-mono text-[10px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
             title={data.subtitle}
@@ -233,7 +240,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
             {data.subtitle}
           </div>
         )}
-        {!isRoot && !isChild && !isCluster && dir && rank <= 4 && (
+        {!isRoot && !isChild && !isCluster && !isFolder && dir && rank <= 4 && (
           <div
             className="rs-node-subtitle font-mono text-[9px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
             title={dir}

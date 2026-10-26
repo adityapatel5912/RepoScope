@@ -27,6 +27,21 @@
         "environment": {
           "TAVILY_API_KEY": "{env:TAVILY_API_KEY}"
         }
+      },
+      "reposcope": {
+        "type": "local",
+        "command": [
+          "python",
+          "-m",
+          "mcp_server.server",
+          "--root",
+          "D:\\Aditya\\Hackathon Projects\\RepoScope"
+        ],
+        "cwd": "backend",
+        "timeout": {
+          "startup": 120000,
+          "catalog": 60000
+        }
       }
     }
   }

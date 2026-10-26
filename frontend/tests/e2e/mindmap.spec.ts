@@ -125,10 +125,12 @@ test.describe("Mind Map QA journeys", () => {
     // Allow debounce to process
     await page.waitForTimeout(350);
 
-    // Assert search result count indicator
+    // Assert search result count indicator and that the first result is selected/focused
     const matchCount = page.locator('[data-testid="search-match-count"]');
     await expect(matchCount).toBeVisible();
-    await expect(matchCount).toHaveText(/1/);
+    await expect(matchCount).toHaveText(/^\d+\/\d+$/);
+    await expect(helpersFile).toHaveAttribute("data-selected", "true");
+    await expect(helpersFile).toBeInViewport();
 
     // Open outline and assert it mirrors the visible tree
     const outlineToggle = page.locator('[data-testid="toggle-outline-btn"]');
@@ -192,7 +194,7 @@ test.describe("Mind Map QA journeys", () => {
     assertNoErrors(errors, "MM02");
   });
 
-  test("MM03 — hierarchical folder expansion with v2_contract fixture", async ({
+  test("MM03 — hierarchical folder, file, and symbol expansion with v2_contract fixture", async ({
     page,
   }) => {
     await loadFixture("v2_contract");
@@ -201,17 +203,37 @@ test.describe("Mind Map QA journeys", () => {
     await page.goto("/");
     await page.locator('[data-testid="view-mode-mindmap"]').click();
 
-    // Expand backend pillar
-    const backendPillar = page.locator('[data-node-id="pillar:backend"]');
-    await expect(backendPillar).toBeVisible();
-    await backendPillar.getByRole("button", { name: /expand|collapse/i }).click();
+    // The six pillars are expanded on first paint; open the frontend folder branch.
+    const frontendPillar = page.locator('[data-node-id="pillar:frontend"]');
+    await expect(frontendPillar).toBeVisible();
 
-    // Check if folder is present in v2_contract
-    const folder = page.locator('[data-node-kind="folder"]').first();
-    if ((await folder.count()) > 0) {
-      await expect(folder).toBeVisible();
-      await folder.getByRole("button", { name: /expand|collapse/i }).click();
-    }
+    const componentsFolder = page.locator(
+      '[data-node-id="folder:frontend:components"]',
+    );
+    await expect(componentsFolder).toBeVisible();
+    await componentsFolder.getByRole("button", { name: /expand/i }).click();
+
+    const buttonFile = page.locator(
+      '[data-node-id="file:components/Button.tsx"]',
+    );
+    await expect(buttonFile).toBeVisible();
+    await buttonFile
+      .getByRole("button", { name: /expand symbols/i })
+      .click();
+
+    const buttonSymbol = page.locator(
+      '[data-node-id="func:components/Button.tsx:Button"]',
+    );
+    await expect(buttonSymbol).toBeVisible();
+
+    // The outline mirrors the same expanded hierarchy.
+    await page.locator('[data-testid="toggle-outline-btn"]').click();
+    const outline = page.locator('[data-testid="mindmap-outline"]');
+    await expect(outline).toBeVisible();
+    await expect(
+      outline.getByText("components", { exact: true }),
+    ).toBeVisible();
+    await expect(outline.getByText("Button", { exact: true })).toBeVisible();
 
     assertNoErrors(errors, "MM03");
   });

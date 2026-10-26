@@ -102,10 +102,21 @@ Run all of these before you commit:
 
 ```bash
 npm --prefix frontend run build
-npm --prefix frontend exec tsc -- --noEmit
-npm --prefix frontend exec playwright test tests/e2e/mindmap.spec.ts
-npm --prefix frontend exec playwright test tests/e2e/journeys.spec.ts
+npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json
 ```
+
+Then, from `frontend/`:
+
+```bash
+npx playwright test tests/e2e/mindmap.spec.ts
+npx playwright test tests/e2e/journeys.spec.ts
+```
+
+Playwright must run from `frontend/` because that is where its config and
+`tests/` live. The `tsc` form above is the only one that runs the project:
+`npm --prefix frontend exec tsc -- --noEmit` prints compiler help and exits 1.
+J22's 100 ms threshold is fixed; a failure on slow hardware is recorded with
+its numbers, not "fixed" by changing the budget.
 
 The new Playwright journey must:
 

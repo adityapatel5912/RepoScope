@@ -107,6 +107,35 @@ resolver, and mind-map contract`. CI is green at `7c5b467`; the commits after
 - Limits: the L3 gate runs on push and nightly, not on pull requests; Python
   3.13/3.14 are local checks, not CI targets.
 
+### Phase 2 review
+
+Status: accepted at Wren's amended head `478376d`; merge follows.
+
+- Wren's fixes verified: the mind map remounts on repository change
+  (`key={repo ?? "none"}`), the storage effect falls back to root + six pillars
+  when the new key has no saved state, and the handoff no longer cites a stale
+  hash. Item 3 was skipped because Rook had already covered it.
+- Gate on the rebased `rook/phase-2-minor`: `npm --prefix frontend run build`
+  pass; `tsc --noEmit -p frontend/tsconfig.json` pass; `mindmap.spec.ts` 3/3;
+  `journeys.spec.ts` 16/16 with J22 excluded.
+- A combined run of both specs reports 19/20: only J22 fails. Standalone J22
+  measured 165.2 ms and 137 ms; base `699e8b6` measured 103.3/147.8 ms and
+  Wren's first head 114.6/158.7 ms. Under full-suite load the first attempt
+  exceeded the 15 s request timeout and the retry measured 246.3 ms. Phase 2
+  changes no backend code, so this is an environmental machine-speed failure,
+  not a Phase 2 regression. The 100 ms threshold stays unchanged; CI remains
+  the authoritative gate.
+- Rook minor fixes on `rook/phase-2-minor`: `data-selected` and
+  `aria-current` on every node card; GitHub links fall back to `HEAD` instead
+  of `main`; symbol route-count badge; MM01 asserts the first search result is
+  selected and in view; MM03 asserts the full folder → file → symbol chain.
+  Wren should skip the optional search-focus item; Rook has covered it.
+  `HANDOFF_PHASE_2.md` now lists the gate commands that actually run
+  (`tsc --noEmit -p frontend/tsconfig.json`, Playwright from `frontend/`).
+- Merge `rook/phase-2-minor` into `experimental` with `--no-ff`, preserving
+  Wren's single implementation commit. `main` stays untouched until the user
+  tests `experimental`.
+
 ## Open decisions
 
 - None. The mind-map contract is frozen; Wren consumes it without editing

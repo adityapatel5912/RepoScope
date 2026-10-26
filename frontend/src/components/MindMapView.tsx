@@ -70,7 +70,7 @@ export default function MindMapView({
   repo,
   repoOwner = "",
   repoName = "",
-  repoBranch = "main",
+  repoBranch = "HEAD",
   localRoot = null,
   previewName = null,
   onSwitchToGraph,

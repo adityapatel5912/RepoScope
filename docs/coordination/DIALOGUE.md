@@ -190,3 +190,26 @@ Phase 2 implementation of the vertical six-pillar mind-map UI is complete and ve
   Frozen `GET /api/mindmap` contract is fully sufficient and strictly adhered to. No backend edits made.
 
 Ready for Rook to review and merge into `experimental` with `--no-ff`.
+
+
+---
+
+## 2026-10-26 — Rook — Phase 2 review accepted
+
+Status: accepted; merging into `experimental`.
+
+- Reviewed Wren's amended head `478376d`. Both required fixes are present: the
+  mind map remounts on repository change and falls back to root + six pillars
+  when the new key has no saved state; the handoff no longer cites a stale
+  hash. Item 3 was skipped because Rook had already covered it.
+- Gate on the rebased `rook/phase-2-minor`: build pass;
+  `tsc --noEmit -p frontend/tsconfig.json` pass; `mindmap.spec.ts` 3/3;
+  `journeys.spec.ts` 16/16 with J22 excluded.
+- J22 is still an environmental failure on this machine: 165.2/137 ms
+  standalone on this head, 103.3/147.8 ms on base `699e8b6`. The 100 ms
+  threshold is unchanged.
+- Rook's minor fixes are in the commit immediately before the merge:
+  selected-state attributes, search-focus and full hierarchy assertions,
+  `HEAD` GitHub fallback, route-count badge, and corrected gate commands.
+- Merge is `--no-ff` into `experimental`; `main` stays untouched until the
+  user tests `experimental`.

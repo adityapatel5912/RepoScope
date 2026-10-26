@@ -88,7 +88,7 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
     isBlastTarget = false,
     repoOwner,
     repoName,
-    repoBranch = "main",
+    repoBranch = "HEAD",
   }) => {
     // ── Build GitHub URL client-side ──
     const canHaveGitHub = Boolean(repoOwner && repoName && node.path);
@@ -135,6 +135,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
         <div
           data-node-id={node.id}
           data-node-kind={node.kind}
+          data-selected={isSelected ? "true" : "false"}
+          aria-current={isSelected ? "true" : undefined}
           tabIndex={0}
           role="button"
           aria-label={`Root: ${node.label}`}
@@ -178,6 +180,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
         <div
           data-node-id={node.id}
           data-node-kind={node.kind}
+          data-selected={isSelected ? "true" : "false"}
+          aria-current={isSelected ? "true" : undefined}
           tabIndex={0}
           role="button"
           aria-label={`Pillar: ${node.label}`}
@@ -232,6 +236,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
         <div
           data-node-id={node.id}
           data-node-kind={node.kind}
+          data-selected={isSelected ? "true" : "false"}
+          aria-current={isSelected ? "true" : undefined}
           tabIndex={0}
           role="button"
           aria-label={`Folder: ${node.label}`}
@@ -271,6 +277,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
         <div
           data-node-id={node.id}
           data-node-kind={node.kind}
+          data-selected={isSelected ? "true" : "false"}
+          aria-current={isSelected ? "true" : undefined}
           tabIndex={0}
           role="button"
           aria-label={`File: ${node.label}${node.role ? `, ${node.role}` : ""}`}
@@ -391,6 +399,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
         <div
           data-node-id={node.id}
           data-node-kind={node.kind}
+          data-selected={isSelected ? "true" : "false"}
+          aria-current={isSelected ? "true" : undefined}
           tabIndex={0}
           role="button"
           aria-label={`Symbol: ${node.label}${node.role ? `, ${node.role}` : ""}`}
@@ -414,6 +424,15 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
                 L{node.line}
               </span>
             )}
+            {node.route_count !== undefined && node.route_count > 0 && (
+              <span
+                data-testid="symbol-route-count-badge"
+                title={`${node.route_count} API route${node.route_count === 1 ? "" : "s"}`}
+                className="px-1 py-0.2 rounded bg-rose-50 border border-rose-200 text-[9px] font-mono font-semibold text-rose-700"
+              >
+                {node.route_count} route{node.route_count === 1 ? "" : "s"}
+              </span>
+            )}
             {node.role && (
               <span className="px-1 py-0.2 rounded bg-bg-panel-alt border border-border-hairline text-[9px] font-mono text-text-secondary">
                 {formatRole(node.role)}
@@ -428,6 +447,8 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
     return (
       <div
         data-node-id={node.id}
+        data-selected={isSelected ? "true" : "false"}
+        aria-current={isSelected ? "true" : undefined}
         tabIndex={0}
         role="button"
         onClick={handleCardClick}

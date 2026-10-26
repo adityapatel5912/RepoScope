@@ -3,6 +3,7 @@
  * API client for Code Tours and What-If Impact Analysis, with
  * response-shape guards. Reuses the stable tab SESSION_ID from client.ts.
  */
+import { apiErrorHint } from "./client";
 import { SESSION_ID } from "./client";
 
 // ── Shared types ──────────────────────────────────────────────────────────
@@ -100,8 +101,8 @@ async function postJson<T>(
     clearTimeout(timer);
   }
   if (!r.ok) {
-    const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail ?? "Request failed");
+    const err = await r.json().catch(() => ({ detail: apiErrorHint(r) }));
+    throw new Error(err.detail ?? apiErrorHint(r));
   }
   const data: unknown = await r.json();
   if (!validate(data)) {
@@ -416,8 +417,8 @@ export async function loadDemo(id: string): Promise<{ owner: string; repo: strin
       signal: controller.signal,
     });
     if (!r.ok) {
-      const err = await r.json().catch(() => ({ detail: r.statusText }));
-      throw new Error(err.detail ?? "Failed to load demo");
+      const err = await r.json().catch(() => ({ detail: apiErrorHint(r) }));
+      throw new Error(err.detail ?? apiErrorHint(r));
     }
     return r.json();
   } catch (e: unknown) {
@@ -454,8 +455,8 @@ export async function downloadRepoFile(path: string): Promise<void> {
     clearTimeout(timer);
   }
   if (!r.ok) {
-    const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail ?? "Download failed");
+    const err = await r.json().catch(() => ({ detail: apiErrorHint(r) }));
+    throw new Error(err.detail ?? apiErrorHint(r));
   }
   // Preferred filename from Content-Disposition, falling back to basename
   const cd = r.headers.get("Content-Disposition") ?? "";

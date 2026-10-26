@@ -12,13 +12,15 @@
  * error, so the UI can simply not render the panel.
  */
 
+import { apiErrorHint, networkErrorHint } from "./client";
+
 const BASE = "";
 const JSON_TIMEOUT_MS = 30_000;
 
 async function _json(res: Response) {
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Request failed");
+    const err = await res.json().catch(() => ({ detail: apiErrorHint(res) }));
+    throw new Error(err.detail ?? apiErrorHint(res));
   }
   return res.json();
 }
@@ -32,7 +34,7 @@ async function _fetchWithTimeout(path: string): Promise<Response> {
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error("Request timed out. Please try again.");
     }
-    throw e;
+    throw new Error(networkErrorHint(e));
   } finally {
     clearTimeout(timer);
   }

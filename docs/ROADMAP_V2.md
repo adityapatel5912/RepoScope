@@ -2039,6 +2039,74 @@ These are the tree-sitter 0.25 facts that cost time to discover. All are recorde
 
 ---
 
+## 26. Sprint 2.6 — Graph rendering quality, and the "Internal Server Error"
+
+**Status: complete.** Shipped 2026-10-21, after a manual review of the graph on a 244-file
+repository.
+
+### 26.1 The real "Internal Server Error"
+
+**Correction to an earlier claim.** This was initially attributed to a backend that had been
+stopped. That was wrong. The actual cause was found and fixed:
+
+> The Vite dev proxy targeted `http://localhost:8000`. On Windows, `localhost` resolves to
+> `::1` first, and uvicorn binds IPv4 only — so the proxy's IPv6 connect was refused and
+> **every** `/api/*` request came back as a bare 500 "Internal Server Error" with nothing
+> anywhere in the backend log.
+
+**Fix.** The proxy target is now explicitly `http://127.0.0.1:8000`. The backend log was
+empty, which is what made this so hard to see — a proxy failure looks exactly like a backend
+failure.
+
+**Two follow-on fixes, because the first fix only hid the symptom:**
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P1** | **The QA runner orphaned the Vite process.** `npm run dev` spawns Vite as a CHILD; killing `npm` left the child bound to :5173, still proxying `/api` to the QA backend on :8010. When the QA run ended, every API call in the developer's own app became a 500. | **Fixed** — `stop()` now kills the process TREE (`taskkill /T` on Windows, a process group elsewhere) |
+| **P1** | **The QA harness fought the developer for :5173.** | **Fixed** — the harness now uses its own ports: :5183 for the frontend, :8010 for the backend |
+| **P2** | **The error message was useless.** `res.statusText` for a 500 is the bare string "Internal Server Error". | **Fixed** — `apiErrorHint()` / `networkErrorHint()` now say what is actually wrong and what to check |
+
+### 26.2 Graph rendering flaws
+
+Found by rendering the 244-file repository and reading the result.
+
+| Severity | Flaw | Status |
+|---|---|---|
+| **P2** | **Level-of-detail culling hid ALL the edges below zoom 0.25.** The graph became a field of disconnected boxes. The hierarchy IS the information — dropping it destroyed the one thing a small view could still communicate. | **Fixed** — the edges are never hidden. What IS hidden at minimal zoom is the text, because a 10px font at a 0.2 zoom renders at 2px. The low-zoom view is now an **architecture density map**: colour is the layer, shape is the dependency structure. |
+| **P2** | **The rank guides were illegible.** ReactFlow scales every node with the viewport, so at the 0.2 zoom a large repository fits to, "RANK 2 — CORE MODULES" shrank to 2px. | **Fixed** — the guides counter-scale to a constant screen size, growing leftwards so they never overlap a node. A small graph is now still readable as a *structure*. |
+| **P2** | **The root node was clipped off the top of the canvas.** The fit nudged the viewport upwards to clear the floating toolbar, which traded one defect for another. | **Fixed** — the fit now computes the viewport directly, reserving the toolbar's strip, and runs only once the nodes are MEASURED (`useNodesInitialized`). Before that, `getNodesBounds` used unmeasured dimensions and the fit landed in the wrong place. |
+| **P3** | **Eight nodes all labelled `__init__.py`** were indistinguishable in a row. | **Fixed** — a repeated basename gains its parent directory: `chat/__init__.py`. |
+
+### 26.3 New tooling
+
+| Tool | Purpose |
+|---|---|
+| `scripts/check_mcp.py` | Health-checks the three MCP servers by starting each one and sending a real MCP `initialize` handshake over stdio. All three answer: `chrome_devtools 1.11.0`, `Playwright 1.64.0-alpha`, `tavily-mcp 0.2.22`. |
+| `frontend/scripts/shoot_graph.mjs` | A QA lens: opens the real app, waits for the graph, and captures the canvas with the node/edge/label counts and the viewport transform. Used to compare the low-zoom density view against the readable view. |
+
+### 26.4 The MCP servers
+
+The three MCP servers showed `Error` in the client. The cause was **my own doing** — an
+over-broad `Stop-Process` sweep over every `node.exe` killed the server processes the client
+had spawned, and the client does not respawn them.
+
+The servers themselves were always healthy, which `scripts/check_mcp.py` now proves with a real
+handshake rather than an assumption. **Restarting the MCP client (or opencode) re-registers
+them.** The health check is committed so this is verifiable in one command instead of by
+guesswork.
+
+### 26.5 Verified numbers
+
+| Measure | Value |
+|---|---|
+| Backend tests | **171 passed** |
+| Browser journeys | **9 passed**, 0 console errors |
+| MCP servers answering the handshake | **3 of 3** |
+| Nodes / edges on the 244-file repo | 251 / 244, all rank labels legible |
+| The dev proxy after a QA run | healthy (the orphan bug is fixed) |
+
+---
+
 ## 25. Sprint 2.5 — Layer classification correctness
 
 **Status: complete.** Shipped 2026-10-21, after manual review of the graph on a real repository.

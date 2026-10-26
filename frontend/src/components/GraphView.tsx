@@ -6,6 +6,8 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
   useViewport,
+  useNodesInitialized,
+  getNodesBounds,
   ReactFlowProvider,
   type Node,
   type Edge,
@@ -38,8 +40,23 @@ export interface TourGraphState {
 
 // ── Rank Label Node (A8) ───────────────────────────────────────────────────
 function RankLabelNode({ data }: { data: { rank: number; label: string } }) {
+  // The rank guides are orientation, not content. ReactFlow scales every
+  // node with the viewport, so at a 0.2 zoom — which is what a large
+  // repository fits to — the guides shrink to 2px and the view loses the
+  // only thing it could still communicate: which band is which.
+  //
+  // Counter-scaling keeps them at a constant screen size. They grow
+  // LEFTWARDS (transform-origin: right center) so they never overlap a
+  // node, and the scale is capped so a very zoomed-out graph does not
+  // produce giant overlapping labels.
+  const { zoom } = useViewport();
+  const scale = Math.min(1 / Math.max(zoom, 0.18), 3.2);
+
   return (
-    <div className="pointer-events-none select-none text-right pr-4 whitespace-nowrap">
+    <div
+      className="rs-rank-label pointer-events-none select-none text-right pr-4 whitespace-nowrap"
+      style={{ transform: `scale(${scale})` }}
+    >
       <div className="text-[11px] font-bold uppercase text-[#94A3B8] tracking-[0.08em]">
         Rank {data.rank}
       </div>
@@ -98,7 +115,14 @@ const FIT_VIEW_OPTIONS = {
  * its nodes become unclickable. Nudging the viewport after the fit moves
  * the content clear of the toolbar without changing the zoom.
  */
-const TOOLBAR_CLEARANCE = { x: 90, y: 70 };
+/**
+ * The space the floating toolbar occupies at the bottom-left of the canvas.
+ *
+ * The toolbar is roughly 520px wide and 170px tall. The fit reserves its
+ * height across the bottom of the canvas so the graph is never drawn
+ * underneath it.
+ */
+const TOOLBAR_INSET = { width: 520, height: 170 };
 const DOT_COLOR  = "#D9D2C0";
 
 // ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
@@ -137,6 +161,31 @@ interface RawNode {
 function basename(p: string): string {
   const parts = p.split("/");
   return parts[parts.length - 1] || p;
+}
+
+/**
+ * Disambiguate repeated file names.
+ *
+ * A Python package has an `__init__.py` in every sub-package, so a
+ * repository routinely shows eight nodes all labelled "__init__.py" in a
+ * row — indistinguishable. When a basename repeats, the label gains its
+ * parent directory, so the row reads "chat/__init__.py", "engine/__init__.py".
+ *
+ * Returns a lookup from the full path to the label to show.
+ */
+function buildLabelResolver(fileNodes: RawNode[]): (path: string) => string {
+  const counts = new Map<string, number>();
+  for (const node of fileNodes) {
+    const base = basename(String(node.label));
+    counts.set(base, (counts.get(base) ?? 0) + 1);
+  }
+  return (path: string): string => {
+    const base = basename(path);
+    if ((counts.get(base) ?? 0) < 2) return base;
+    const parts = path.split("/").filter(Boolean);
+    if (parts.length > 1) return `${parts[parts.length - 2]}/${base}`;
+    return base;
+  };
 }
 
 // ── Connectivity scoring ────────────────────────────────────────────────────
@@ -358,6 +407,7 @@ function buildPyramidGraph(
   // heuristic. The fallback chain is unchanged, so a graph built without
   // the analysis pass still ranks sensibly.
   const pagerankById = pagerankIndex(rn);
+  const labelFor = buildLabelResolver(fileNodes);
   const scored = fileNodes
     .map((n) => ({
       node: n,
@@ -451,7 +501,7 @@ function buildPyramidGraph(
             width: cfg.width,
             height: cfg.height,
             data: {
-              label: basename(String(item.node.label)),
+              label: labelFor(String(item.node.label)),
               kind: "file",
               layer: classify(String(item.node.id), String(item.node.label)),
               subtitle: String(item.node.label),
@@ -477,7 +527,7 @@ function buildPyramidGraph(
           width: cfg.width,
           height: cfg.height,
           data: {
-            label: basename(String(item.node.label)),
+            label: labelFor(String(item.node.label)),
             kind: "file",
             layer: classify(String(item.node.id), String(item.node.label)),
             subtitle: String(item.node.label),
@@ -920,29 +970,74 @@ function GraphInner({
   const [reversePrompt, setReversePrompt] = useState<string | null>(null);
   const [scaffoldBusy, setScaffoldBusy]  = useState(false);
   const [scaffold, setScaffold]          = useState<Scaffold | null>(null);
-  const { fitView, setCenter, getViewport, setViewport } = useReactFlow();
+  const { fitView, setCenter, setViewport, getNodes } = useReactFlow();
 
   /**
-   * Fit the graph, then nudge it clear of the floating toolbar.
+   * Fit the graph into the part of the canvas the toolbar does not cover.
    *
-   * ReactFlow's fitView centres the content in the raw container, and the
-   * toolbar occupies the bottom-left corner. On a narrow graph the fit
-   * lands the content on top of the toolbar, and the nodes underneath
-   * become unclickable. Nudging the viewport after the fit moves the
-   * content clear without changing the zoom.
+   * ReactFlow's own `fitView` centres the content in the raw container,
+   * and the toolbar occupies the bottom-left corner. On a narrow graph —
+   * the architecture cluster view, for instance — the content lands
+   * squarely on top of the toolbar and those nodes become unclickable.
+   *
+   * An earlier version nudged the viewport after the fit. That traded one
+   * defect for another: the content moved up far enough to clip the root
+   * node off the top of the canvas.
+   *
+   * This computes the fit directly instead. The content is fitted into
+   * the region ABOVE the toolbar, so the toolbar never covers a node AND
+   * the root node is never clipped.
    */
   const fitClearOfToolbar = useCallback((duration = 400) => {
-    fitView({ ...FIT_VIEW_OPTIONS, duration });
-    window.setTimeout(() => {
-      const viewport = getViewport();
-      setViewport({
-        ...viewport,
-        x: viewport.x + TOOLBAR_CLEARANCE.x,
-        y: viewport.y - TOOLBAR_CLEARANCE.y,
-      });
-    }, duration + 40);
-  }, [fitView, getViewport, setViewport]);
+    const container = containerRef.current;
+    const nodes = getNodes();
+    if (!container || nodes.length === 0) {
+      fitView({ ...FIT_VIEW_OPTIONS, duration });
+      return;
+    }
+
+    const bounds = getNodesBounds(nodes);
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (width <= 0 || height <= 0) {
+      fitView({ ...FIT_VIEW_OPTIONS, duration });
+      return;
+    }
+
+    const contentW = Math.max(1, bounds.width);
+    const contentH = Math.max(1, bounds.height);
+    const availableW = width * 0.94;
+    const availableH = Math.max(120, height - TOOLBAR_INSET.height) * 0.94;
+
+    const zoom = Math.min(
+      availableW / contentW,
+      availableH / contentH,
+      FIT_VIEW_OPTIONS.maxZoom,
+    );
+    if (!Number.isFinite(zoom) || zoom <= 0) {
+      fitView({ ...FIT_VIEW_OPTIONS, duration });
+      return;
+    }
+
+    // Centre the content in the region above the toolbar.
+    const nextX = (width - contentW * zoom) / 2 - bounds.x * zoom;
+    const nextY = (height - TOOLBAR_INSET.height - contentH * zoom) / 2 - bounds.y * zoom;
+    setViewport({ x: nextX, y: nextY, zoom }, { duration });
+  }, [fitView, setViewport, getNodes, getNodesBounds]);
   const { zoom } = useViewport();
+
+  // Fit only once the nodes have been MEASURED.
+  //
+  // `getNodesBounds` uses each node's measured width and height. Before
+  // ReactFlow has measured them, the bounds are wrong and the fit lands
+  // in the wrong place — which is what clipped the root node off the top
+  // of the canvas. `useNodesInitialized` flips exactly when every node
+  // has its dimensions, so the fit runs on real geometry.
+  const nodesInitialized = useNodesInitialized();
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    fitClearOfToolbar(400);
+  }, [nodesInitialized, fitClearOfToolbar]);
 
   // ── Level-of-detail culling (Milestone 1.4) ─────────────────────────────
   // Below a certain zoom the graph is unreadable in full detail, and

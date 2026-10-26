@@ -14,9 +14,39 @@ const JSON_TIMEOUT_MS = 30_000;
 async function _json(res: Response) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? "Request failed");
+    throw new Error(err.detail ?? apiErrorHint(res));
   }
   return res.json();
+}
+
+/**
+ * A human-readable reason for a failed API call.
+ *
+ * `res.statusText` for a 500 is the bare string "Internal Server Error",
+ * which tells the user nothing. When the backend is unreachable — the
+ * most common cause — say so, and say what to check.
+ */
+export function apiErrorHint(res: Response): string {
+  if (res.status >= 500) {
+    return `The backend returned ${res.status}. Is it running? (npm run dev / uvicorn on :8000)`;
+  }
+  if (res.status === 404) {
+    return "The backend has no such endpoint.";
+  }
+  return res.statusText || "Request failed";
+}
+
+/**
+ * A human-readable reason for a request that never reached the backend.
+ *
+ * `fetch` rejects with "Failed to fetch" for a connection error, which
+ * reads like an application bug rather than "the server is not running".
+ */
+export function networkErrorHint(err: unknown): string {
+  if (err instanceof Error && /failed to fetch|networkerror|load failed/i.test(err.message)) {
+    return "Cannot reach the backend. Is it running on :8000?";
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
@@ -32,7 +62,8 @@ async function _fetchWithTimeout(path: string, init: RequestInit = {}): Promise<
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error("Request timed out. Please try again.");
     }
-    throw e;
+    // A connection error is almost always "the backend is not running".
+    throw new Error(networkErrorHint(e));
   } finally {
     clearTimeout(timer);
   }

@@ -21,7 +21,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const BACKEND_PORT = process.env.REPOSCOPE_QA_BACKEND_PORT ?? "8010";
-const FRONTEND_PORT = process.env.REPOSCOPE_QA_FRONTEND_PORT ?? "5173";
+// The QA harness uses its own frontend port so it never collides with a
+// developer's dev server on :5173.
+const FRONTEND_PORT = process.env.REPOSCOPE_QA_FRONTEND_PORT ?? "5183";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 

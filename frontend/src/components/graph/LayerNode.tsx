@@ -207,7 +207,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
       <Icon size={isRoot ? 20 : isChild ? 14 : rank <= 2 ? 18 : 15} style={{ color: textColor }} className="shrink-0" />
       <div className="min-w-0 flex-1 overflow-hidden">
         <div
-          className="leading-tight truncate min-w-0"
+          className="rs-node-label leading-tight truncate min-w-0"
           title={isRoot ? data.label : fullPath || filename}
           style={{
             color: textColor,

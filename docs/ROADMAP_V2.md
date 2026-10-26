@@ -5,7 +5,10 @@
 - **Audience:** Engineering Team & Technical Autonomous Agents
 - **Context:** IBM Bob 2.0 Hackathon
 - **Date:** October 2026
-- **Status:** **Delivered** — Sprints 0–7 shipped (2026-10-21 → 2026-10-22). §31 records Sprint 7 and the items deliberately left out of v2.0.
+- **Status:** **Delivered** - Sprints 0-7 shipped (2026-10-21 - 2026-10-22), then Sprint 8 ran the
+  product end to end and fixed what running it found. 31 records Sprint 7 and the items
+  deliberately left out of v2.0; **32 records the verification sprint** and the honest list as it
+  stands now.
 - **Revision 2:** Part II added after a competitive audit — four new milestones (M7–M10), a
   sharpening list, and a revised sprint plan
 
@@ -2920,5 +2923,145 @@ v2.0 is delivered, but these are real gaps, not footnotes:
   absent from this agent's session catalog throughout; the server itself was verified over a
   real stdio pipe.
 
+---
 
+# Part III — The verification sprint
 
+## 32. Sprint 8 — running the thing, and fixing what running it found
+
+Sprints 0–7 built the v2.0 feature set. This sprint did something else: it **ran** the product —
+the web app in Chrome, the MCP server inside OpenCode, the CLI in local mode against this
+repository, and the extension in a real VS Code window — and fixed what the running exposed.
+
+The headline: **the graph was missing most of its import edges.** A repository is not always
+imported from its own root; `backend/` is a source root here, so `backend/main.py` says
+`from graph_builder import build_graph_from_repo`, and "graph_builder" is not that file's dotted
+path. Every such import produced no edge, so the blast radius of the most central module in the
+repository read **"no dependents"**, the MCP lineage tool answered **"empty"**, and the VS Code
+status bar said **"low risk"**. Fixing the resolution took import edges from **124 to 323**.
+
+### 32.1 What was verified, and how
+
+| Surface | How it was verified | Result |
+|---|---|---|
+| Web app | Chrome DevTools MCP against the built bundle | Graph, drawer, settings, modes, no console errors |
+| Local mode | `python -m cli.main run .` against **this** repository | 452 files, watcher live, nothing leaves the machine |
+| Watcher | Created and deleted a file while the server ran | 1929 → 1930 → 1929 nodes, correctly |
+| MCP (stdio) | The real MCP client, over a pipe | 8 tools, 5 resources, all answers checked |
+| MCP (HTTP) | A real Streamable HTTP session | initialize → tools/list → resources/list → tool call → resource read |
+| MCP (in OpenCode) | The server configured in `opencode.json` | Connected; tools live in the agent's catalog |
+| Extension | A real VS Code window, the extension installed from the VSIX | Status bar, CodeLens, mini-graph, URI handler |
+| Extension (unit) | `npm test` | **18 passed** |
+| Backend | `python -m pytest -q` | **330 passed** |
+| Frontend | `tsc --noEmit` | Clean |
+
+### 32.2 The defects this sprint found
+
+**1. Python imports from an unnamed source root never resolved.** (backend/graph_builder.py)
+The module index is keyed by the dotted path from the repository root, so `graph_builder` did not
+match `backend.graph_builder`. The index now also answers by SUFFIX — `api.routers.analysis`
+matches `backend.api.routers.analysis` — and the most specific variant wins, so `from
+api.routers import analysis` points at the module, not at the package. Import edges: **124 → 323**.
+
+**2. A stale index was served as if it were true.** (backend/graph_store.py, mcp_server/server.py)
+The MCP server loaded `.reposcope/graph.json` whenever it existed, with no way to know the source
+had moved on. The index now carries `built_at`, and a reader compares it with the newest source
+file; an index that cannot be dated is rebuilt rather than served.
+
+**3. The extension's callers carried no file.** (backend/api/routers/analysis.py)
+A file-level caller answered with an empty path, so the quick pick showed `label — :0` and the
+"jump to the caller" opened the workspace root.
+
+**4. The CodeLens fired one HTTP request per definition line.** (backend, extensions/vscode)
+A file with fifty definitions meant fifty round trips and a lens that took seconds to appear.
+`GET /api/analysis/callers-batch` answers for the whole file at once: **92 requests → 2**.
+
+**5. The mini-graph took the editor away.** (extensions/vscode)
+It was documented as an Activity Bar view and declared as one, but the code opened a webview
+PANEL and revealed it on every file switch — the editor disappeared mid-keystroke and the status
+bar then said "no file" while the developer was looking at one. It is a `WebviewViewProvider` now.
+
+**6. "Offline" was never recovered from.** (extensions/vscode)
+The extension decided once that the backend was not there and said "offline" for the rest of the
+session, even after the backend came up. It retries every 10 seconds until the backend answers,
+and "offline" now means the backend is missing rather than "no file is open".
+
+**7. The watcher's ignore list only checked the first path segment.** (backend/watcher.py)
+`frontend/dist` escaped it, so a `npm run build` re-parsed 482 generated files in 40 seconds.
+Every segment is checked now. The parse cache also writes through a unique temp file — the CLI
+server and the MCP server share one cache for the same repository and kept colliding on it.
+
+**8. The extension API tests read the ambient repository.** (backend/tests)
+They passed or failed depending on what the developer had loaded in another window. They now pin
+the repository they talk about.
+
+**9. The rank labels were clipped; the legend sat on the graph.** (frontend/src/components/GraphView.tsx)
+The counter-scaled labels are wider on screen than the box the fit measures, so they lost their
+first letter at the canvas edge; the legend is an overlay, so two nodes were hidden behind it.
+The fit now lands the graph in the space that is actually free.
+
+**10. "Group by directory" did nothing.** (frontend/src/components/GraphView.tsx)
+The flag reached the pyramid builder as an unused parameter. It now groups: **452 files → 77
+directories**, each node saying how many files it holds, the drawer listing them, and the ranks
+unchanged (a group sits in the rank of its most important member). The default follows the size
+of the repository — nine files read better as nine files.
+
+**11. The TopBar's dropdowns were clipped by the header.** (frontend/src/components/TopBar.tsx)
+`overflow-x-hidden` on the `header` cut off the Loading stepper and the Settings popover at the
+header boundary. The header no longer clips, and the Load button has a stable width so the
+repository details never run under it.
+
+### 32.3 The extension's look
+
+The mini-graph was "a grid of dots": technically the graph, and unreadable. It is now a map with
+**bands** (ranked by centrality, each labelled and counted), a soft background per band so the rows
+read as rows, a **title on every node** so the mouse says what it is, a **legend** that lists only
+the layers the repository actually uses, and the file you are editing named at the top.
+
+### 32.4 Published
+
+`adityapatel5912.reposcope 2.0.0` is **published to Open VSX** (`open-vsx.org/extension/
+adityapatel5912/reposcope`) — the namespace was created and the VSIX uploaded with the
+`OVSX_TOKEN` from `.env`. It is not yet **visible in search**: Open VSX hides an extension whose
+publisher namespace has not been verified by email. That last click is a human one.
+
+### 32.5 The honest list, after this sprint
+
+Still not done — these are real gaps:
+
+1. **The VS Code Marketplace is not published.** The publisher account and the Azure DevOps
+   personal access token are still missing. Open VSX covers Cursor and VSCodium; VS Code itself
+   needs `code --install-extension` from the VSIX until then.
+2. **The Open VSX extension is invisible until the namespace is verified by email.**
+3. **The extension's mini-graph has not been seen in a real Activity Bar view.** The provider is
+   registered and the map is rendered by the same code the unit tests cover, but the final visual
+   check was blocked by VS Code's own auto-update landing mid-session.
+4. **The `reposcope://open` URI handler was not exercised end to end.** The parsing is unit
+   tested and the handler now fails with a readable message; the URL dispatch itself could not be
+   isolated between two running VS Code instances.
+5. **The browser picker cannot be automated.** Opening a real folder through the native dialog
+   needs a human.
+6. The WebGL tier, the `kuzu` flag, monorepo cross-package edges, the ownership overlay, the
+   critical-path panel, the PR-comment test stubs, the `@reposcope-bot` reply Action, the
+   visual-regression baselines and the unbounded 50k measurement are all still open — carried
+   unchanged from Sprint 7.
+7. **Test fixtures are still indexed as production code.** `backend/tests/fixtures/` is a real
+   directory in the repository, so the top PageRank hub in this repository is
+   `backend/tests/fixtures/real_small/src/tomli/_parser.py:set` and three of the five dependency
+   cycles are fixture files. A separate "tests are not architecture" mode would be the fix.
+
+### 32.6 Notes for the next agent
+
+- **A repository is not imported from its own root.** Any import resolution that only knows the
+  repository-root dotted path will silently miss every module a project imports as a top-level
+  module from its own source directory. This is the single most damaging kind of bug here,
+  because it makes the intelligence *quietly wrong* rather than loudly absent.
+- **The index must be dated.** Any index that is persisted and then re-read needs to say when it
+  was built, or a reader cannot tell a true answer from a stale one.
+- **The state on disk is process-wide.** Tests that read "the loaded repository" are reading
+  whatever the developer's other window loaded. Pin it.
+- **A control that lies is worse than no control.** "Group by directory" changed its state and
+  the graph stayed the same; a dead button reads as a broken feature. If a control is in the
+  toolbar, it must do what its label says.
+- **The extension is a program, not a package.** It only works when it is actually running in an
+  editor, talking to a backend that is actually up.

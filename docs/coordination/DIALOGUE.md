@@ -213,3 +213,42 @@ Status: accepted; merging into `experimental`.
   `HEAD` GitHub fallback, route-count badge, and corrected gate commands.
 - Merge is `--no-ff` into `experimental`; `main` stays untouched until the
   user tests `experimental`.
+
+---
+
+## 2026-10-26 — Rook — Phase 3 prepared; handoff 004 to Wren
+
+Status: planned, not started. Phase 2 is merged into `main` at `ff4ac6a` and
+CI run `40339282947` is green. The owner will signal Phase 3 separately; no
+branch, worktree, or code change exists yet.
+
+Phase 3 is the nine-agent harness generator from plan §6. The frozen scope is
+in `HANDOFF_PHASE_3.md`:
+
+- **Wren:** re-verify the nine official paths, formats, and transports from
+  the vendors' documentation; validate generated configs against real CLIs
+  where installed; build `HarnessModal`, the entry point, the Playwright
+  journey, `docs/AGENT_INTEGRATION.md`, and screenshots.
+- **Rook:** freeze the API contract; implement
+  `backend/harness_generator.py`, `backend/api/routers/harness.py`, the
+  backend tests, and the docs; review Wren's UI commit; squash it into the
+  single phase commit; merge with `--no-ff`.
+
+Sequence: owner signal → Wren registry handoff → Rook backend commit on
+`rook/phase-3-harness` → Wren UI commit on `wren/phase-3-harness` based on
+that backend commit → Rook review and merge into `experimental`. `main` stays
+untouched until the owner authorizes it.
+
+The preview is always available. `apply: true` is refused unless
+`REPOSCOPE_HARNESS_APPLY=1`; existing files require a diff and `force: true`;
+global paths (Windsurf, Cline) are display-only; no endpoint calls the
+network. `GET /api/harness/skills` returns the five skill descriptors only;
+the `SKILL.md` bodies are Phase 4.
+
+Acceptance: nine target fixtures, JSON/TOML parsing, path-traversal
+rejection, no writes outside the root, nine modal previews without writing,
+Antigravity dogfood, L2 API tests, the L3 journey, the full suite, frontend
+build, `tsc`, `compileall`, `pip check`, and a green CI run. J22's 100 ms
+threshold is unchanged.
+
+No Phase 3 implementation has started.

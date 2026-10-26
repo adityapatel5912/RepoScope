@@ -31,6 +31,10 @@ handoff instead. The integrator may reassign a claim, but must say so in
 - `experimental` is the single integration branch.
 - Each agent works in a **separate worktree** on a short-lived child branch
   named `rook/<phase>` or `wren/<phase>`.
+- A consumer branch may be based on the producer's phase branch when the
+  consumer needs an unmerged contract implementation (Phase 3: Wren's UI branch
+  is based on Rook's backend commit). The consumer still pushes only its own
+  branch; the integrator merges.
 - Merge into `experimental` only when the phase gate is green.
 - Never force-push or rebase a shared branch.
 - Do not run two agents in the same working directory.
@@ -114,4 +118,7 @@ the handoff in `DIALOGUE.md`.
 
 A phase is done when the gate is green on a clean checkout, the contract is
 documented, the user-visible surface is tested, the rollback is understood,
-and the phase has exactly one commit on `experimental`.
+and the phase lands as one `--no-ff` integration merge on `experimental`. A
+split-ownership phase may have one scoped commit per writer on child branches;
+the integrator squashes them into the single phase commit and adds a
+`Co-authored-by` trailer. No unrelated or fix commits.

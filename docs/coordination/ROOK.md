@@ -9,7 +9,12 @@ for the commit history.
 - Phase 0 — CI stabilization and dependency truth. **Complete.**
 - Phase 1 — graph schema v2, deterministic resolver, API linker, mind-map
   contract. **Complete and frozen.**
-- Review Wren's Phase 2 handoff against the gate, then start Phase 3.
+- Phase 2 — vertical six-pillar mind map. **Complete and merged into `main`
+  at `ff4ac6a`; CI green (`40339282947`).**
+- Phase 3 — nine-agent harness generator. **Planned, not started.** Do not
+  create a branch, worktree, or code change until the owner signals the start.
+  The frozen scope, contract, and Wren handoff are in
+  `docs/coordination/HANDOFF_PHASE_3.md` and plan §6.
 
 ## Claims (Phase 0)
 
@@ -44,6 +49,21 @@ for the commit history.
 | `backend/tests/test_graph_golden.py` | claimed | Pin v1 subset, assert v2 additivity. |
 | `docs/API.md` | claimed | Additive endpoint docs. |
 | `docs/FEATURES.md` | claimed | Limits and flags. |
+
+## Claims (Phase 3 — planned, not started)
+
+| File | Status | Notes |
+|---|---|---|
+| `backend/harness_generator.py` | planned | Nine-agent registry, preview/merge/apply, five skill descriptors. |
+| `backend/api/routers/harness.py` | planned | Four endpoints; no network. |
+| `backend/api/__init__.py` | planned | Mount the harness router. |
+| `backend/tests/test_harness_generator.py` | planned | Registry, formats, merge, path safety. |
+| `backend/tests/test_harness_api.py` | planned | L2 contract and apply behavior. |
+| `docs/API.md` | planned | Document the four endpoints. |
+| `docs/FEATURES.md` | planned | Apply flag, global-path limits, Phase 4 boundary. |
+| `CHANGELOG.md` | planned | Phase 3 entry. |
+| `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` | done | Phase 3 status and frozen contract. |
+| `docs/coordination/ROOK.md`, `DIALOGUE.md` | done | This planning record. |
 
 ## Claims (CI hermeticity)
 
@@ -136,7 +156,33 @@ Status: accepted at Wren's amended head `478376d`; merge follows.
   Wren's single implementation commit. `main` stays untouched until the user
   tests `experimental`.
 
+### Phase 3 (planned, not started)
+
+Status: prepared on 2026-10-26; no code, branch, or worktree exists yet.
+
+- Scope: the nine-agent harness generator from plan §6. Wren owns the nine-target
+  registry research, fixture validation, the `HarnessModal` UI,
+  `docs/AGENT_INTEGRATION.md`, and the L3 journey. Rook owns the API contract,
+  generator, apply safety, backend tests, API docs, review, and merge.
+- Sequence: owner signal → Wren registry handoff → Rook backend commit on
+  `rook/phase-3-harness` → Wren UI commit on `wren/phase-3-harness` based on
+  the backend commit → Rook review, squash the UI commit into the phase
+  commit, and merge into `experimental` with `--no-ff`.
+- Apply is off by default (`REPOSCOPE_HARNESS_APPLY=1` enables writes);
+  preview never writes; global paths are display-only; existing files need a
+  diff and `force: true`.
+- Gate: nine target fixtures, JSON/TOML parsing, path-traversal rejection,
+  no writes outside the root, nine modal previews without writing, Antigravity
+  dogfood, L2 API tests, the Playwright journey, the full suite, frontend
+  build, `tsc`, `compileall`, `pip check`, and a green CI run.
+- Explicit non-goals: MCP tool/resource changes, `SKILL.md` bodies, npm/PyPI
+  packaging, and any write outside the project root.
+
 ## Open decisions
 
-- None. The mind-map contract is frozen; Wren consumes it without editing
-  backend graph code.
+- None for Phase 2. The mind-map contract is frozen; Wren consumes it without
+  editing backend graph code.
+- Phase 3 start is the owner's decision. Until then, no branch, worktree, or
+  code change is created.
+- Phase 3 registry deltas are resolved at kickoff; Wren's verification is the
+  input, Rook's contract is the authority.

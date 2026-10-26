@@ -1,6 +1,6 @@
 # RepoScope V2.5–V2.8 — Implementation Plan
 
-**Status:** Approved — execution started 2026-10-26 with Phase 0 and Phase 1.
+**Status:** Approved — Phase 0–2 complete; Phase 3 planned and not started.
 **Source draft:** [`RepoScope_V2.5_AI_Expansion_Plan.md`](../RepoScope_V2.5_AI_Expansion_Plan.md) (preserved unchanged).
 **Target repository:** this repository, `adityapatel5912/RepoScope`. The plan does **not** migrate to `RepoScope-V2`.
 **Integration branch:** `experimental`. `main` is untouched until the owner tests `experimental` and merges it.
@@ -672,11 +672,26 @@ Hide the mode switch behind `localStorage` / a feature flag and leave `MindMapVi
 **Release:** V2.5
 **Depends on:** Phase 1 (stable MCP tool names) and Phase 2 (a place to surface the modal)
 **Risk:** medium — wrong configs are worse than no configs
-**Owner:** Wren (registry research and fixture validation); Rook (API contract, apply safety, merge)
+**Owner:** Wren (registry research, fixture validation, UI); Rook (API contract, generator, apply safety, tests, merge)
+**Status (prepared 2026-10-26):** planned, not started. Do not create a branch, worktree, or code change until the owner signals Phase 3.
 
 ### Goal
 
 Generate exact, copy-pasteable MCP configuration for all nine targets, preview every file before writing, and never invent a path. One-click apply writes only known files under the repository root, with a dry-run default.
+
+### Ownership and sequence
+
+| Work | Owner | Notes |
+|---|---|---|
+| Re-verify nine targets against official docs; record path, format, transport, docs URL, `verified_at` | Wren | First task; post the registry handoff in `DIALOGUE.md` before code. |
+| Freeze the API contract and implement the generator, router, safety, and backend tests | Rook | `rook/phase-3-harness`; one backend commit. |
+| Build `HarnessModal`, the entry point, the L3 journey, `docs/AGENT_INTEGRATION.md`, and screenshots | Wren | `wren/phase-3-harness`, based on Rook's announced backend commit. |
+| Review, run the clean gate, squash the UI commit into the phase commit, merge `--no-ff` into `experimental` | Rook | Sole integrator; `main` is untouched until the owner authorizes it. |
+
+Order: owner signal → Wren registry handoff → Rook backend commit → Wren UI
+commit → Rook review and integration. Wren must not start the UI against a
+guessed contract; if the backend preview is missing or differs from this
+section, stop and report it.
 
 ### Targets and paths
 
@@ -694,37 +709,197 @@ Generate exact, copy-pasteable MCP configuration for all nine targets, preview e
 
 ### Files
 
-`backend/harness_generator.py`, `backend/api/routers/harness.py`, `frontend/src/components/HarnessModal.tsx`, `frontend/src/api/client.ts`, `backend/tests/test_harness_generator.py`, `backend/tests/test_harness_api.py`, `docs/AGENT_INTEGRATION.md`.
+Rook owns:
+
+- `backend/harness_generator.py` (new)
+- `backend/api/routers/harness.py` (new)
+- `backend/api/__init__.py` (mount the router)
+- `backend/tests/test_harness_generator.py` (new)
+- `backend/tests/test_harness_api.py` (new)
+- `docs/API.md`, `docs/FEATURES.md`, `CHANGELOG.md`
+
+Wren owns:
+
+- `frontend/src/components/HarnessModal.tsx` (new)
+- `frontend/src/components/harness/*` (new, only if the modal is split)
+- `frontend/src/api/client.ts` (harness types and calls)
+- `frontend/src/App.tsx`, `frontend/src/components/TopBar.tsx` (entry point and modal state)
+- `frontend/tests/e2e/harness.spec.ts` (new)
+- `docs/AGENT_INTEGRATION.md` (new)
+- `docs/screenshots/v2/harness/*.png` (new)
+
+Do not touch `frontend/src/components/GraphView.tsx` or
+`frontend/src/components/mindmap/*` in this phase. Do not add `SKILL.md`
+bodies or `.agents/skills/*` files; those are Phase 4.
 
 ### API
 
-- `GET /api/harness/agents` → registry with `id`, `label`, `config_paths`, `transport`, `docs_url`, `verified_at`.
-- `GET /api/harness/config?agent=claude&transport=stdio&root=/repo` → preview only, no writes.
-- `POST /api/harness/apply` body `{agent, transport, root, apply: false}` → preview when `apply` is false; writes on `apply: true`.
-- `GET /api/harness/skills` → the five skill bundles.
+All endpoints are read-only unless the request explicitly sets `apply: true`,
+and `apply: true` is refused unless `REPOSCOPE_HARNESS_APPLY=1`. No endpoint
+calls the network.
+
+#### `GET /api/harness/agents`
+
+```json
+{
+  "agents": [
+    {
+      "id": "claude",
+      "label": "Claude Code",
+      "config_paths": [".mcp.json", "CLAUDE.md"],
+      "transport": ["stdio", "http"],
+      "default_transport": "stdio",
+      "global_preview_paths": [],
+      "docs_url": "https://...",
+      "verified_at": "2026-10-26"
+    }
+  ],
+  "apply_enabled": false
+}
+```
+
+`config_paths` are project-relative. `global_preview_paths` are displayed and
+never written. `apply_enabled` reflects the server flag, not the UI.
+
+#### `GET /api/harness/config?agent=<id>&transport=stdio&root=<absolute path>`
+
+Preview only; never writes. `root` is optional when the active repository has
+a local path. Otherwise it is required and must be an existing absolute
+directory.
+
+```json
+{
+  "ok": true,
+  "agent": "claude",
+  "label": "Claude Code",
+  "transport": "stdio",
+  "root": "D:\\repo",
+  "command": "claude mcp add reposcope -- reposcope-mcp --root D:\\repo",
+  "apply_enabled": false,
+  "requires_force": false,
+  "files": [
+    {
+      "path": ".mcp.json",
+      "format": "json",
+      "content": "{...}\n",
+      "exists": false,
+      "diff": null,
+      "will_write": true
+    }
+  ],
+  "warnings": []
+}
+```
+
+- `format` is `json`, `toml`, or `markdown`.
+- `content` is the exact text that would be written.
+- `exists` says whether the target file is already present.
+- `diff` is a unified diff when `exists` is true and the content differs;
+  otherwise `null`.
+- `will_write` is false for an identical file or a global preview path.
+- `requires_force` is true when any existing file would change.
+
+#### `POST /api/harness/apply`
+
+Body:
+
+```json
+{
+  "agent": "claude",
+  "transport": "stdio",
+  "root": "D:\\repo",
+  "apply": false,
+  "force": false
+}
+```
+
+The response is the preview shape plus:
+
+```json
+{
+  "apply": true,
+  "applied": [".mcp.json"],
+  "unchanged": [],
+  "warnings": []
+}
+```
+
+- `apply: false` is a dry run and returns the same file list as the preview.
+- `apply: true` writes only the files listed as writable under `root`.
+- `403` when the flag is off; `409` when an existing file differs and `force`
+  is false; `400` for an unknown agent, unsupported transport, invalid root,
+  or an unsafe path.
+- Existing JSON/TOML configs are merged, not replaced: unrelated keys and
+  servers survive. An unparseable existing config is a warning and requires
+  `force: true` to replace.
+- Markdown instruction files get one delimited RepoScope section; a second
+  apply is a no-op.
+- Writes are atomic (temporary file in the same directory, then replace).
+
+#### `GET /api/harness/skills`
+
+Returns the five bundle descriptors: `blast-radius-guard`,
+`zero-grep-architect`, `pr-contract-shield`, `onboarding-navigator`, and
+`dead-code-surgeon`. Each has `id`, `label`, `description`, `targets`,
+`files`, and `content_available: false`. The `SKILL.md` bodies land in Phase 4.
 
 ### Safety rules
 
-- Reject absolute paths, `..`, symlinks outside the root, and unknown config paths.
-- Never overwrite an existing file without returning a diff and requiring `force: true`.
-- The preview always includes the exact command, the exact JSON/TOML, and the paths that would change.
+- Reject absolute paths, `..`, symlinks or junctions that resolve outside the
+  root, and unknown config paths.
+- Never overwrite an existing file without returning a diff and requiring
+  `force: true`.
+- The preview always includes the exact command, the exact JSON/TOML, and the
+  paths that would change.
 - The backend does not call the network to “verify” a config.
 - Configs use the Python package or the npm launcher, never a second parser.
+- `apply` is off by default; `REPOSCOPE_HARNESS_APPLY=1` is the only way to
+  enable writes.
+- Global paths (Windsurf, Cline) are shown as text and never written.
+- No secret is read from `.env` or copied into a config; placeholders only.
 
 ### Acceptance gate
 
 - [ ] Every target has a fixture assertion for path, format, and transport.
-- [ ] Claude’s `.mcp.json`, VS Code’s `servers`, Codex’s TOML, and OpenCode’s nested `mcp.servers` parse successfully in tests.
-- [ ] A path-traversal attempt is rejected.
-- [ ] No `apply` writes outside the root.
+- [ ] Claude’s `.mcp.json`, VS Code’s `servers`, Codex’s TOML, and OpenCode’s
+  nested `mcp.servers` parse successfully in tests.
+- [ ] A path-traversal attempt is rejected (absolute path, `..`, and
+  symlink/junction escape).
+- [ ] No `apply` writes outside the root; preview never writes.
+- [ ] Existing files require a diff and `force: true`; an unchanged file is a
+  no-op.
 - [ ] The modal previews all nine without writing.
-- [ ] Antigravity’s own config is dogfooded against RepoScope (Wren reports whether it works).
+- [ ] Antigravity’s own config is dogfooded against RepoScope (Wren reports
+  whether it works, or why it could not be run).
+- [ ] `GET /api/harness/agents`, `GET /api/harness/config`,
+  `POST /api/harness/apply`, and `GET /api/harness/skills` have L2 contract
+  coverage.
+- [ ] The Phase 3 Playwright journey passes with zero un-whitelisted console
+  errors.
+- [ ] Existing tests, the frontend build, `tsc`, `compileall`, and `pip check`
+  pass.
+- [ ] No Phase 4 file (context compressor, MCP tools, `SKILL.md` bodies) is
+  changed.
+
+### Non-goals
+
+- No MCP tool or resource changes (Phase 4).
+- No `SKILL.md` bodies or `.agents/skills/*` files (Phase 4).
+- No npm package, PyPI packaging, or zero-clone work (Phase 14).
+- No writes to global agent config paths.
+- No LLM call and no network call to validate a config.
 
 ### Commit
+
+Phase commit (exactly one commit on `experimental`):
 
 ```
 feat(harness): generate and safely apply nine agent configs
 ```
+
+Wren's UI commit is reviewed on `wren/phase-3-harness`, then squashed into
+the phase commit at integration with a `Co-authored-by: Wren` trailer. The
+phase branch is merged into `experimental` with `--no-ff`.
 
 ---
 

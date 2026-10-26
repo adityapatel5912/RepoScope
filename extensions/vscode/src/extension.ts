@@ -44,7 +44,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
-
   // ── 2. The status bar ──────────────────────────────────────────────────
   let statusBar: StatusBarController | undefined;
   if (config.get<boolean>("statusBar") !== false) {
@@ -190,13 +189,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const file = relativePath(editor.document);
       await statusBar?.update(file);
       codeLensProvider.refresh();
-      // The mini-graph centres on the file you are in.
+      // The mini-graph centres on the file you are in. The graph itself
+      // has not changed, so re-centring is local - an editor switch must
+      // not download the repository again.
       if (file) {
-        try {
-          const graph = await client.getGraph();
-          miniGraph.show(graph, `file:${file}`);
-        } catch {
-          /* the backend is offline — the panel keeps whatever it had */
+        if (!miniGraph.setFocus(`file:${file}`)) {
+          try {
+            const graph = await client.getGraph();
+            miniGraph.show(graph, `file:${file}`);
+          } catch {
+            /* the backend is offline - the panel keeps whatever it had */
+          }
         }
       }
     }),
@@ -242,13 +245,17 @@ async function refreshEverything(
   }
   try {
     const graph = await client.getGraph();
-    miniGraph.show(graph);
+    const editor = vscode.window.activeTextEditor;
+    const file = editor ? relativePath(editor.document) : undefined;
+    // The first paint knows which file is open, so the map can centre on
+    // it immediately instead of waiting for the next editor switch.
+    miniGraph.show(graph, file ? `file:${file}` : undefined);
   } catch {
-    /* ignore — the panel keeps its last contents */
+    /* ignore - the panel keeps its last contents */
   }
-  const editor = vscode.window.activeTextEditor;
-  if (editor) {
-    await statusBar?.update(relativePath(editor.document));
+  const active = vscode.window.activeTextEditor;
+  if (active) {
+    await statusBar?.update(relativePath(active.document));
   }
   return true;
 }

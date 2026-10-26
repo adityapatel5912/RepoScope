@@ -20,10 +20,7 @@ import { Graph } from "./graphClient";
 import { escapeXml, renderLegend, renderSvg } from "./model";
 
 /** The HTML shell for the webview. */
-export function webviewHtml(svg: string, summary: string, legend = "", focus?: string): string {
-  const focusLine = focus
-    ? `<div class="focus" title="${escapeXml(focus)}">${escapeXml(focus)}</div>`
-    : "";
+export function webviewHtml(svg: string, summary: string, legend = ""): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -48,15 +45,7 @@ export function webviewHtml(svg: string, summary: string, legend = "", focus?: s
   .header .summary {
     margin-left: auto; color: #64748b; font-size: 10px; font-family: monospace;
   }
-  .focus {
-    padding: 6px 12px 8px;
-    color: #e2e8f0;
-    font-family: monospace; font-size: 11px;
-    border-bottom: 1px solid #1e293b;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .focus::before { content: "● "; color: #38bdf8; }
-  .map { padding: 6px 0 2px; }
+  .map { padding: 4px 0 0; }
   svg { display: block; width: 100%; height: auto; }
   .legend {
     display: flex; flex-wrap: wrap; gap: 4px 10px;
@@ -75,7 +64,6 @@ export function webviewHtml(svg: string, summary: string, legend = "", focus?: s
 </head>
 <body>
 <div class="header"><b>RepoScope</b><span class="summary">${escapeXml(summary)}</span></div>
-${focusLine}
 <div class="map">${svg}</div>
 ${legend}
 <script>
@@ -128,17 +116,28 @@ export class MiniGraphView implements vscode.WebviewViewProvider, vscode.Disposa
     this.render();
   }
 
+  /**
+   * Re-centre on another file without fetching the graph again.
+   *
+   * The graph is the same repository-wide picture; only the highlight
+   * moves. Returns false when there is no graph yet, so the caller knows
+   * it still has to fetch one.
+   */
+  setFocus(focusId?: string): boolean {
+    if (!this.graph) return false;
+    if (this.focusId === focusId) return true;
+    this.focusId = focusId;
+    this.render();
+    return true;
+  }
+
   /** Paint the latest graph into the view, if the view exists yet. */
   private render(): void {
     if (!this.view || !this.graph) return;
-    const focusLabel = this.focusId
-      ? this.focusId.replace(/^file:/, "")
-      : undefined;
     this.view.webview.html = webviewHtml(
       renderSvg(this.graph, this.focusId),
       this.graph.summary,
       renderLegend(this.graph),
-      focusLabel,
     );
   }
 

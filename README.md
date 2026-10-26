@@ -63,27 +63,36 @@ that apply to that module.
 
 ### Graph modes
 
-**Grouped by module** keeps a large repository readable.
+#### **Grouped by module**
+
+Large-repository view: top-level modules become cards; every file remains
+reachable in the drawer.
 
 ![Grouped architecture graph](docs/screenshots/v2/readme-graph-grouped.png)
 
-**Architecture clusters** group by layer: Client/UI, Backend/API, Storage/Data,
+#### **Architecture clusters**
+
+Group by layer: Client/UI, Backend/API, Storage/Data,
 External/Integrations, and Compute/Workers.
 
 ![Architecture cluster view](docs/screenshots/v2/readme-graph-clusters.png)
 
-**Flat inspection** renders every file node. It is useful for checking the
-inventory, not for a first read of a large repository.
+#### **Flat inspection**
+
+Every file node is rendered. Useful for inventory, not a first read of a large
+repository.
 
 ![Flat graph mode](docs/screenshots/v2/readme-graph-flat.png)
 
-**Churn overlay** adds the git-history heat signal without replacing the layer
-colours.
+#### **Churn overlay**
+
+Adds the git-history heat signal without replacing the layer colours.
 
 ![Churn heatmap](docs/screenshots/v2/readme-graph-churn.png)
 
-**Small repositories** still use the full connectivity pyramid rather than
-module cards.
+#### **Small repositories**
+
+Use the full connectivity pyramid rather than module cards.
 
 ![Small repository graph](docs/screenshots/v2/readme-graph-small.png)
 
@@ -94,36 +103,58 @@ left rail.
 
 ![Side panels](docs/screenshots/v2/readme-side-panels.png)
 
-Guided code tours walk a module step by step and keep the graph in sync.
+#### **Code tour**
+
+Guided tours walk a module step by step and keep the graph in sync.
 
 ![Code tour panel](docs/screenshots/v2/readme-tour.png)
 
-What-If Impact asks for a target and a depth, then highlights the blast radius.
+#### **What-If Impact**
+
+Ask for a target and a depth, then highlight the blast radius.
 
 ![What-If Impact panel](docs/screenshots/v2/readme-impact.png)
 
-The PR Bot form previews the comment and the risk summary before anything is
-posted.
+#### **PR Bot**
+
+Preview the comment and risk summary before anything is posted.
 
 ![PR Bot panel](docs/screenshots/v2/readme-prbot.png)
 
-BYOK keeps GitHub and provider keys in the browser tab, not on disk.
+#### **BYOK**
+
+Keep GitHub and provider keys in the browser tab, not on disk.
 
 ![BYOK panel](docs/screenshots/v2/readme-byok.png)
 
-Tracking and Security are two modes of the same repository panel.
+#### **Tracking and Security**
+
+Two modes of the same repository panel.
 
 ![Tracking panel](docs/screenshots/v2/readme-tracking.png)
 
 ![Security panel](docs/screenshots/v2/readme-security.png)
 
-Student Mode turns the graph into a three-level onboarding path.
+#### **Student Mode**
+
+Turns the graph into a three-level onboarding path.
 
 ![Student Mode](docs/screenshots/v2/readme-student.png)
 
-The demo picker loads a public repository through the normal GitHub path.
+#### **Demo repositories**
+
+Load a public repository through the normal GitHub path.
 
 ![Demo repositories](docs/screenshots/v2/readme-demo.png)
+
+### Chat with citations
+
+The current assistant still streams answers with file, function, and line
+citations plus a **Next steps** section. This capture is from the earlier UI
+generation, so the surrounding chrome is older, but it is the available chat
+panel shot.
+
+![Cited chat answer with Next steps (earlier UI)](docs/screenshots/chat.png)
 
 ### MCP in OpenCode
 

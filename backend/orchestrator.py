@@ -17,7 +17,7 @@ from repo_tracker import load_state
 log = logging.getLogger("reposcope.orchestrator")
 
 # Module-level graph cache so /api/repo/graph can serve it without rebuild
-_graph_cache: dict = {"nodes": [], "edges": [], "graph_summary": ""}
+_graph_cache: dict = {"nodes": [], "edges": [], "graph_summary": "", "root": None}
 
 # Setup-intent detection: when a question mentions any of these words, extra
 # setup files (build.sh, render.yaml, …) are added to the LLM context.
@@ -106,7 +106,51 @@ def clear_graph_cache() -> None:
     analysis endpoints, the PR bot, and the web UI would all describe a
     codebase that is no longer loaded.
     """
-    _graph_cache.update({"nodes": [], "edges": [], "graph_summary": ""})
+    _graph_cache.update({
+        "nodes": [], "edges": [], "graph_summary": "", "root": None,
+    })
+
+
+def current_graph() -> tuple[dict, str | None]:
+    """
+    The active repository's graph, AND the root it describes.
+
+    **One source of truth.** Every endpoint that answers a question
+    about "the repository" must read the same graph. There used to be
+    two paths — the live session and the orchestrator's cache — and a
+    request could get one from each. The result was an answer about
+    two different codebases at once: the repo map was built from the
+    live session's graph while its baseline was measured against the
+    state file's root, and the panel reported a map for one repository
+    against a "full repository" figure for another.
+
+    The root is returned alongside the graph so a caller never has to
+    guess which repository the graph describes.
+    """
+    from watcher import session
+
+    # A live session owns the graph: it is the only thing that knows
+    # about edits made since the last full build.
+    if session.indexer is not None:
+        return session.indexer.graph, session.root
+
+    graph = get_cached_graph()
+    if graph.get("nodes"):
+        return graph, _graph_cache.get("root")
+
+    state = load_state()
+    local_path = state.get("local_path")
+    if local_path:
+        try:
+            built = build_graph_from_repo(local_path)
+        except Exception as exc:  # noqa: BLE001 - never fail a read
+            log.warning("Could not build the graph for %s: %s", local_path, exc)
+            return graph, None
+        _graph_cache.update(built)
+        _graph_cache["root"] = local_path
+        return built, local_path
+
+    return graph, None
 
 
 async def build_context(

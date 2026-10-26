@@ -43,17 +43,12 @@ import time
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from parse_cache import FileFacts, ParseCache, hash_bytes
+from parse_cache import SKIP_DIRS, FileFacts, ParseCache, hash_bytes
 from parsers.registry import get_parser
 
 log = logging.getLogger("reposcope.graph_builder")
 
-_SKIP_DIRS = {"node_modules", ".git", "dist", "build", "__pycache__",
-              ".venv", "venv", ".mypy_cache", ".pytest_cache",
-              # RepoScope's own index lives here. Without this the graph
-              # would index its own cache and the graph store, and every
-              # re-index would see a "changed" file.
-              ".reposcope"}
+_SKIP_DIRS = set(SKIP_DIRS)
 
 _PY_EXTS = {".py"}
 _JS_EXTS = {".ts", ".tsx", ".js", ".jsx"}
@@ -711,6 +706,7 @@ class GraphIndexer:
         self._import_edge_keys: dict[str, list[tuple[str, str, str]]] = {}
         self._call_edge_keys: dict[str, list[tuple[str, str, str]]] = {}
         self._files_by_symbol_name: dict[str, set[str]] = {}
+        self._symbol_names_by_file: dict[str, set[str]] = {}
         self._callers_by_name: dict[str, set[str]] = {}
 
         self.graph: dict = {"nodes": [], "edges": [], "summary": "0 nodes, 0 edges"}
@@ -718,12 +714,23 @@ class GraphIndexer:
     # ── Building ────────────────────────────────────────────────────────────
 
     def index(self) -> dict:
-        """Index the whole repository from scratch."""
+        """
+        Index the whole repository from scratch.
+
+        Two passes, and the second one matters. A call is resolved by
+        NAME, so `Card.tsx` calling `formatName` can only resolve once
+        `format.ts` has been added. Resolving calls as each file is
+        added — in alphabetical order — silently dropped every call to a
+        file that sorts later. The full rebuild does the same two passes,
+        which is why the two graphs have to be compared.
+        """
         self.facts = collect_facts(self.root, self.cache)
         self._index = build_module_index(self.facts)
         self._reset_tables()
         for rel in sorted(self.facts):
-            self._add_file(rel, self.facts[rel])
+            self._add_file(rel, self.facts[rel], resolve_calls=False)
+        for rel in sorted(self.facts):
+            self._resolve_calls_for(rel)
         self._publish()
         return self.graph
 
@@ -738,9 +745,10 @@ class GraphIndexer:
         self._import_edge_keys = {}
         self._call_edge_keys = {}
         self._files_by_symbol_name = {}
+        self._symbol_names_by_file = {}
         self._callers_by_name = {}
 
-    def _add_file(self, rel: str, file_facts: FileFacts) -> None:
+    def _add_file(self, rel: str, file_facts: FileFacts, resolve_calls: bool = True) -> None:
         """Insert one file's nodes, imports and call sites into the tables."""
         fid = f"file:{rel}"
         self._nodes[fid] = {
@@ -775,6 +783,7 @@ class GraphIndexer:
 
         self._symbols_in_file[rel] = per_file
         self._node_ids_by_file[rel] = node_ids
+        self._symbol_names_by_file[rel] = set(per_file)
         self._call_sites[rel] = list(file_facts.calls)
         for call in file_facts.calls:
             callee = call.get("callee") or ""
@@ -782,10 +791,28 @@ class GraphIndexer:
                 self._callers_by_name.setdefault(callee, set()).add(rel)
 
         self._resolve_imports_for(rel, file_facts)
-        self._resolve_calls_for(rel)
+        if resolve_calls:
+            self._resolve_calls_for(rel)
 
-    def _remove_file(self, rel: str) -> None:
-        """Remove one file's nodes and edges from the tables."""
+    def _remove_file(self, rel: str, drop_incoming: bool = True) -> None:
+        """
+        Remove one file's nodes and edges from the tables.
+
+        `drop_incoming` controls the edges that point AT this file's
+        nodes. They belong to OTHER files — an `imports` edge from a
+        caller, or a `calls` edge to a symbol here.
+
+        When the file is being DELETED, those edges must go: their target
+        no longer exists, and a dangling edge is worse than a missing
+        one.
+
+        When the file is being RE-ADDED — the content changed, the path
+        did not — they must STAY. The node ids are derived from the
+        path, so the incoming edges are still perfectly valid, and
+        dropping them would break every importer of the edited file. The
+        edges into the file's SYMBOLS are re-resolved separately, because
+        a rename genuinely changes them.
+        """
         for key in self._import_edge_keys.pop(rel, []):
             self._edges.pop(key, None)
         for key in self._call_edge_keys.pop(rel, []):
@@ -793,13 +820,13 @@ class GraphIndexer:
 
         for node_id in self._node_ids_by_file.pop(rel, []):
             self._nodes.pop(node_id, None)
-            # Drop edges that leave the removed nodes.
+            # Drop the edges that LEAVE the removed nodes.
             for key in [k for k in self._edges if k[0] == node_id]:
                 self._edges.pop(key, None)
-            # Drop edges that pointed AT the removed nodes — an import
-            # edge from another file, for instance.
-            for key in [k for k in self._edges if k[1] == node_id]:
-                self._edges.pop(key, None)
+            if drop_incoming:
+                # Drop the edges that pointed AT the removed nodes.
+                for key in [k for k in self._edges if k[1] == node_id]:
+                    self._edges.pop(key, None)
 
         for name, entries in list(self._global_symbols.items()):
             kept = [entry for entry in entries if entry[0] != rel]
@@ -807,11 +834,20 @@ class GraphIndexer:
                 self._global_symbols[name] = kept
             else:
                 self._global_symbols.pop(name, None)
-                self._files_by_symbol_name.pop(name, None)
+            # The owner set has to lose this file even when ANOTHER file
+            # still defines the same name — otherwise the file would
+            # still be listed as an owner of a symbol it no longer has,
+            # and the call re-resolution would chase a phantom.
+            owners = self._files_by_symbol_name.get(name)
+            if owners is not None:
+                owners.discard(rel)
+                if not owners:
+                    self._files_by_symbol_name.pop(name, None)
 
         self._symbols_in_file.pop(rel, None)
         self._file_imports.pop(rel, None)
         self._call_sites.pop(rel, None)
+        self._symbol_names_by_file.pop(rel, None)
 
         for name, rels in list(self._callers_by_name.items()):
             rels.discard(rel)
@@ -894,22 +930,22 @@ class GraphIndexer:
         # removal.
         removed -= changed
 
-        file_set_changed = bool(removed)
         reparsed = 0
         reused = 0
+        file_set_changed = False
 
-        for rel in sorted(removed):
-            self._remove_file(rel)
-            self.facts.pop(rel, None)
-
+        # ── 1. Parse the changed files ──────────────────────────────────────
+        # The facts table has to be final before the module index is
+        # rebuilt, so this happens first.
+        new_facts: dict[str, FileFacts] = {}
         for rel in sorted(changed):
             path = self.root / rel
             if not path.is_file():
                 # The file vanished between the event and the re-index.
-                self._remove_file(rel)
-                self.facts.pop(rel, None)
+                removed.add(rel)
                 file_set_changed = True
                 continue
+
             if self.cache is not None:
                 suffix = path.suffix
                 facts = self.cache.get_for(
@@ -918,30 +954,75 @@ class GraphIndexer:
                 )
             else:
                 facts = parse_file(path, rel)
-            if facts.sha256 and self.facts.get(rel) is not None \
-                    and self.facts[rel].sha256 == facts.sha256:
-                reused += 1
-            else:
-                reparsed += 1
-            self._remove_file(rel)
-            self.facts[rel] = facts
-            file_set_changed = True
 
+            previous = self.facts.get(rel)
+            if previous is not None and facts.sha256 and previous.sha256 == facts.sha256:
+                # The content did not actually change — a touch, a
+                # re-save of the same bytes. Nothing to re-index.
+                reused += 1
+                continue
+
+            reparsed += 1
+            if previous is None:
+                file_set_changed = True
+            new_facts[rel] = facts
+
+        # ── 2. Apply the file-set change ────────────────────────────────────
+        for rel in sorted(removed):
+            self.facts.pop(rel, None)
+        self.facts.update(new_facts)
+
+        # ── 3. Rebuild the module index when the file SET changed ───────────
+        # A content change cannot alter which module a path resolves to;
+        # an added or removed file can.
         if file_set_changed:
-            # The set of files changed, so the module index may have
-            # changed, and any file's imports may now resolve elsewhere.
             self._index = build_module_index(self.facts)
+
+        # ── 4. Drop the old nodes and edges of every changed file ──────────
+        #
+        # The symbol names the changed files define, captured BEFORE the
+        # removal — a caller of a symbol that the edit DELETED must have
+        # its call edge re-resolved too, and after the removal that
+        # symbol is no longer in the table.
+        affected_names: set[str] = set()
+        for rel in set(new_facts) | removed:
+            affected_names |= self._symbol_names_by_file.get(rel, set())
+        for rel in new_facts:
+            affected_names |= {
+                str(symbol.get("name", ""))
+                for symbol in new_facts[rel].symbols
+                if symbol.get("name")
+            }
+
+        for rel in sorted(set(new_facts) | removed):
+            # A file that is being re-added keeps its incoming edges —
+            # the path, and therefore every node id that depends on it,
+            # has not changed. A file that is genuinely gone loses them.
+            self._remove_file(rel, drop_incoming=rel not in new_facts)
+
+        # ── 5. Re-add the changed files ─────────────────────────────────────
+        for rel in sorted(new_facts):
+            self._add_file(rel, new_facts[rel])
+
+        # ── 6. Re-resolve every import when the module index moved ─────────
+        # A file that was added or removed can change where somebody
+        # ELSE's import resolves to, so every file's import edges are
+        # recomputed. This is cheap — it is arithmetic over cached facts,
+        # not a re-parse.
+        if file_set_changed:
             for rel, file_facts in self.facts.items():
                 self._resolve_imports_for(rel, file_facts)
 
-        # A file that was edited may have changed which symbols it
-        # defines, so the call edges of files that call those symbols
-        # must be re-resolved.
+        # ── 7. Re-resolve the calls that the edit could have changed ───────
+        #
+        # A call resolves to a symbol by name. If the edit changed which
+        # symbols a file defines, every caller of those names has to be
+        # re-resolved — including a caller whose call used to resolve
+        # and now does not.
         affected_callers: set[str] = set()
-        for rel in changed:
-            for name in self._files_by_symbol_name.get(rel, set()):
-                affected_callers |= self._callers_by_name.get(name, set())
-        for rel in sorted(affected_callers | changed):
+        for name in affected_names:
+            affected_callers |= self._callers_by_name.get(name, set())
+        for rel in sorted(affected_callers | set(new_facts)):
             if rel in self.facts:
                 self._resolve_calls_for(rel)
 
@@ -953,7 +1034,7 @@ class GraphIndexer:
             reparsed, reused, elapsed_ms,
         )
         self.last_update = {
-            "changed": sorted(changed),
+            "changed": sorted(new_facts),
             "removed": sorted(removed),
             "reparsed": reparsed,
             "unchanged": reused,

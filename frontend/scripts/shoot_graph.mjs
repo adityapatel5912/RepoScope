@@ -45,7 +45,10 @@ page.on("response", (r) => {
   }
 });
 
-await page.goto(FRONTEND, { waitUntil: "networkidle" });
+// NOT "networkidle": in local mode the app holds an open SSE stream
+// (`/api/local/events`), so the network is never idle and the wait
+// times out on a perfectly healthy page.
+await page.goto(FRONTEND, { waitUntil: "load" });
 
 try {
   await page.waitForSelector(".react-flow__node", { timeout: 90000 });

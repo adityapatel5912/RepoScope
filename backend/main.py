@@ -79,6 +79,15 @@ async def lifespan(_app: FastAPI):
     state = load_state()
     if state.get("is_local"):
         local_path = state.get("local_path")
+        # A QA run must be hermetic. The persisted state belongs to
+        # whatever the developer last loaded, and resuming that session
+        # would put a DIFFERENT repository's graph behind the QA
+        # journeys — which is exactly how a journey came to compare a
+        # map for one codebase against a "full repository" figure for
+        # another.
+        if os.getenv("REPOSCOPE_QA") == "1":
+            log.info("QA mode: not resuming a local session")
+            local_path = None
         if local_path and Path(local_path).is_dir():
             try:
                 from live_events import bus
@@ -352,7 +361,19 @@ def _build_user_prompt(message: str, ctx: dict) -> str:
 
 @app.get("/")
 async def root():
-    """Root redirect — sends browsers straight to the health page."""
+    """
+    Root route.
+
+    Normally this redirects to the health page — the API is the product
+    when there is no frontend. But `reposcope run .` serves the BUILT
+    frontend from the same port, and there the root has to be the app.
+    The CLI sets `REPOSCOPE_STATIC_DIR` to say so.
+    """
+    static_dir = os.getenv("REPOSCOPE_STATIC_DIR")
+    if static_dir:
+        index = Path(static_dir) / "index.html"
+        if index.is_file():
+            return FileResponse(index)
     return RedirectResponse(url="/api/health")
 
 
@@ -419,25 +440,16 @@ async def repo_check(x_session_id: str = Header(None)):
 
 @app.get("/api/repo/graph")
 async def repo_graph():
-    from orchestrator import get_cached_graph
+    """
+    The graph for the active repository.
 
-    # A live local session owns the graph: it is the only thing that
-    # knows about edits made since the last full build.
-    from watcher import session
+    One source of truth: the live session when there is one, the
+    orchestrator's cache otherwise. Two paths meant the UI could show
+    one codebase while the analysis endpoints described another.
+    """
+    from orchestrator import current_graph
 
-    if session.indexer is not None:
-        return session.indexer.graph
-
-    graph = get_cached_graph()
-    # If cache is empty (e.g. first load before any chat), build it now
-    if not graph.get("nodes"):
-        state = load_state()
-        local_path = state.get("local_path")
-        if local_path:
-            built = await asyncio.to_thread(build_graph_from_repo, local_path)
-            from orchestrator import _graph_cache
-            _graph_cache.update(built)
-            return built
+    graph, _root = await asyncio.to_thread(current_graph)
     return graph
 
 

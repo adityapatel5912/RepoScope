@@ -48,7 +48,7 @@ from typing import Callable, Iterable
 
 from graph_builder import GraphIndexer
 from live_events import EventBus, bus as default_bus
-from parse_cache import ParseCache, default_cache_path
+from parse_cache import SKIP_DIRS, ParseCache, default_cache_path
 
 log = logging.getLogger("reposcope.watcher")
 
@@ -111,8 +111,9 @@ class RepoWatcher:
         self.on_change = on_change
         self.debounce_ms = debounce_ms
         self.ignore_dirs = {
-            ".git", "node_modules", "__pycache__", ".reposcope",
-            "dist", "build", ".venv", "venv", ".pytest_cache", ".mypy_cache",
+            # The same list the indexer uses, so a file the indexer skips
+            # can never trigger a re-index it would then ignore.
+            *SKIP_DIRS,
             *ignore_dirs,
         }
 

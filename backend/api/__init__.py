@@ -13,12 +13,13 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import arch
+from api.routers import analysis, arch
 
 
 def register_routers(app: FastAPI) -> None:
     """Mount every router onto the application."""
     app.include_router(arch.router)
+    app.include_router(analysis.router)
 
     # QA-only routes exist so the browser-QA harness can reach a known state
     # without touching the network. They are mounted ONLY in QA mode, so a

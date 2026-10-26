@@ -300,6 +300,24 @@
   overflow: hidden;
 }
 
+/* ── Level-of-detail culling (Milestone 1.4) ───────────────────────────────
+   Driven by ONE class on the ReactFlow container, set from the viewport
+   zoom. Doing it in CSS rather than by rebuilding the graph means zooming
+   costs nothing — no re-layout, no re-render of every node.
+
+     lod-compact  (zoom < 0.40) — hide the subtitle line
+     lod-minimal  (zoom < 0.25) — hide the subtitle AND the edges
+   */
+.react-flow.lod-compact .rs-node-subtitle,
+.react-flow.lod-minimal .rs-node-subtitle {
+  display: none;
+}
+
+.react-flow.lod-minimal .react-flow__edges {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .react-flow__attribution {
   display: none !important;
 }

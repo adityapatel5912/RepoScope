@@ -1978,5 +1978,64 @@ These are the tree-sitter 0.25 facts that cost time to discover. All are recorde
 - `calls` edges are produced and scored by the frontend, but the pyramid renders only parent-child edges. Rendering call edges as arcs is a Sprint 2 decision.
 - The graph is now richer, so the pyramid's row ranking needs PageRank (M7.1) to stay defensible.
 
+---
+
+## 24. Sprint 2 delivery record — graph intelligence and graph UX
+
+**Status: complete.** Sprint 2 shipped on 2026-10-21.
+
+### 24.1 Delivered
+
+| Deliverable | File | Milestone |
+|---|---|---|
+| Git churn, co-change coupling, ownership | `backend/git_history.py` | 1.3 |
+| Churn × centrality hotspot score | `backend/git_history.py` | 1.3 + 7.1 |
+| Analysis endpoints | `backend/api/routers/analysis.py` | 1.3, 7.1–7.3 |
+| PageRank attached to every node | `backend/graph_builder.py` → `graph_analysis.attach_analysis` | 7.1 |
+| PageRank pyramid ranking | `frontend/src/components/GraphView.tsx` | 7.1 |
+| Churn heatmap overlay + spectrum | `frontend/src/api/analysis.ts`, `GraphView.tsx`, `graph/LayerNode.tsx` | 1.3 |
+| Architecture cluster view | `frontend/src/components/GraphView.tsx` (`buildClusterGraph`) | 1.2 |
+| Insights panel | `frontend/src/components/InsightsPanel.tsx` | 7.1–7.3 |
+| Level-of-detail culling | `frontend/src/styles/app.css`, `GraphView.tsx` | 1.4 |
+
+### 24.2 Verified numbers
+
+| Measure | Value |
+|---|---|
+| Backend tests | **171 passed** (was 161) |
+| QA journeys | **9 passed** (was 6) — J06, J07, J08 added |
+| Analysis endpoints | 4 live: `/api/analysis/{hubs,cycles,unreachable,hotspots}` |
+| Churn measured on this repo | 257 files changed in 90 days, co-change pairs detected |
+| Ranked hubs (PageRank) | `formatName` 11.5%, `format.ts` 10.1%, `helpers.py` 6.8% |
+| LOD thresholds | zoom < 0.40 hides subtitles · zoom < 0.25 hides edges |
+
+### 24.3 Defects found and fixed in this sprint
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P1** | **Loading a second repository kept serving the first one's graph.** The orchestrator's graph cache was never invalidated when the active repo changed, so the analysis endpoints, the PR bot, and the UI all described a codebase that was no longer loaded. | **Fixed** — `orchestrator.clear_graph_cache()`, called from both `load_repo` and `load_local_repo` |
+| **P2** | **The `cluster` node type was never registered in `nodeTypes`.** ReactFlow fell back to its default renderer, so the cluster cards were plain white boxes with no layer colour, no icon, and no file count. | **Fixed** |
+| **P2** | **The churn legend painted over the layer legend.** Both were `absolute top-4 right-4`. | **Fixed** — the churn spectrum now lives inside the layer legend card |
+| **P2** | **Cluster cards overlapped each other.** The pitch was 190px against a 260px card width. | **Fixed** — the pitch is now `width + 40` |
+| **P2** | **The fit-view placed the cluster cards under the floating toolbar**, making them unclickable. ReactFlow 11 only supports a numeric `padding`, so an asymmetric fit is impossible. | **Fixed** — `fitClearOfToolbar()` nudges the viewport after the fit |
+| **P2** | **Mojibake in the graph title** — a PowerShell `Get-Content`/`Set-Content` round-trip re-encoded `GraphView.tsx` through Windows-1252. | **Fixed** — `scripts/repair_mojibake.py` reverses the mis-decode; the encoding test now names it in its failure message |
+
+### 24.4 The insights the app can now show
+
+| Insight | Where | Honest framing |
+|---|---|---|
+| Dependency cycles | Insights panel | Split into file-level and symbol-level; a cycle that crosses layers is marked red |
+| Unreachable symbols | Insights panel | Labelled **"a static estimate — dynamic dispatch and reflection are invisible to it"** — never called dead code |
+| Most central files | Insights panel | PageRank, with the score shown as a percentage |
+| Churn hotspots | Graph ring + legend | Emerald → amber → crimson, blended with centrality |
+| Architecture layers | Cluster view | Collapses the pyramid into the five canonical layers with their file counts |
+
+### 24.5 Open items carried into Sprint 3
+
+- The frontend still holds a copy of the layer rules; the parity test enforces equivalence.
+- `calls` edges are scored by the frontend but not drawn as arcs.
+- The cluster view uses the five canonical layers. Louvain community detection would find finer-grained modules — `networkx.community.louvain_communities` is available and verified working.
+- Visual-regression baselines (`toHaveScreenshot()`) are still not wired up.
+
 
 

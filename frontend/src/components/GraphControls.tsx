@@ -6,7 +6,8 @@
 import { useReactFlow } from "reactflow";
 import {
   Plus, Minus, Maximize, LayoutGrid, ArrowLeftRight, ArrowUpDown,
-  FolderTree, LocateFixed, Map as MapIcon, Image, FileCode2, Wand2, Zap,
+  FolderTree, LocateFixed, Map as MapIcon, Image, FileCode2, Wand2, Zap, Flame,
+  Layers,
 } from "lucide-react";
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
   onToggleDirection: () => void;
   onToggleGroup: () => void;
   onToggleLegend: () => void;
+  onToggleChurn: () => void;
+  onToggleClustered: () => void;
   onFocus: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
@@ -22,6 +25,8 @@ interface Props {
   direction: "LR" | "TB";
   grouped: boolean;
   legendShown: boolean;
+  churnShown: boolean;
+  clustered: boolean;
   exporting: boolean;
   promptBusy: boolean;
   scaffoldBusy: boolean;
@@ -36,9 +41,10 @@ const btn = (active?: boolean) => `
 `;
 
 export default function GraphControls({
-  onRelayout, onToggleDirection, onToggleGroup, onToggleLegend, onFocus,
-  onExportPng, onExportSvg, onReversePrompt, onScaffold,
-  direction, grouped, legendShown, exporting, promptBusy, scaffoldBusy,
+  onRelayout, onToggleDirection, onToggleGroup, onToggleLegend, onToggleChurn,
+  onToggleClustered, onFocus, onExportPng, onExportSvg, onReversePrompt, onScaffold,
+  direction, grouped, legendShown, churnShown, clustered, exporting, promptBusy,
+  scaffoldBusy,
 }: Props) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
@@ -66,12 +72,28 @@ export default function GraphControls({
           <FolderTree size={14} />
         </button>
         <button
+          onClick={onToggleClustered}
+          title={clustered ? "Show every file (click for the file pyramid)" : "Group by architecture layer"}
+          aria-label="Toggle architecture cluster view"
+          className={btn(clustered)}
+        >
+          <Layers size={14} />
+        </button>
+        <button
           onClick={onToggleLegend}
           title={legendShown ? "Hide legend" : "Show legend"}
           aria-label="Toggle legend"
           className={btn(legendShown)}
         >
           <MapIcon size={14} />
+        </button>
+        <button
+          onClick={onToggleChurn}
+          title={churnShown ? "Hide the churn heatmap" : "Show the churn heatmap — how often each file changes"}
+          aria-label="Toggle churn heatmap"
+          className={btn(churnShown)}
+        >
+          <Flame size={14} />
         </button>
         <button
           onClick={onFocus}

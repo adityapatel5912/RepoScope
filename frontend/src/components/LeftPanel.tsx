@@ -9,6 +9,7 @@ import TourPanel, { type TourRequest, type TourState } from "./TourPanel";
 import ImpactPanel, { type ImpactRequest } from "./ImpactPanel";
 import AIKeyPanel from "./AIKeyPanel";
 import OnboardingPath from "./OnboardingPath";
+import InsightsPanel from "./InsightsPanel";
 import { toast } from "./Toasts";
 import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
@@ -172,6 +173,14 @@ export default function LeftPanel({
           </div>
         )}
       </Card>
+
+      {/* ── Insights: cycles, unreachable symbols, central hubs ── */}
+      {repoInfo && (
+        <InsightsPanel
+          enabled={Boolean(repoInfo)}
+          onSelectNode={onHighlightNode}
+        />
+      )}
 
       {/* ── Student Mode: guided learning path (pyramid-ranked) ── */}
       {studentMode && (

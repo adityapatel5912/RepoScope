@@ -2,10 +2,11 @@ import { memo } from "react";
 import { Handle, Position } from "reactflow";
 import { Monitor, Server, Database, Globe, Cpu, FileCode2, Folder, Boxes, type LucideIcon } from "lucide-react";
 import { LAYER_STYLE, type Layer } from "./layerClassifier";
+import { churnColor } from "../../api/analysis";
 
 export interface LayerNodeData {
   label: string;
-  kind: "root" | "folder" | "file" | "function" | "class" | "import" | "commit" | "repo";
+  kind: "root" | "folder" | "file" | "function" | "class" | "import" | "commit" | "repo" | "cluster";
   layer: Layer;
   rank?: number;
   fullPath?: string;
@@ -16,6 +17,10 @@ export interface LayerNodeData {
   child?: boolean;           // expanded function/class child — small card
   // Impact analysis state (FILE 3 emphasis language)
   impactState?: "target" | "direct" | "transitive" | "dim";
+  /** Churn hotspot score, 0..1 (Milestone 1.3). 0 means no churn data. */
+  churn?: number;
+  /** PageRank centrality of this node (Milestone 7.1). */
+  pagerank?: number;
   // Tour / generic highlight
   highlight?: boolean;
   stepBadge?: number;        // 1-based number for the current tour step
@@ -100,6 +105,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
   const isFunctionChild = isChild && data.kind === "function";
   const isClassChild = isChild && data.kind === "class";
   const isFolder = data.kind === "folder";
+  const isCluster = data.kind === "cluster";
 
   // Per-kind fills
   let fill = cfg.fill ?? style.fill;
@@ -112,6 +118,14 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
     border = "#1A1A1A";
     textColor = "#FFFFFF";
     subColor = "rgba(255,255,255,0.7)";
+  } else if (isCluster) {
+    // A cluster node is a summary of a whole layer, so it gets the
+    // layer's colour with a strong border — it must read as a container,
+    // not as one more file.
+    fill = style.fill;
+    border = style.border;
+    textColor = style.text;
+    subColor = style.text;
   } else if (isFunctionChild) {
     fill = "#FFFFFF";
     border = "#D4AF37";
@@ -140,6 +154,16 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
   else if (data.impactState === "transitive") ring = `0 0 0 2px rgba(217, 119, 6, 0.55)`;
   else if (data.highlight || selected) ring = `0 0 0 3px #F0503C`;
 
+  // Churn ring (Milestone 1.3). The layer keeps the fill; the churn is
+  // shown as a separate outer ring, so the two signals never fight.
+  const churn = data.churn ?? 0;
+  const churnRing = churn > 0
+    ? `0 0 0 3px ${churnColor(churn)}`
+    : "none";
+  const combinedRing = churnRing !== "none"
+    ? (ring !== "none" ? `${ring}, ${churnRing}` : churnRing)
+    : ring;
+
   const { dir, filename, fullPath } = splitFilePath(data.fullPath || data.subtitle || data.label, data.label);
   const rootFontSize = isRoot
     ? data.label.length > 22
@@ -163,7 +187,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
         borderWidth: cfg.borderWidth,
         borderStyle: "solid",
         borderRadius: cfg.borderRadius,
-        boxShadow: ring,
+        boxShadow: combinedRing,
         opacity: data.impactState === "dim" ? 0.25 : 1,
       }}
       title={fullPath || data.label}
@@ -191,11 +215,20 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
             fontWeight: isChild ? 700 : cfg.fontWeight,
           }}
         >
-          {isRoot ? data.label : filename}
+          {isRoot ? data.label : isCluster ? data.label : filename}
         </div>
-        {!isRoot && !isChild && dir && rank <= 4 && (
+        {isCluster && data.subtitle && (
           <div
-            className="font-mono text-[9px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
+            className="rs-node-subtitle font-mono text-[10px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
+            title={data.subtitle}
+            style={{ color: subColor }}
+          >
+            {data.subtitle}
+          </div>
+        )}
+        {!isRoot && !isChild && !isCluster && dir && rank <= 4 && (
+          <div
+            className="rs-node-subtitle font-mono text-[9px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
             title={dir}
             style={{ color: subColor }}
           >

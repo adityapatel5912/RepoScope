@@ -5,6 +5,7 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useViewport,
   ReactFlowProvider,
   type Node,
   type Edge,
@@ -13,7 +14,7 @@ import ReactFlow, {
   ConnectionLineType,
 } from "reactflow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon } from "lucide-react";
+import { X, MessageSquare, ArrowUpRight, ArrowDownRight, Zap, Map as MapIcon, Flame, Network } from "lucide-react";
 import LayerNode, { NODE_W, NODE_H, CHILD_W, RANK_CONFIGS, type LayerNodeData } from "./graph/LayerNode";
 import { classify, LAYER_STYLE, type Layer } from "./graph/layerClassifier";
 import EmptyState from "./EmptyState";
@@ -22,6 +23,7 @@ import ReversePromptModal from "./ReversePromptModal";
 import ScaffoldModal from "./ScaffoldModal";
 import { exportGraphPng, exportGraphSvg } from "../utils/graphExport";
 import { generateReversePrompt, generateScaffold, type Scaffold } from "../api/features";
+import { getHotspots, churnColor, churnLabel } from "../api/analysis";
 import { toast } from "./Toasts";
 import { log } from "../utils/logger";
 import "reactflow/dist/style.css";
@@ -58,6 +60,10 @@ const nodeTypes: NodeTypes = {
   import:    LayerNode,
   commit:    LayerNode,
   repo:      LayerNode,
+  // The architecture-cluster view (Milestone 1.2). Without this entry
+  // ReactFlow falls back to its DEFAULT node renderer, which draws a
+  // plain white box with a label and none of the layer styling.
+  cluster:   LayerNode,
   rankLabel: RankLabelNode,
 };
 
@@ -82,6 +88,17 @@ const FIT_VIEW_OPTIONS = {
   minZoom: 0.2,
   maxZoom: 0.9,
 } as const;
+
+/**
+ * How far to nudge the fitted view up and to the right.
+ *
+ * The toolbar floats in the bottom-left of the canvas. A fit centres the
+ * content in the raw container, so a narrow graph — the architecture
+ * cluster view, for instance — lands squarely on top of the toolbar and
+ * its nodes become unclickable. Nudging the viewport after the fit moves
+ * the content clear of the toolbar without changing the zoom.
+ */
+const TOOLBAR_CLEARANCE = { x: 90, y: 70 };
 const DOT_COLOR  = "#D9D2C0";
 
 // ── Layout constants (A6: 280 vertical spacing, 280 / 220 sibling spacing) ─
@@ -107,6 +124,14 @@ interface RawNode {
   line?: number;
   file?: string;
   size?: number;
+  /** PageRank centrality, computed server-side (Milestone 7.1). */
+  pagerank?: number;
+  /** Number of dependency edges pointing at this node. */
+  in_degree?: number;
+  /** Number of dependency edges leaving this node. */
+  out_degree?: number;
+  /** Betweenness centrality — is this node on the critical path? */
+  betweenness?: number;
 }
 
 function basename(p: string): string {
@@ -114,8 +139,27 @@ function basename(p: string): string {
   return parts[parts.length - 1] || p;
 }
 
-// ── Connectivity scoring: incoming ×2 + outgoing ────────────────────────────
-function scoreNode(nodeId: string, importEdges: Array<{ source: string; target: string }>): number {
+// ── Connectivity scoring ────────────────────────────────────────────────────
+//
+// The backend computes PageRank over the dependency graph and attaches it
+// to every node (Milestone 7.1). PageRank is used when it is available,
+// because it is a real centrality measure — the old `incoming x 2 +
+// outgoing` heuristic cannot tell a widely-imported leaf from a genuine
+// hub. The degree heuristic remains as the fallback for a graph built
+// without the analysis pass, and the path heuristic remains the last
+// resort for a file with no edges at all.
+function scoreNode(
+  nodeId: string,
+  importEdges: Array<{ source: string; target: string }>,
+  pagerankById?: Map<string, number>,
+): number {
+  const pagerank = pagerankById?.get(nodeId);
+  if (pagerank !== undefined && pagerank > 0) {
+    // PageRank sums to 1 across the graph, so scale it into the same
+    // range as the degree heuristic to keep the ranking comparable.
+    return pagerank * 1000;
+  }
+
   let incoming = 0;
   let outgoing = 0;
   for (const e of importEdges) {
@@ -123,6 +167,17 @@ function scoreNode(nodeId: string, importEdges: Array<{ source: string; target: 
     else if (e.source === nodeId) outgoing += 1;
   }
   return incoming * 2 + outgoing;
+}
+
+/** Index the PageRank scores by node id, once per graph build. */
+function pagerankIndex(rawNodes: RawNode[]): Map<string, number> {
+  const index = new Map<string, number>();
+  for (const node of rawNodes) {
+    if (typeof node.pagerank === "number" && node.pagerank > 0) {
+      index.set(node.id, node.pagerank);
+    }
+  }
+  return index;
 }
 
 // Path-based fallback when a file has no import edges at all
@@ -177,12 +232,109 @@ function categorizeFile(label: string): number {
  * - Edges with sourceHandle 'out' and targetHandle 'in'
  * - Filtered strictly to parent-child only (t === s + 1)
  */
+/**
+ * Build the architecture-cluster view (Milestone 1.2).
+ *
+ * The file pyramid shows every file. That is the right view for reading
+ * a codebase and the wrong view for understanding its SHAPE: with 300
+ * files, the important question — "what are the layers, and how big is
+ * each one?" — is answered by squinting at a wall of nodes.
+ *
+ * The cluster view collapses the graph into the five canonical layers.
+ * Each cluster node shows the layer, its file count, and its share of
+ * the repository. Clicking one opens the drawer with its file list.
+ *
+ * The layout is a deliberate, simple vertical stack: the repo root at the
+ * top, the five layers beneath it. It is not a force layout — the point
+ * is that it is always readable and always the same.
+ */
+function buildClusterGraph(
+  raw: unknown[],
+  _rawEdges: unknown[],
+  repoTitle: string,
+): { nodes: Node[]; edges: Edge[] } {
+  const rn = raw as RawNode[];
+  if (rn.length === 0) return { nodes: [], edges: [] };
+
+  const fileNodes = rn.filter((n) => n.type === "file");
+  const byLayer = new Map<Layer, RawNode[]>();
+  for (const layer of Object.keys(LAYER_STYLE) as Layer[]) {
+    byLayer.set(layer, []);
+  }
+  for (const node of fileNodes) {
+    const layer = classify(String(node.id), String(node.label));
+    byLayer.get(layer)?.push(node);
+  }
+
+  const repoCfg = RANK_CONFIGS[0] ?? RANK_CONFIGS[2];
+  const cfg = RANK_CONFIGS[1] ?? RANK_CONFIGS[2];
+
+  const out: Node[] = [];
+  const edges: Edge[] = [];
+
+  out.push({
+    id: "repo:root",
+    type: "root",
+    position: { x: 0, y: 0 },
+    width: repoCfg.width,
+    height: repoCfg.height,
+    data: {
+      label: repoTitle,
+      kind: "root",
+      layer: classify("repo:root", repoTitle),
+      rank: 0,
+      fullPath: repoTitle,
+    } satisfies LayerNodeData,
+  });
+
+  const layers = (Object.keys(LAYER_STYLE) as Layer[])
+    .filter((layer) => (byLayer.get(layer)?.length ?? 0) > 0);
+  // The pitch must exceed the node width, or the cluster cards overlap.
+  // RANK_CONFIGS[1].width is 260, so 300 leaves a 40px gutter.
+  const pitch = cfg.width + 40;
+  const totalWidth = (layers.length - 1) * pitch;
+
+  layers.forEach((layer, index) => {
+    const files = byLayer.get(layer) ?? [];
+    const style = LAYER_STYLE[layer];
+    const id = `cluster:${layer}`;
+    out.push({
+      id,
+      type: "cluster",
+      position: { x: -totalWidth / 2 + index * pitch, y: 140 },
+      width: cfg.width,
+      height: cfg.height,
+      data: {
+        label: style.name,
+        kind: "cluster",
+        layer,
+        rank: 1,
+        subtitle: `${files.length} file${files.length === 1 ? "" : "s"}`,
+        fullPath: style.name,
+        // The drawer reads this to list the cluster's files.
+        symbols: files.slice(0, 12).map((f) => String(f.label)),
+      } satisfies LayerNodeData,
+    });
+    edges.push({
+      id: `e-root-${layer}`,
+      source: "repo:root",
+      target: id,
+      type: "smoothstep",
+      sourceHandle: "out",
+      targetHandle: "in",
+    });
+  });
+
+  return { nodes: out, edges };
+}
+
 function buildPyramidGraph(
   raw: unknown[],
   rawEdges: unknown[],
   repoTitle: string,
   _expandFuncs: boolean,
   _invert: boolean,
+  churnScores?: Map<string, number>,
 ): { nodes: Node[]; edges: Edge[] } {
   const rn = raw as RawNode[];
   if (rn.length === 0) return { nodes: [], edges: [] };
@@ -199,11 +351,17 @@ function buildPyramidGraph(
     ).length}`,
   );
 
-  // Score and sort files
+  // Score and sort files.
+  //
+  // PageRank is used when the backend supplied it, so the pyramid's rows
+  // are ranked by a real centrality measure rather than by a degree
+  // heuristic. The fallback chain is unchanged, so a graph built without
+  // the analysis pass still ranks sensibly.
+  const pagerankById = pagerankIndex(rn);
   const scored = fileNodes
     .map((n) => ({
       node: n,
-      score: scoreNode(n.id, importEdges) || fallbackScore(String(n.label)),
+      score: scoreNode(n.id, importEdges, pagerankById) || fallbackScore(String(n.label)),
       category: categorizeFile(String(n.label)),
     }))
     .sort((a, b) => (b.score !== a.score ? b.score - a.score : a.node.id.localeCompare(b.node.id)));
@@ -300,6 +458,7 @@ function buildPyramidGraph(
               fullPath: String(item.node.label),
               size: item.node.size,
               rank: r,
+              churn: churnScores?.get(String(item.node.label)) ?? 0,
             } satisfies LayerNodeData,
           };
           out.push(node);
@@ -325,6 +484,7 @@ function buildPyramidGraph(
             fullPath: String(item.node.label),
             size: item.node.size,
             rank: r,
+            churn: churnScores?.get(String(item.node.label)) ?? 0,
           } satisfies LayerNodeData,
         };
         out.push(node);
@@ -523,7 +683,7 @@ function fixOverlaps(nodes: Node[]): Node[] {
 }
 
 // ── Legend (FILE 3: top-right, white card, one swatch per layer) ────────────
-function Legend({ visible }: { visible: boolean }) {
+function Legend({ visible, churn }: { visible: boolean; churn?: boolean }) {
   if (!visible) return null;
   return (
     <div className="graph-legend absolute top-4 right-4 z-[5] card-flat !border-border-hairline px-3 py-2.5 pointer-events-none">
@@ -539,9 +699,48 @@ function Legend({ visible }: { visible: boolean }) {
           </li>
         ))}
       </ul>
+
+      {/*
+        The churn spectrum lives in the SAME card. It used to be a second
+        absolutely-positioned card at the same corner, which painted over
+        the layer legend and cut it in half.
+      */}
+      {churn && (
+        <>
+          <p className="label-caps !text-[10px] mt-2.5 mb-1.5 pt-2 border-t border-border-hairline">
+            Churn
+          </p>
+          <ul className="flex flex-col gap-1">
+            {[
+              { score: 0.1, label: "Stable" },
+              { score: 0.4, label: "Churn" },
+              { score: 0.8, label: "Hotspot" },
+            ].map((entry) => (
+              <li key={entry.label} className="flex items-center gap-2">
+                <span
+                  className="w-3.5 h-3.5 rounded-sm border-2 bg-transparent"
+                  style={{ borderColor: churnColor(entry.score) }}
+                />
+                <span className="text-[11px] font-medium text-text-secondary">{entry.label}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
+
+/**
+ * The churn spectrum legend (Milestone 1.3).
+ *
+ * The layer keeps the node's fill; the churn is a separate outer ring.
+ * Two signals, one colour each — never mixed into a single swatch.
+ *
+ * The spectrum is rendered inside the LAYER legend card rather than as a
+ * second floating card — two cards in the same corner painted over each
+ * other.
+ */
 
 // ── Node detail drawer ──────────────────────────────────────────────────────
 interface NodeDrawerProps {
@@ -618,6 +817,29 @@ function NodeDrawer({
           </span>
           <span className="font-mono text-accent-hover">{outgoing}</span>
         </div>
+        {data.churn != null && data.churn > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-muted flex items-center gap-1">
+              <Flame size={11} /> Churn
+            </span>
+            <span
+              className="font-mono font-semibold"
+              style={{ color: churnColor(data.churn) }}
+            >
+              {churnLabel(data.churn)}
+            </span>
+          </div>
+        )}
+        {data.pagerank != null && data.pagerank > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-muted flex items-center gap-1">
+              <Network size={11} /> Centrality
+            </span>
+            <span className="font-mono text-text-primary">
+              {(data.pagerank * 100).toFixed(2)}%
+            </span>
+          </div>
+        )}
         <div className="pt-1 text-[10px] font-mono text-text-muted break-all leading-relaxed border-t border-border-hairline">
           {node.id}
         </div>
@@ -685,12 +907,54 @@ function GraphInner({
   const [expandFuncs, setExpandFuncs]    = useState(true);
   const [invert, setInvert]              = useState(false);
   const [legendShown, setLegendShown]    = useState(true);
+  const [churnShown, setChurnShown]      = useState(false);
+  // Architecture-cluster view (Milestone 1.2) — the pyramid collapses to
+  // the five canonical layers.
+  const [clustered, setClustered]        = useState(false);
+  // Churn scores per repo-relative path (Milestone 1.3).
+  const [churnScores, setChurnScores]     = useState<Map<string, number>>(new Map());
+  const [churnLoading, setChurnLoading]   = useState(false);
+  const [churnLoaded, setChurnLoaded]     = useState(false);
   const [exporting, setExporting]        = useState(false);
   const [promptBusy, setPromptBusy]      = useState(false);
   const [reversePrompt, setReversePrompt] = useState<string | null>(null);
   const [scaffoldBusy, setScaffoldBusy]  = useState(false);
   const [scaffold, setScaffold]          = useState<Scaffold | null>(null);
-  const { fitView, setCenter }           = useReactFlow();
+  const { fitView, setCenter, getViewport, setViewport } = useReactFlow();
+
+  /**
+   * Fit the graph, then nudge it clear of the floating toolbar.
+   *
+   * ReactFlow's fitView centres the content in the raw container, and the
+   * toolbar occupies the bottom-left corner. On a narrow graph the fit
+   * lands the content on top of the toolbar, and the nodes underneath
+   * become unclickable. Nudging the viewport after the fit moves the
+   * content clear without changing the zoom.
+   */
+  const fitClearOfToolbar = useCallback((duration = 400) => {
+    fitView({ ...FIT_VIEW_OPTIONS, duration });
+    window.setTimeout(() => {
+      const viewport = getViewport();
+      setViewport({
+        ...viewport,
+        x: viewport.x + TOOLBAR_CLEARANCE.x,
+        y: viewport.y - TOOLBAR_CLEARANCE.y,
+      });
+    }, duration + 40);
+  }, [fitView, getViewport, setViewport]);
+  const { zoom } = useViewport();
+
+  // ── Level-of-detail culling (Milestone 1.4) ─────────────────────────────
+  // Below a certain zoom the graph is unreadable in full detail, and
+  // rendering every label and every edge is what makes a large graph
+  // sluggish. Two thresholds, both in one place so they are easy to tune:
+  //   below 0.40 — hide the subtitle line on each node
+  //   below 0.25 — hide the edges entirely
+  //
+  // The culling is done in CSS, driven by one class on the ReactFlow
+  // container. Rebuilding the graph on every zoom change would cost a
+  // full re-layout; a class change costs nothing.
+  const lodLevel = zoom >= 0.4 ? "full" : zoom >= 0.25 ? "compact" : "minimal";
   const containerRef                     = useRef<HTMLDivElement>(null);
   const exportIdRef                      = useRef(0);
 
@@ -751,7 +1015,7 @@ function GraphInner({
       timer = window.setTimeout(() => {
         const ns = nodesRef.current;
         if (ns.length === 0) return;
-        fitView({ ...FIT_VIEW_OPTIONS, duration: 300 });
+        fitClearOfToolbar(300);
       }, 150);
     });
     ro.observe(el);
@@ -763,21 +1027,59 @@ function GraphInner({
 
   const buildGraph = useCallback((
     rn: unknown[], re: unknown[], name: string, expand: boolean, inv: boolean,
+    clusteredOverride?: boolean,
   ) => {
     if (rn.length === 0) { setNodes([]); setEdges([]); return; }
-    const { nodes: pyramid, edges: pe } = buildPyramidGraph(rn, re, name, expand, inv);
+    const useClusters = clusteredOverride ?? clustered;
+    const { nodes: pyramid, edges: pe } = useClusters
+      ? buildClusterGraph(rn, re, name)
+      : buildPyramidGraph(rn, re, name, expand, inv, churnScores);
     setNodes(pyramid);
     setEdges(pe);
     setSelected(null);
     setTimeout(() => {
-      fitView({ ...FIT_VIEW_OPTIONS, duration: 400 });
+      fitClearOfToolbar(400);
     }, 50);
-  }, [fitView, setNodes, setEdges]);
+  }, [fitView, setNodes, setEdges, churnScores, clustered]);
 
   useEffect(() => {
     buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawNodes, rawEdges, repoTitle]);
+
+  // ── Churn heatmap (Milestone 1.3) ────────────────────────────────────────
+  // The churn metrics come from `git log --numstat`, which is not free on
+  // a large repository — so they are fetched the first time the user
+  // turns the overlay on, not on every graph load.
+  const toggleChurn = useCallback(() => {
+    const next = !churnShown;
+    setChurnShown(next);
+    if (!next || churnLoaded || churnLoading) return;
+
+    setChurnLoading(true);
+    getHotspots(90)
+      .then((response) => {
+        if (!response.available) return;
+        const scores = new Map<string, number>();
+        for (const entry of response.files) {
+          scores.set(entry.path, entry.hotspot_score);
+        }
+        setChurnScores(scores);
+        setChurnLoaded(true);
+      })
+      .catch(() => {
+        // The overlay simply stays off — a failed metrics call must never
+        // break the graph.
+      })
+      .finally(() => setChurnLoading(false));
+  }, [churnShown, churnLoaded, churnLoading]);
+
+  // Rebuild once the churn scores arrive, so the rings appear.
+  useEffect(() => {
+    if (churnScores.size === 0) return;
+    buildGraph(rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [churnScores]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelected(node);
@@ -800,6 +1102,15 @@ function GraphInner({
       return !v;
     });
   }, [rawNodes, rawEdges, repoTitle, invert, buildGraph]);
+
+  // Switch between the file pyramid and the architecture-cluster view.
+  const toggleClustered = useCallback(() => {
+    const next = !clustered;
+    setClustered(next);
+    buildGraph(
+      rawNodes, rawEdges, repoTitle ?? "Repository", expandFuncs, invert, next,
+    );
+  }, [clustered, rawNodes, rawEdges, repoTitle, expandFuncs, invert, buildGraph]);
 
   // Focus mode — center the highlighted (tour/impact) or selected node
   const focusNode = useCallback(() => {
@@ -945,7 +1256,7 @@ function GraphInner({
         </h2>
       </div>
 
-      <Legend visible={legendVisible} />
+      <Legend visible={legendVisible} churn={churnShown} />
 
       {/* Tour progress bar — top of the graph (4.5) */}
       {tourState && tourState.total > 0 && (
@@ -990,6 +1301,7 @@ function GraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
+        className={`lod-${lodLevel}`}
         onNodeClick={onNodeClick}
         onPaneClick={() => setSelected(null)}
         onNodeMouseEnter={(_, node) => {
@@ -1034,6 +1346,9 @@ function GraphInner({
         onToggleDirection={toggleDirection}
         onToggleGroup={toggleGrouped}
         onToggleLegend={() => setLegendShown((v) => !v)}
+        onToggleChurn={toggleChurn}
+        onToggleClustered={toggleClustered}
+        clustered={clustered}
         onFocus={focusNode}
         onExportPng={() => void runExport("png")}
         onExportSvg={() => void runExport("svg")}
@@ -1042,6 +1357,7 @@ function GraphInner({
         direction={invert ? "LR" : "TB"}
         grouped={expandFuncs}
         legendShown={legendShown}
+        churnShown={churnShown}
         exporting={exporting}
         promptBusy={promptBusy}
         scaffoldBusy={scaffoldBusy}

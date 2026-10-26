@@ -141,6 +141,107 @@ test.describe("RepoScope QA journeys", () => {
     assertNoErrors(errors, "J03");
   });
 
+  test("J06 — the analysis endpoints serve the graph intelligence", async ({
+    page,
+  }) => {
+    await loadFixture("multilang");
+    const errors = attachErrorCollector(page);
+
+    const hubs = await page.request.get(`${BACKEND_URL}/api/analysis/hubs`);
+    expect(hubs.status()).toBe(200);
+    const hubPayload = await hubs.json();
+    expect(hubPayload.available).toBe(true);
+    expect(hubPayload.hubs.length).toBeGreaterThan(0);
+    // PageRank scores must be real numbers that sum to roughly 1.
+    const scores = hubPayload.hubs.map((h: { pagerank: number }) => h.pagerank);
+    expect(scores.every((s: number) => s > 0)).toBe(true);
+    expect(scores[0]).toBeGreaterThanOrEqual(scores[scores.length - 1]);
+
+    const cycles = await page.request.get(`${BACKEND_URL}/api/analysis/cycles`);
+    expect(cycles.status()).toBe(200);
+    const cyclePayload = await cycles.json();
+    expect(cyclePayload.available).toBe(true);
+    // The multi-language fixture has no cycles, so the count is zero —
+    // but the endpoint must still answer with a well-formed payload.
+    expect(cyclePayload.total).toBe(0);
+
+    // The circular fixture has both file-level and symbol-level cycles.
+    await loadFixture("circular");
+    const circularCycles = await page.request.get(
+      `${BACKEND_URL}/api/analysis/cycles`,
+    );
+    const circularPayload = await circularCycles.json();
+    expect(circularPayload.total).toBeGreaterThan(0);
+    expect(circularPayload.file_cycles).toBeGreaterThan(0);
+    expect(circularPayload.symbol_cycles).toBeGreaterThan(0);
+
+    // Put the multi-language fixture back for the remaining checks.
+    await loadFixture("multilang");
+
+    const unreachable = await page.request.get(
+      `${BACKEND_URL}/api/analysis/unreachable`,
+    );
+    expect(unreachable.status()).toBe(200);
+    const unreachablePayload = await unreachable.json();
+    expect(unreachablePayload.available).toBe(true);
+    // The result is always labelled as an estimate, never as proof.
+    expect(unreachablePayload.estimate).toBe(true);
+
+    assertNoErrors(errors, "J06");
+  });
+
+  test("J07 — the churn heatmap overlay renders", async ({ page }) => {
+    await loadFixture("multilang");
+    const errors = attachErrorCollector(page);
+
+    await page.goto("/");
+    await expectGraphHasNodes(page);
+
+    // The churn overlay is opt-in: turn it on from the toolbar.
+    const churnToggle = page.getByRole("button", {
+      name: "Toggle churn heatmap",
+    });
+    await churnToggle.click();
+
+    // The churn spectrum appears in the legend card.
+    const legend = page.locator(".graph-legend");
+    await expect(legend).toBeVisible({ timeout: 15_000 });
+    await expect(legend).toContainText("Churn");
+    await expect(legend).toContainText("Hotspot");
+    // The layer legend must still be readable in the same card.
+    await expect(legend).toContainText("Client / UI");
+
+    assertNoErrors(errors, "J07");
+    await captureJourney(page, "j07-churn", "churn-heatmap");
+  });
+
+  test("J08 — the architecture cluster view renders", async ({ page }) => {
+    await loadFixture("multilang");
+    const errors = attachErrorCollector(page);
+
+    await page.goto("/");
+    await expectGraphHasNodes(page);
+
+    const clusterToggle = page.getByRole("button", {
+      name: "Toggle architecture cluster view",
+    });
+    await clusterToggle.click();
+
+    // The pyramid collapses to the five canonical layers.
+    const clusters = page.locator('.react-flow__node[data-id^="cluster:"]');
+    await expect(clusters.first()).toBeVisible({ timeout: 15_000 });
+    const count = await clusters.count();
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(5);
+
+    // Wait for the fit-view animation to settle before capturing, so the
+    // screenshot shows the final layout rather than a mid-transition frame.
+    await page.waitForTimeout(1200);
+
+    assertNoErrors(errors, "J08");
+    await captureJourney(page, "j08-clusters", "cluster-view");
+  });
+
   test("J04 — the graph survives a page reload with no console errors", async ({
     page,
   }) => {

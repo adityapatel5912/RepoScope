@@ -18,6 +18,21 @@ from repo_tracker import load_state, save_state
 
 log = logging.getLogger("reposcope.repo_loader")
 
+
+def clear_graph_cache() -> None:
+    """
+    Forget the cached graph.
+
+    Imported lazily to avoid a circular import: orchestrator imports
+    repo_loader, and repo_loader would otherwise import orchestrator.
+    """
+    try:
+        from orchestrator import clear_graph_cache as _clear
+
+        _clear()
+    except Exception:  # noqa: BLE001 - the cache is an optimisation
+        pass
+
 # Use system temp dir for Windows compatibility
 REPO_CACHE = Path(tempfile.gettempdir()) / "reposcope"
 
@@ -118,6 +133,10 @@ def load_repo(url: str, user_token: str | None = None) -> dict:
     s["file_count"] = file_count
     save_state(s)
 
+    # The active repository changed — the cached graph now describes a
+    # different codebase.
+    clear_graph_cache()
+
     log.info("Repo loaded: %s/%s  files=%d", owner, name, file_count)
     return {
         "local_path": str(dest),
@@ -175,6 +194,10 @@ def load_local_repo(path: str) -> dict:
     state["file_count"] = file_count
     state["is_local"] = True
     save_state(state)
+
+    # The active repository changed — the cached graph now describes a
+    # different codebase.
+    clear_graph_cache()
 
     log.info("Local repo loaded: %s  files=%d", root, file_count)
     return {

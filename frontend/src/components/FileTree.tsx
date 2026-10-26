@@ -30,6 +30,18 @@ type TreeNode = DirNode | FileNode;
 
 interface Props {
   rawNodes: unknown[];
+  /** Render without the outer card chrome (for embedding inside modals). */
+  embedded?: boolean;
+  /** Card title override (default "File Tree"). */
+  title?: string;
+  /** Currently highlighted file path (works with onSelectFile). */
+  selectedPath?: string | null;
+  /** Makes file rows clickable and reports the clicked path. */
+  onSelectFile?: (path: string) => void;
+  /** Overrides the default API download (e.g. scaffold files from memory). */
+  onDownloadFile?: (path: string) => Promise<void>;
+  /** Hides the per-row download buttons entirely. */
+  hideDownload?: boolean;
 }
 
 // ── Build a nested tree from flat file paths ────────────────────────────────
@@ -70,6 +82,7 @@ function buildTree(files: FileNode[]): DirNode {
 // ── One row (file or directory), with FILE 4 box-drawing prefix ─────────────
 function Row({
   node, prefix, isLast, depth, expanded, onToggleDir, onDownload, downloading,
+  onSelectFile, selectedPath, hideDownload,
 }: {
   node: TreeNode;
   prefix: string;
@@ -79,6 +92,9 @@ function Row({
   onToggleDir: (path: string) => void;
   onDownload: (path: string) => void;
   downloading: string | null;
+  onSelectFile?: (path: string) => void;
+  selectedPath?: string | null;
+  hideDownload?: boolean;
 }) {
   const tee = isLast ? "└─ " : "├─ ";
   const childPrefix = prefix + (isLast ? "   " : "│  ");
@@ -114,41 +130,83 @@ function Row({
             onToggleDir={onToggleDir}
             onDownload={onDownload}
             downloading={downloading}
+            onSelectFile={onSelectFile}
+            selectedPath={selectedPath}
+            hideDownload={hideDownload}
           />
         ))}
       </>
     );
   }
 
-  return (
-    <div className="w-full flex items-center gap-1 group hover:bg-bg-panel-alt rounded-sm">
+  const isSelected = selectedPath != null && node.path === selectedPath;
+  const clickable = onSelectFile != null;
+
+  const fileRow = (
+    <>
       <span className="font-mono text-[10.5px] text-border-strong shrink-0 select-none">
         {prefix}{tee}
       </span>
-      <FileCode2 size={11} className="shrink-0 text-text-muted" />
-      <span className="font-mono text-[11px] text-text-secondary truncate flex-1" title={node.path}>
+      <FileCode2 size={11} className={`shrink-0 ${isSelected ? "text-accent-cyan" : "text-text-muted"}`} />
+      <span className={`font-mono text-[11px] truncate flex-1 ${isSelected ? "text-accent-cyan font-semibold" : "text-text-secondary"}`} title={node.path}>
         {node.name}
       </span>
+      {!hideDownload && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDownload(node.path); }}
+          disabled={downloading != null}
+          aria-label={`Download ${node.name}`}
+          title={`Download ${node.name}`}
+          className="shrink-0 w-5 h-5 flex items-center justify-center rounded
+            text-text-muted hover:text-accent-hover hover:bg-bg-panel-hover
+            disabled:opacity-40 transition-colors"
+        >
+          {downloading === node.path ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
+        </button>
+      )}
+    </>
+  );
+
+  if (clickable) {
+    return (
       <button
-        onClick={() => onDownload(node.path)}
-        disabled={downloading != null}
-        aria-label={`Download ${node.name}`}
-        title={`Download ${node.name}`}
-        className="shrink-0 w-5 h-5 flex items-center justify-center rounded
-          text-text-muted hover:text-accent-hover hover:bg-bg-panel-hover
-          disabled:opacity-40 transition-colors"
+        onClick={() => onSelectFile(node.path)}
+        className={`w-full flex items-center gap-1 text-left rounded-sm transition-colors
+          ${isSelected ? "bg-accent-cyan/10" : "hover:bg-bg-panel-alt"}`}
       >
-        {downloading === node.path ? <Loader2 size={11} className="animate-spin" /> : <Download size={11} />}
+        {fileRow}
       </button>
+    );
+  }
+
+  return (
+    <div className="w-full flex items-center gap-1 group hover:bg-bg-panel-alt rounded-sm">
+      {fileRow}
     </div>
   );
 }
 
 // ── Card ─────────────────────────────────────────────────────────────────────
-export default function FileTree({ rawNodes }: Props) {
+export default function FileTree({
+  rawNodes, embedded = false, title, selectedPath = null, onSelectFile,
+  onDownloadFile, hideDownload = false,
+}: Props) {
   const [query, setQuery]       = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState<string | null>(null);
+
+  const doDownload = async (path: string) => {
+    if (downloading) return;
+    setDownloading(path);
+    try {
+      if (onDownloadFile) await onDownloadFile(path);
+      else await downloadRepoFile(path);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const files: FileNode[] = useMemo(
     () =>
@@ -186,18 +244,6 @@ export default function FileTree({ rawNodes }: Props) {
     });
   };
 
-  const doDownload = async (path: string) => {
-    if (downloading) return;
-    setDownloading(path);
-    try {
-      await downloadRepoFile(path);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Download failed");
-    } finally {
-      setDownloading(null);
-    }
-  };
-
   // Expand top-level dirs by default on first load
   const seeded = useRef(false);
   useEffect(() => {
@@ -211,11 +257,11 @@ export default function FileTree({ rawNodes }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files.length]);
 
-  return (
-    <section className="card p-4 flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
+  const body = (
+    <>
+      <div className={`flex items-center gap-1.5 ${embedded ? "mb-1.5" : ""}`}>
         <FolderTree size={12} className="text-text-muted" />
-        <h3 className="label-caps">File Tree</h3>
+        <h3 className="label-caps">{title ?? "File Tree"}</h3>
         <span className="ml-auto text-[10px] font-mono text-text-muted">{files.length}</span>
       </div>
 
@@ -249,10 +295,21 @@ export default function FileTree({ rawNodes }: Props) {
               onToggleDir={toggleDir}
               onDownload={(p) => void doDownload(p)}
               downloading={downloading}
+              onSelectFile={onSelectFile}
+              selectedPath={selectedPath}
+              hideDownload={hideDownload}
             />
           ))
         )}
       </div>
+    </>
+  );
+
+  if (embedded) return <div className="flex flex-col gap-2 min-h-0">{body}</div>;
+
+  return (
+    <section className="card p-4 flex flex-col gap-2">
+      {body}
     </section>
   );
 }

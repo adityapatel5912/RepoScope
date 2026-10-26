@@ -3,11 +3,12 @@ import { setBYOK } from "../api/client";
 import { loadDemo } from "../api/features";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import FileTree from "./FileTree";
-import TrackingPanel from "./TrackingPanel";
+import SecurityPanel from "./SecurityPanel";
 import CommitPanel from "./CommitPanel";
 import TourPanel, { type TourRequest, type TourState } from "./TourPanel";
 import ImpactPanel, { type ImpactRequest } from "./ImpactPanel";
 import AIKeyPanel from "./AIKeyPanel";
+import OnboardingPath from "./OnboardingPath";
 import { toast } from "./Toasts";
 import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
@@ -27,6 +28,7 @@ interface Props {
   contextInfo: { file_count?: number; node_count?: number; edge_count?: number; readme_length?: number } | null;
   rawNodes?: unknown[];
   loader: RepoLoader;
+  studentMode?: boolean;
   onHighlightNode?: (nodeId: string | null) => void;
   onHighlightImpact?: (targetId: string | null, directIds: string[], transitiveIds: string[]) => void;
   tourRequest?: TourRequest | null;
@@ -58,7 +60,7 @@ function Card({
 }
 
 export default function LeftPanel({
-  onLoaded, repoInfo, trackingData, contextInfo, rawNodes = [], loader,
+  onLoaded, repoInfo, trackingData, contextInfo, rawNodes = [], loader, studentMode = false,
   onHighlightNode, onHighlightImpact, tourRequest, impactRequest, onTourState,
   onShowShortcuts, onToggleDebug, onClose,
 }: Props) {
@@ -168,11 +170,19 @@ export default function LeftPanel({
         )}
       </Card>
 
+      {/* ── Student Mode: guided learning path (pyramid-ranked) ── */}
+      {studentMode && (
+        <OnboardingPath repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null} />
+      )}
+
       {/* ── Card 2 · FILE TREE (FILE 4 format) ── */}
       <FileTree rawNodes={rawNodes} />
 
-      {/* ── Tracking results ── */}
-      <TrackingPanel data={trackingData as never} />
+      {/* ── Tracking results + Security scan (tabbed) ── */}
+      <SecurityPanel
+        trackingData={trackingData as never}
+        repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
+      />
 
       {/* ── Card · DEMO REPOS (one-click examples) ── */}
       <Card title="Try a demo">
@@ -242,8 +252,12 @@ export default function LeftPanel({
       {/* ── Code Tours ── */}
       <TourPanel onHighlightNode={onHighlightNode} onTourState={onTourState} request={tourRequest} />
 
-      {/* ── What-If Impact Analysis ── */}
-      <ImpactPanel onHighlightImpact={onHighlightImpact} request={impactRequest} />
+      {/* ── What-If Impact Analysis + PR Bot ── */}
+      <ImpactPanel
+        repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
+        onHighlightImpact={onHighlightImpact}
+        request={impactRequest}
+      />
 
       {/* ── Card 5 · SETTINGS SHORTCUTS ── */}
       <Card title="Quick actions">

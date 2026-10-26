@@ -6,7 +6,7 @@
 import { useReactFlow } from "reactflow";
 import {
   Plus, Minus, Maximize, LayoutGrid, ArrowLeftRight, ArrowUpDown,
-  FolderTree, LocateFixed, Map as MapIcon, Image, FileCode2, Wand2,
+  FolderTree, LocateFixed, Map as MapIcon, Image, FileCode2, Wand2, Zap,
 } from "lucide-react";
 
 interface Props {
@@ -18,11 +18,13 @@ interface Props {
   onExportPng: () => void;
   onExportSvg: () => void;
   onReversePrompt: () => void;
+  onScaffold: () => void;
   direction: "LR" | "TB";
   grouped: boolean;
   legendShown: boolean;
   exporting: boolean;
   promptBusy: boolean;
+  scaffoldBusy: boolean;
 }
 
 const btn = (active?: boolean) => `
@@ -35,8 +37,8 @@ const btn = (active?: boolean) => `
 
 export default function GraphControls({
   onRelayout, onToggleDirection, onToggleGroup, onToggleLegend, onFocus,
-  onExportPng, onExportSvg, onReversePrompt,
-  direction, grouped, legendShown, exporting, promptBusy,
+  onExportPng, onExportSvg, onReversePrompt, onScaffold,
+  direction, grouped, legendShown, exporting, promptBusy, scaffoldBusy,
 }: Props) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
@@ -111,6 +113,19 @@ export default function GraphControls({
         >
           {promptBusy ? <span className="btn-spinner" /> : <Wand2 size={13} />}
           Build Prompt
+        </button>
+        <button
+          onClick={onScaffold}
+          disabled={scaffoldBusy}
+          title="Generate a starter scaffold from this repo — ZIP or open in StackBlitz"
+          aria-label="Generate scaffold"
+          className="h-8 px-2.5 flex items-center gap-1.5 rounded-md text-[11px] font-semibold
+            bg-accent-amber text-white border border-border-subtle shadow-sm
+            hover:brightness-110 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none
+            disabled:opacity-40 transition-all duration-100"
+        >
+          {scaffoldBusy ? <span className="btn-spinner" /> : <Zap size={13} />}
+          Scaffold
         </button>
       </div>
 

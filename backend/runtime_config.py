@@ -80,9 +80,11 @@ def ask_llm(
     user_query: str,
     graph_context: str = "",
     provider: dict | None = None,
+    max_tokens: int = 1024,
 ) -> str:
     """
     Execute LLM call using the resolved BYOK provider or fallback server chain.
+    max_tokens can be raised for structured outputs (e.g. scaffold JSON).
     """
     if provider is None:
         try:
@@ -102,7 +104,7 @@ def ask_llm(
             }
             body = {
                 "model": provider["model"],
-                "max_tokens": 1024,
+                "max_tokens": max_tokens,
                 "temperature": 0.3,
                 "system": system_prompt,
                 "messages": [
@@ -127,7 +129,7 @@ def ask_llm(
                 {"role": "user", "content": f"{graph_context}\n\n{user_query}" if graph_context else user_query},
             ],
             temperature=0.3,
-            max_tokens=1024,
+            max_tokens=max_tokens,
         )
         return resp.choices[0].message.content or ""
 

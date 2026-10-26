@@ -4,10 +4,13 @@
  * function/class; get blast radius, risk score, and graph highlighting.
  */
 import { useEffect, useRef, useState } from "react";
-import { analyzeImpact, type Impact, type ImpactNode } from "../api/features";
+import {
+  analyzeImpact, generatePRImpact,
+  type Impact, type ImpactNode, type PRImpact,
+} from "../api/features";
 import { toast } from "./Toasts";
 import { SkeletonCard } from "./Skeleton";
-import { Zap, X, ChevronDown } from "lucide-react";
+import { Zap, X, ChevronDown, GitPullRequest, Copy, Check, ClipboardCopy } from "lucide-react";
 
 export interface ImpactRequest {
   target: string;
@@ -15,6 +18,8 @@ export interface ImpactRequest {
 }
 
 interface Props {
+  /** owner/repo of the loaded repository — enables the PR Bot section. */
+  repo?: string | null;
   onHighlightImpact?: (
     targetId: string | null,
     directIds: string[],
@@ -31,13 +36,20 @@ const RISK_BADGE: Record<Impact["risk_level"], string> = {
   critical: "text-accent-rose    border-accent-rose/40    bg-accent-rose/15 risk-pulse",
 };
 
-export default function ImpactPanel({ onHighlightImpact, request }: Props) {
+export default function ImpactPanel({ repo, onHighlightImpact, request }: Props) {
   const [target, setTarget]   = useState("");
   const [impact, setImpact]   = useState<Impact | null>(null);
   const [loading, setLoading] = useState(false);
   const requestIdRef           = useRef(0);
   const [error, setError]     = useState<string | null>(null);
   const [depth, setDepth]     = useState(3);
+
+  // ── PR Bot state ──
+  const [prNumber, setPrNumber]     = useState("");
+  const [prBusy, setPrBusy]         = useState(false);
+  const [prResult, setPrResult]     = useState<PRImpact | null>(null);
+  const [prError, setPrError]       = useState<string | null>(null);
+  const [prCopied, setPrCopied]     = useState(false);
 
   const analyze = async (override?: string) => {
     const t = (override ?? target).trim();
@@ -75,6 +87,37 @@ export default function ImpactPanel({ onHighlightImpact, request }: Props) {
     setImpact(null);
     setError(null);
     onHighlightImpact?.(null, [], []);
+  };
+
+  // ── PR Bot: compute the PR's blast radius and preview the GitHub comment ──
+  const runPRImpact = async () => {
+    const n = Number.parseInt(prNumber, 10);
+    if (!repo || !Number.isFinite(n) || n <= 0 || prBusy) {
+      if (!Number.isFinite(n) || n <= 0) setPrError("Enter a valid PR number");
+      return;
+    }
+    setPrBusy(true);
+    setPrError(null);
+    try {
+      const data = await generatePRImpact(`https://github.com/${repo}`, n);
+      setPrResult(data);
+      toast.success(`PR #${n} report ready — risk ${data.risk_score}/10`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "PR analysis failed";
+      setPrError(msg);
+      setPrResult(null);
+      toast.error(msg);
+    } finally {
+      setPrBusy(false);
+    }
+  };
+
+  const copyPrComment = () => {
+    if (!prResult) return;
+    navigator.clipboard.writeText(prResult.comment).then(() => {
+      setPrCopied(true);
+      setTimeout(() => setPrCopied(false), 2000);
+    });
   };
 
   // External request (e.g. "Analyze impact" in the node drawer)
@@ -151,6 +194,94 @@ export default function ImpactPanel({ onHighlightImpact, request }: Props) {
           className="flex-1 accent-[#F0503C] h-1"
         />
       </div>
+
+      {/* ── PR Bot — impact report as a GitHub comment ── */}
+      {repo && (
+        <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
+          <h4 className="m-0 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-accent-violet">
+            <GitPullRequest size={11} />
+            PR Bot
+          </h4>
+          <div className="flex gap-2 items-center">
+            <input
+              value={prNumber}
+              onChange={(e) => { setPrNumber(e.target.value.replace(/\D/g, "")); setPrError(null); }}
+              onKeyDown={(e) => e.key === "Enter" && void runPRImpact()}
+              placeholder="PR #"
+              inputMode="numeric"
+              aria-label="Pull request number"
+              className="w-20 min-w-0 px-3 py-2 rounded-lg text-xs font-mono
+                bg-bg-panel-alt border border-border-subtle
+                text-text-primary placeholder:text-text-muted placeholder:font-sans
+                focus:outline-none focus:border-accent-violet/50 focus:ring-1 focus:ring-accent-violet/20
+                disabled:opacity-50 transition-all duration-200"
+            />
+            <button
+              onClick={() => void runPRImpact()}
+              disabled={prBusy || !prNumber.trim()}
+              className="
+                flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
+                bg-accent-violet/10 border border-accent-violet/25 text-accent-violet
+                hover:bg-accent-violet/20 disabled:opacity-40 disabled:cursor-not-allowed
+                transition-all duration-200 whitespace-nowrap
+              "
+            >
+              {prBusy ? <span className="btn-spinner" /> : <ClipboardCopy size={12} />}
+              {prBusy ? "Analyzing PR" : "Generate PR Comment Preview"}
+            </button>
+          </div>
+
+          {prError && (
+            <div className="px-3 py-2 rounded-lg text-xs bg-accent-rose/10 border border-accent-rose/25 text-accent-rose">
+              {prError}
+            </div>
+          )}
+
+          {prBusy && !prResult && <SkeletonCard lines={3} />}
+
+          {prResult && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`
+                  inline-block px-2.5 py-1 rounded-lg border text-2xs font-bold uppercase tracking-[0.08em]
+                  ${RISK_BADGE[prResult.risk_level]}
+                `}>
+                  PR #{prResult.pr_number} · {prResult.risk_level} · {prResult.risk_score}/10
+                </span>
+                <span className="text-2xs text-text-muted font-mono">
+                  {prResult.affected_files.length} files · {prResult.impacted_total} impacted
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {prResult.affected_files.slice(0, 8).map((f) => (
+                  <span key={f.file} className="px-1.5 py-0.5 rounded bg-bg-panel-alt border border-border-hairline font-mono text-[10px] text-text-muted">
+                    {f.file.split("/").pop()}
+                  </span>
+                ))}
+                {prResult.affected_files.length > 8 && (
+                  <span className="px-1.5 py-0.5 text-[10px] text-text-muted">+{prResult.affected_files.length - 8} more</span>
+                )}
+              </div>
+              <textarea
+                readOnly
+                value={prResult.comment}
+                aria-label="GitHub comment preview"
+                onFocus={(e) => e.currentTarget.select()}
+                className="input !py-2 font-mono !text-[10px] leading-snug h-44 !resize-none whitespace-pre-wrap"
+              />
+              <div className="flex items-center gap-2">
+                <button onClick={copyPrComment} className="btn-primary flex-1 !py-1.5 !px-3 !text-xs justify-center">
+                  {prCopied ? <Check size={12} /> : <Copy size={12} />}
+                  {prCopied ? "Copied" : "Copy comment"}
+                </button>
+              </div>
+              <p className="text-2xs text-text-muted leading-relaxed m-0">
+                Paste into the PR — mermaid renders live. The <code>pr-impact.yml</code> workflow posts this automatically; export the highlighted graph as PNG to attach.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Error ── */}
       {error && (

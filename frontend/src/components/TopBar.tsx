@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X, Menu } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
@@ -12,6 +12,8 @@ interface Props {
   onModeChange: (m: Mode) => void;
   debugMode: boolean;
   onDebugToggle: () => void;
+  studentMode: boolean;
+  onStudentModeToggle: () => void;
   onShowShortcuts?: () => void;
   loader: RepoLoader;
   onClearRepo: () => void;
@@ -25,8 +27,8 @@ const MODES: { id: Mode; label: string }[] = [
 ];
 
 export default function TopBar({
-  repo, mode, onModeChange, debugMode, onDebugToggle, onShowShortcuts,
-  loader, onClearRepo, onToggleSidebar,
+  repo, mode, onModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
+  onShowShortcuts, loader, onClearRepo, onToggleSidebar,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipEditing, setChipEditing]   = useState(false);
@@ -170,6 +172,22 @@ export default function TopBar({
             </button>
           ))}
         </nav>
+
+        {/* Student Mode toggle — learning path + quizzes (Feature: Student Onboarding) */}
+        <button
+          onClick={onStudentModeToggle}
+          title={studentMode ? "Student Mode is ON — click to exit" : "Student Mode: guided learning path + quizzes"}
+          aria-pressed={studentMode}
+          className={clsx(
+            "flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] transition-all duration-150",
+            studentMode
+              ? "bg-accent-emerald text-white border-accent-emerald shadow-sm"
+              : "bg-bg-panel text-text-primary border-border-subtle hover:bg-bg-panel-alt"
+          )}
+        >
+          <GraduationCap size={13} />
+          <span className="hidden sm:inline">Student</span>
+        </button>
 
         {/* Shortcuts — settings popover covers these on small screens */}
         <button

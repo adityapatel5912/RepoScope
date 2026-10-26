@@ -18,6 +18,11 @@ GET  /api/repo/graph      — full graph (nodes + edges)
 POST /api/chat/stream     — SSE: LLM answer + graph
 POST /api/byok/set        — set user's GitHub PAT (BYOK)
 POST /api/repo/commit     — commit from the app (BYOK)
+POST /api/scaffold        — CodeCrafters-style starter scaffold (LLM)
+POST /api/impact/pr       — PR blast radius -> GitHub comment markdown
+POST /api/onboard         — Student Mode learning path + quizzes + GFIs
+POST /api/tts             — Voice Tour narration (OpenRouter TTS chain)
+POST /api/security/scan   — secrets / breaking changes / CVE flags
 GET  /api/health          — health check
 
 ## SSE Events
@@ -63,9 +68,34 @@ The pyramid is a deterministic manual layout in `GraphView.tsx`
 6. **Diagnostics.** In dev builds, `[EDGE DIAG]` logs node count, edge count,
    and matched-endpoint count to the console (see Troubleshooting).
 
+## NEW in 3.0 Modules
+- `pr_impact.py`        — fetches PR files, aggregates per-file blast radius
+                          (impact_analyzer reverse-BFS), renders the GitHub
+                          comment (markdown + mermaid). POST /api/impact/pr.
+- `onboarding.py`       — ranks files into rows 1-5 (incoming*2 + outgoing,
+                          same score as the pyramid), builds 3 levels with
+                          LLM explanations + quizzes, mines Good First Issues
+                          from low-traffic rows 4-5. POST /api/onboard.
+- `security_scanner.py` — pure-heuristic detectors: secret regexes, .env
+                          leaks, function-signature breaking changes, major
+                          version bumps, curated CVE map. POST
+                          /api/security/scan. No LLM — fast + deterministic.
+- `tts_service.py`      — Voice Tour narration: POST {base}/audio/speech
+                          first, then chat/completions modalities=["text",
+                          "audio"]; fish-audio/s2.1-pro-free:free ->
+                          deepgram/flux-tts:free; OPENROUTER_ROTATOR keys
+                          rotate on 429. POST /api/tts.
+- Frontend additions: ScaffoldModal (jszip ZIP + StackBlitz form POST),
+  OnboardingPath (Student Path card), SecurityPanel (Tracking | Security
+  tabs), TourPanel voice engine (server TTS -> browser speechSynthesis
+  fallback), ImpactPanel PR Bot preview, TopBar Student toggle.
+- CI: .github/workflows/pr-impact.yml posts the PR impact report on every
+  pull_request (opened/synchronize/reopened) via gh pr comment.
+
 ## Failure Fallbacks
 OpenRouter 429 → Groq
 Groq 429       → NVIDIA NIM
 NIM 429        → cached answer + error toast
 GitHub 403     → cached data + warn
 MCP down       → empty graph, LLM answers from GitHub metadata
+TTS down       → browser speechSynthesis fallback in TourPanel

@@ -120,7 +120,41 @@ Details: [docs/BOB_SESSIONS.md](docs/BOB_SESSIONS.md)
 - **GitHub PAT BYOK** — GitHub PAT for private repos; memory-only storage
 - **Multi-key rotation** — comma-separated keys per LLM provider; 429s rotate
   automatically, providers chain OpenRouter → Groq → NVIDIA NIM
+- **PR Bot** — blast-radius report on every pull request: risk score, affected
+  files, suggested tests, and a mermaid impact graph that renders live in the
+  PR comment; one-click preview in the Impact panel, GitHub Action included
+- **Student Onboarding Mode** — pyramid-ranked 3-level learning path (entry
+  points → core modules → utils) with per-file "why it matters" notes, 3
+  checkpoint quizzes per level, and Good First Issues mined from the
+  low-traffic bottom rows
+- **Voice Code Tours** — narrated walkthroughs via OpenRouter TTS
+  (Fish Audio S2.1 Pro → Deepgram Flux) with browser speech fallback; auto-pan
+  and highlight stay synced with the audio — built for accessibility
+- **Security Scan** — Breaking Change + Secret + CVE detection with Nord
+  Security–backed remediation tips: committed API keys, leaked `.env` files,
+  function signature changes, major version bumps, and known-vulnerable pins
+- **Reverse Prompt → Scaffold** — turn the reverse-engineered build prompt
+  into a CodeCrafters-style starter scaffold: Stage 1/2/3 README stub,
+  boilerplate files with TODOs, ZIP download, one-click StackBlitz
 - **Health system** — `GET /api/health` reports uptime, memory, key counts
+
+---
+
+## ⚡ NEW in 3.0: Student Mode, PR Bot & Scaffold
+
+Five features landed in the 3.0 sprint — all additive, no breaking changes:
+
+| Feature | What it does | Try it |
+|---|---|---|
+| 🎓 **Student Mode** | Connectivity-pyramid-ranked learning path with quizzes + Good First Issues | Toggle **Student** in the top bar, load a repo |
+| 🤖 **PR Bot** | Posts a blast-radius report (risk, files, tests, mermaid graph) on every PR | Impact panel → *Generate PR Comment Preview*, or add `pr-impact.yml` |
+| 🔊 **Voice Tours** | Narrated code tours with auto-pan + highlight sync | Code Tour → **▶ Play Tour** |
+| 🛡 **Security Scan** | Breaking changes, leaked secrets, vulnerable deps — Nord Security tips | Tracking card → **Security** tab → *Run Security Scan* |
+| ⚡ **Scaffold** | CodeCrafters-style starter (Stage 1/2/3) from any repo — ZIP or StackBlitz | Graph toolbar → **Scaffold** (or the Build Prompt modal) |
+
+New endpoints: `POST /api/scaffold` · `POST /api/impact/pr` ·
+`POST /api/onboard` · `POST /api/tts` · `POST /api/security/scan` — all covered
+by pytest in [`backend/tests/`](backend/tests/).
 
 ---
 
@@ -141,6 +175,14 @@ The graph is a deterministic **connectivity pyramid** with 6 rank tiers:
 - **Parent-to-Child Edge Filtering**: Edges only render between adjacent tiers (`targetRank === sourceRank + 1`), eliminating horizontal criss-crossing.
 - **Lineage Hover Highlighting**: Hovering over any node dynamically traces its complete ancestor chain up to the repository node in `#10B981` emerald.
 - **Zero-Overlap Collision Pass**: Rows wider than 6000px automatically wrap into sub-rows separated by a 40px vertical gap, followed by a 2D bounding-box collision sweep that enforces a minimum 24px horizontal clearance.
+
+### Student Mode & Row Ranking
+**Student Mode** turns the same ranking into a curriculum: **Row 1** files
+become **Level 1 — Entry Points** (where execution begins), **Rows 2–3** become
+**Level 2 — Core Modules** (the engine room), and **Rows 4–5** become
+**Level 3 — Utils & Leaves**. Because Rows 4–5 hold the least-imported files,
+they're the safest to read — and to change — which is exactly where the Good
+First Issue generator mines its beginner-friendly contributions.
 
 ---
 
@@ -200,7 +242,11 @@ FastAPI (Python 3.11)
    ├─ key_rotator      multi-key round-robin per provider
    ├─ runtime_config   OpenRouter → Groq → NVIDIA NIM chain
    ├─ mcp_client       GitHub REST + codebase-memory MCP
-   └─ tour_generator / impact_analyzer / repo_tracker
+   ├─ tour_generator / impact_analyzer / repo_tracker
+   ├─ pr_impact        PR blast radius → GitHub comment
+   ├─ onboarding       Student Mode rows + quizzes + GFIs
+   ├─ security_scanner secrets / breaking / CVE heuristics
+   └─ tts_service      OpenRouter TTS chain for Voice Tours
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full reference.

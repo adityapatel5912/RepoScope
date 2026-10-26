@@ -451,42 +451,98 @@ def test_the_server_offers_stdio_and_streamable_http():
 
 # ── The real stdio transport ────────────────────────────────────────────────
 
-def _stdio_exchange(messages: list[dict], root: Path) -> list[dict]:
+def _stdio_exchange(messages: list[dict], root: Path, timeout: float = 60) -> list[dict]:
     """
     Drive the server over a REAL stdio pipe.
 
     The in-memory session above tests the tools. This tests the
-    TRANSPORT — which is the thing that breaks when the SDK changes, and
+    TRANSPORT - which is the thing that breaks when the SDK changes, and
     the thing a client like Claude Desktop or Cursor actually uses.
 
     The exchange is deliberately raw JSON-RPC: the server is started as
     a subprocess, the messages are written to its stdin, and its stdout
     is read back. Nothing here shares a process with the server.
+
+    The pipe stays OPEN until every request has its response. Closing
+    stdin immediately after writing makes the server's transport race the
+    request loop on EOF: it can answer `initialize` and exit before
+    `tools/list` is read. A real client keeps stdin open, so the test
+    must too. Requests are also sent one at a time, so `initialize`
+    completes before `notifications/initialized` and `tools/list`.
     """
+    import queue
     import subprocess
     import sys
+    import threading
+    import time
 
     backend = Path(__file__).resolve().parent.parent
-    payload = "".join(json.dumps(message) + "\n" for message in messages)
-
-    completed = subprocess.run(
-        [sys.executable, "-m", "mcp_server.server", "--root", str(root)],
-        input=payload,
-        capture_output=True,
+    process = subprocess.Popen(
+        [sys.executable, "-u", "-m", "mcp_server.server", "--root", str(root)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        timeout=120,
+        encoding="utf-8",
+        bufsize=1,
         cwd=str(backend),
     )
+    assert process.stdin is not None and process.stdout is not None
+
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def _pump_stdout() -> None:
+        try:
+            for line in process.stdout:
+                lines.put(line)
+        finally:
+            lines.put(None)
+
+    reader = threading.Thread(target=_pump_stdout, daemon=True)
+    reader.start()
 
     responses: list[dict] = []
-    for line in completed.stdout.splitlines():
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            continue
+
+    def _read_until(expected_id) -> None:
+        deadline = time.monotonic() + timeout
+        while not any(r.get("id") == expected_id for r in responses):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                line = lines.get(timeout=remaining)
+            except queue.Empty:
+                return
+            if line is None:
+                return
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(message, dict):
+                responses.append(message)
+
+    try:
+        for message in messages:
+            process.stdin.write(json.dumps(message) + "\n")
+            process.stdin.flush()
+            if "id" in message:
+                _read_until(message["id"])
+    finally:
         try:
-            responses.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
+            process.stdin.close()
+        except OSError:
+            pass
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
+
     return responses
 
 

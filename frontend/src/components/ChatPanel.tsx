@@ -48,6 +48,16 @@ const EXAMPLE_PROMPTS = [
 const CITATION_RE = /^[\w./@-]+\.[A-Za-z0-9]+(:\d+)?$/;
 const InTableContext = createContext(false);
 
+// Proper named component so useContext hook is valid
+function InlineCode({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) {
+  const inTable = useContext(InTableContext);
+  const text = String(children ?? "").replace(/\n$/, "");
+  if (!inTable && CITATION_RE.test(text)) {
+    return <span className="citation-chip">{text}</span>;
+  }
+  return <code className={className} {...props}>{children}</code>;
+}
+
 // ── Web Speech (mic) — optional capability ───────────────────────────────────
 interface SpeechRecognitionLike {
   lang: string;
@@ -391,17 +401,9 @@ export default function ChatPanel({
                           remarkPlugins={[remarkGfm]}
                           components={{
                             code: ({ className, children, ...props }) => {
-                              const isInline = !className;
-                              const inTable = useContext(InTableContext);
-                              const text = String(children ?? "").replace(/\n$/, "");
-                              if (isInline) {
-                                // Citation chips only outside table cells
-                                if (!inTable && CITATION_RE.test(text)) {
-                                  return <span className="citation-chip">{text}</span>;
-                                }
-                                return <code {...props}>{children}</code>;
-                              }
-                              return <CodeBlock className={className}>{children}</CodeBlock>;
+                              // fenced code block → CodeBlock; inline → InlineCode
+                              if (className) return <CodeBlock className={className}>{children}</CodeBlock>;
+                              return <InlineCode className={className} {...props}>{children}</InlineCode>;
                             },
                             pre: ({ children }) => <>{children}</>,
                             table: ({ children }) => (
@@ -409,14 +411,14 @@ export default function ChatPanel({
                                 <table>{children}</table>
                               </div>
                             ),
-                            td: ({ children }) => (
+                            td: ({ children, ...props }) => (
                               <InTableContext.Provider value={true}>
-                                <td>{children}</td>
+                                <td {...props}>{children}</td>
                               </InTableContext.Provider>
                             ),
-                            th: ({ children }) => (
+                            th: ({ children, ...props }) => (
                               <InTableContext.Provider value={true}>
-                                <th>{children}</th>
+                                <th {...props}>{children}</th>
                               </InTableContext.Provider>
                             ),
                           }}

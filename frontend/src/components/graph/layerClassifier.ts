@@ -14,11 +14,11 @@ export interface LayerStyle {
 }
 
 export const LAYER_STYLE: Record<Layer, LayerStyle> = {
-  client:   { fill: "#DBEAFE", border: "#3B82F6", text: "#1E3A8A", icon: "monitor",  name: "Client / UI" },
-  backend:  { fill: "#DCFCE7", border: "#22C55E", text: "#14532D", icon: "server",   name: "Backend / API" },
-  storage:  { fill: "#FFEDD5", border: "#F97316", text: "#7C2D12", icon: "database", name: "Storage / Data" },
-  external: { fill: "#FCE7F3", border: "#EC4899", text: "#831843", icon: "globe",    name: "External / Integrations" },
-  compute:  { fill: "#EDE9FE", border: "#8B5CF6", text: "#4C1D95", icon: "cpu",      name: "Compute / Workers" },
+  client:   { fill: "#DBEAFE", border: "#2563EB", text: "#1E3A8A", icon: "monitor",  name: "Client / UI" },
+  backend:  { fill: "#FEF3C7", border: "#D97706", text: "#78350F", icon: "server",   name: "Backend / API" },
+  storage:  { fill: "#D1FAE5", border: "#059669", text: "#065F46", icon: "database", name: "Storage / Data" },
+  external: { fill: "#FEE2E2", border: "#DC2626", text: "#991B1B", icon: "globe",    name: "External / Integrations" },
+  compute:  { fill: "#EDE9FE", border: "#7C3AED", text: "#4C1D95", icon: "cpu",      name: "Compute / Workers" },
 };
 
 // Ordered rules — first match wins.

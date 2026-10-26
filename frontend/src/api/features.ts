@@ -69,6 +69,8 @@ const JSON_TIMEOUT_MS = 30_000;
 // over a minute — give them a generous budget.
 const LLM_TIMEOUT_MS = 120_000;
 
+import { aiHeaders } from "../utils/aiHeaders";
+
 async function postJson<T>(
   path: string,
   body: object,
@@ -81,7 +83,11 @@ async function postJson<T>(
   try {
     r = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Session-Id": SESSION_ID },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-Id": SESSION_ID,
+        ...aiHeaders(),
+      },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

@@ -15,11 +15,14 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from typing import Optional
+
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ai_byok import PROVIDERS, resolve_provider
 from byok_manager import get_user_token, set_user_token
 from graph_builder import build_graph_from_repo
 from graph_utils import find_node_by_label
@@ -454,10 +457,28 @@ REVERSE_SYSTEM_PROMPT = (
 )
 
 
+@app.get("/api/ai/providers")
+async def list_ai_providers():
+    """List available AI providers and server-configured key status."""
+    return {
+        "providers": PROVIDERS,
+        "server_keys": {
+            "groq": bool(os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEYS")),
+            "nvidia": bool(os.getenv("NVIDIA_API_KEY") or os.getenv("NVIDIA_API_KEYS")),
+        },
+    }
+
+
 @app.post("/api/repo/reverse-prompt")
-async def reverse_prompt():
+async def reverse_prompt(
+    x_ai_provider: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_model: Optional[str] = Header(None),
+    x_ai_base_url: Optional[str] = Header(None),
+):
     """Generate a single agent-ready prompt that would rebuild this repo."""
     req_id = str(uuid.uuid4())[:8]
+    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
@@ -476,7 +497,7 @@ async def reverse_prompt():
             f"FILES ({len(files)}):\n" + "\n".join(files[:200]) + "\n\n"
             f"README (excerpt):\n{readme}"
         )
-        text = await asyncio.to_thread(ask_llm, REVERSE_SYSTEM_PROMPT, user_prompt)
+        text = await asyncio.to_thread(ask_llm, REVERSE_SYSTEM_PROMPT, user_prompt, "", provider)
         # Strip any markdown fences the model may have added
         cleaned = text.strip()
         if cleaned.startswith("```"):
@@ -496,9 +517,16 @@ async def reverse_prompt():
 
 
 @app.post("/api/tour/generate")
-async def tour_generate(req: TourReq):
+async def tour_generate(
+    req: TourReq,
+    x_ai_provider: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_model: Optional[str] = Header(None),
+    x_ai_base_url: Optional[str] = Header(None),
+):
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] tour/generate topic=%s", req_id, req.topic)
+    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
@@ -506,7 +534,7 @@ async def tour_generate(req: TourReq):
     try:
         # Offload the (sync) graph build + LLM calls so the event loop stays free
         graph = await asyncio.to_thread(build_graph_from_repo, local_path)
-        tour = await asyncio.to_thread(build_tour, graph, req.topic)
+        tour = await asyncio.to_thread(build_tour, graph, req.topic, 12, provider)
     except HTTPException:
         raise
     except Exception as e:
@@ -519,9 +547,16 @@ async def tour_generate(req: TourReq):
 
 
 @app.post("/api/impact/analyze")
-async def impact_analyze(req: ImpactReq):
+async def impact_analyze(
+    req: ImpactReq,
+    x_ai_provider: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_model: Optional[str] = Header(None),
+    x_ai_base_url: Optional[str] = Header(None),
+):
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] impact/analyze target=%s depth=%s", req_id, req.target, req.max_depth)
+    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
@@ -536,7 +571,7 @@ async def impact_analyze(req: ImpactReq):
         impact = await asyncio.to_thread(
             compute_blast_radius, graph, target["id"], req.max_depth
         )
-        impact["narrative"] = await asyncio.to_thread(generate_impact_narrative, impact)
+        impact["narrative"] = await asyncio.to_thread(generate_impact_narrative, impact, provider)
     except HTTPException:
         raise
     except Exception as e:
@@ -549,9 +584,18 @@ async def impact_analyze(req: ImpactReq):
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(q: Query, request: Request, x_session_id: str = Header(None)):
+async def chat_stream(
+    q: Query,
+    request: Request,
+    x_session_id: str = Header(None),
+    x_ai_provider: Optional[str] = Header(None),
+    x_ai_key: Optional[str] = Header(None),
+    x_ai_model: Optional[str] = Header(None),
+    x_ai_base_url: Optional[str] = Header(None),
+):
     req_id = str(uuid.uuid4())[:8]
-    log.info("[%s] chat/stream mode=%s repo=%s", req_id, q.mode, q.repo)
+    log.info("[%s] chat/stream mode=%s repo=%s provider=%s", req_id, q.mode, q.repo, x_ai_provider or "default")
+    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
 
     async def event_generator():
         try:
@@ -570,7 +614,7 @@ async def chat_stream(q: Query, request: Request, x_session_id: str = Header(Non
             })
 
             user_prompt = _build_user_prompt(q.message, ctx)
-            answer = ask_llm(SYSTEM_PROMPT, user_prompt)
+            answer = ask_llm(SYSTEM_PROMPT, user_prompt, provider=provider)
             log.info("[%s] LLM answered %d chars", req_id, len(answer))
 
             # Stream in small chunks (~4 words) for smooth UX, but preserve

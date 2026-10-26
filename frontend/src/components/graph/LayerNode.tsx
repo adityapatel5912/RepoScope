@@ -7,6 +7,8 @@ export interface LayerNodeData {
   label: string;
   kind: "root" | "folder" | "file" | "function" | "class" | "import" | "commit" | "repo";
   layer: Layer;
+  rank?: number;
+  fullPath?: string;
   subtitle?: string;         // file path or role — muted mono line
   line?: number;
   size?: number;             // file size in bytes (files only) — shown in the drawer
@@ -19,6 +21,28 @@ export interface LayerNodeData {
   stepBadge?: number;        // 1-based number for the current tour step
   pastStep?: boolean;
 }
+
+export interface RankConfig {
+  width: number;
+  height: number;
+  fontSize: number;
+  fontWeight: number | string;
+  borderRadius: number;
+  borderWidth: number;
+  fill?: string;
+  border?: string;
+  text?: string;
+}
+
+export const RANK_CONFIGS: Record<number, RankConfig> = {
+  0: { width: 320, height: 80, fontSize: 18, fontWeight: 700, borderRadius: 16, borderWidth: 1, fill: "#1A1A1A", border: "#1A1A1A", text: "#FFFFFF" },
+  1: { width: 260, height: 72, fontSize: 14, fontWeight: 700, borderRadius: 12, borderWidth: 2 },
+  2: { width: 240, height: 64, fontSize: 13, fontWeight: 700, borderRadius: 10, borderWidth: 1.5 },
+  3: { width: 220, height: 58, fontSize: 12, fontWeight: 500, borderRadius: 10, borderWidth: 1 },
+  4: { width: 200, height: 52, fontSize: 11, fontWeight: 500, borderRadius: 8, borderWidth: 1 },
+  5: { width: 180, height: 46, fontSize: 11, fontWeight: 400, borderRadius: 8, borderWidth: 1 },
+  6: { width: 160, height: 40, fontSize: 10, fontWeight: 400, borderRadius: 8, borderWidth: 1, fill: "#F1F5F9", border: "#CBD5E1", text: "#64748B" },
+};
 
 export const NODE_W = 240;
 export const NODE_H = 68;
@@ -39,73 +63,134 @@ const KIND_ICONS: Partial<Record<LayerNodeData["kind"], LucideIcon>> = {
   file: FileCode2,
 };
 
-/**
- * Flat pastel node per FILE 3: rounded rectangle, 1px layer border,
- * icon left · bold label · muted mono subtitle. No shadows, no gradients.
- * Child nodes (expanded functions/classes) render smaller with distinct
- * styling: functions white/gold, classes purple, no subtitle.
- */
-function LayerNodeInner({ data, selected }: { data: LayerNodeData; selected?: boolean }) {
+function splitFilePath(fullPath: string, label: string) {
+  const p = fullPath || label || "";
+  const lastSlash = p.lastIndexOf("/");
+  let dir = "";
+  let filename = p;
+  if (lastSlash >= 0) {
+    dir = p.slice(0, lastSlash);
+    filename = p.slice(lastSlash + 1);
+  }
+
+  // If total length exceeds 30 characters, show only the filename with ellipsis. Never truncate the extension.
+  let displayFilename = filename;
+  if (p.length > 30) {
+    const dotIdx = filename.lastIndexOf(".");
+    if (dotIdx > 0) {
+      const ext = filename.slice(dotIdx);
+      const base = filename.slice(0, dotIdx);
+      const maxBase = Math.max(6, 18 - ext.length);
+      displayFilename = base.length > maxBase ? `${base.slice(0, maxBase)}…${ext}` : filename;
+    } else {
+      displayFilename = filename.length > 18 ? `${filename.slice(0, 16)}…` : filename;
+    }
+  }
+
+  return { dir, filename: displayFilename, fullPath: p };
+}
+
+function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeData; selected?: boolean; rank?: number }) {
+  const rank = propRank ?? data.rank ?? (data.kind === "root" || data.kind === "repo" ? 0 : 2);
+  const cfg = RANK_CONFIGS[rank] ?? RANK_CONFIGS[2];
   const style = LAYER_STYLE[data.layer];
   const Icon = KIND_ICONS[data.kind] ?? LAYER_ICONS[data.layer];
-  const isRoot = data.kind === "root" || data.kind === "repo";
+  const isRoot = rank === 0 || data.kind === "root" || data.kind === "repo";
   const isChild = Boolean(data.child);
   const isFunctionChild = isChild && data.kind === "function";
   const isClassChild = isChild && data.kind === "class";
   const isFolder = data.kind === "folder";
 
-  // Per-kind fills (Section 8 node styling)
-  let fill = style.fill;
-  let border = style.border;
-  let textColor = style.text;
-  let subColor = "#837D6E";
-  if (isRoot)        { fill = "#1A1A1A"; border = "#1A1A1A"; textColor = "#FFFFFF"; subColor = "rgba(255,255,255,0.7)"; }
-  else if (isFunctionChild) { fill = "#FFFFFF"; border = "#D4AF37"; textColor = "#141414"; }
-  else if (isClassChild)    { fill = "#EDE9FE"; border = "#C4B5FD"; textColor = "#4C1D95"; }
-  else if (isFolder)        { fill = "#FAF7F0"; border = "#D4AF37"; textColor = "#141414"; }
+  // Per-kind fills
+  let fill = cfg.fill ?? style.fill;
+  let border = cfg.border ?? style.border;
+  let textColor = cfg.text ?? style.text;
+  let subColor = rank === 6 ? "#94A3B8" : "#64748B";
 
-  const w = isChild ? CHILD_W : NODE_W;
-  const h = isChild ? CHILD_H : NODE_H;
+  if (isRoot) {
+    fill = "#1A1A1A";
+    border = "#1A1A1A";
+    textColor = "#FFFFFF";
+    subColor = "rgba(255,255,255,0.7)";
+  } else if (isFunctionChild) {
+    fill = "#FFFFFF";
+    border = "#D4AF37";
+    textColor = "#141414";
+  } else if (isClassChild) {
+    fill = "#EDE9FE";
+    border = "#C4B5FD";
+    textColor = "#4C1D95";
+  } else if (isFolder) {
+    fill = "#FAF7F0";
+    border = "#D4AF37";
+    textColor = "#141414";
+  } else if (rank === 6) {
+    fill = "#F1F5F9";
+    border = "#CBD5E1";
+    textColor = "#64748B";
+  }
 
-  // Impact rings (4.4) — box-shadow rings, no blur glow
+  const w = isChild ? CHILD_W : cfg.width;
+  const h = isChild ? CHILD_H : cfg.height;
+
+  // Impact rings
   let ring = "none";
-  if (data.impactState === "target")        ring = `0 0 0 4px #F0503C`;
-  else if (data.impactState === "direct")   ring = `0 0 0 3px #D97706`;
+  if (data.impactState === "target") ring = `0 0 0 4px #F0503C`;
+  else if (data.impactState === "direct") ring = `0 0 0 3px #D97706`;
   else if (data.impactState === "transitive") ring = `0 0 0 2px rgba(217, 119, 6, 0.55)`;
-  else if (data.highlight || selected)      ring = `0 0 0 3px #F0503C`;
+  else if (data.highlight || selected) ring = `0 0 0 3px #F0503C`;
+
+  const { dir, filename, fullPath } = splitFilePath(data.fullPath || data.subtitle || data.label, data.label);
 
   return (
     <div
       className={`
-        relative flex items-center gap-2 border rounded-md transition-transform duration-100
-        hover:scale-[1.03] ${isChild ? "px-2" : "px-3"}
+        relative flex items-center gap-2 transition-transform duration-100
+        hover:scale-[1.02] ${isChild ? "px-2" : "px-3"}
       `}
       style={{
         width: w,
         height: h,
         background: fill,
         borderColor: border,
-        borderWidth: 1,
+        borderWidth: cfg.borderWidth,
+        borderStyle: "solid",
+        borderRadius: cfg.borderRadius,
         boxShadow: ring,
         opacity: data.impactState === "dim" ? 0.25 : 1,
       }}
-      title={data.subtitle ?? data.label}
+      title={fullPath}
     >
-      <Handle type="target" position={Position.Top} className="!bg-transparent !border-0 !w-1 !h-1 !min-w-0 !min-h-0 opacity-0" />
-      <Icon size={isChild ? 14 : 18} style={{ color: textColor }} className="shrink-0" />
+      {/* Halo for repo node (A10) */}
+      {isRoot && <div className="repo-halo -translate-x-1/2 -translate-y-1/2" style={{ left: "50%", top: "50%", zIndex: -1 }} />}
+
+      {/* Target handle: in (A1) */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="in"
+        className="rs-handle"
+        isConnectable={false}
+      />
+
+      <Icon size={isRoot ? 22 : isChild ? 14 : rank <= 2 ? 18 : 15} style={{ color: textColor }} className="shrink-0" />
       <div className="min-w-0 flex-1">
         <div
-          className={`font-bold leading-tight truncate ${isChild ? "text-[11px]" : "text-[13px]"}`}
-          style={{ color: textColor }}
+          className="leading-tight truncate"
+          style={{
+            color: textColor,
+            fontSize: isChild ? 11 : cfg.fontSize,
+            fontWeight: isChild ? 700 : cfg.fontWeight,
+          }}
         >
-          {data.label}
+          {isRoot ? data.label : filename}
         </div>
-        {data.subtitle && !isChild && (
+        {!isRoot && !isChild && dir && rank <= 4 && (
           <div
-            className="font-mono text-[10px] leading-tight truncate mt-0.5"
+            className="font-mono text-[9px] leading-tight truncate opacity-80 mt-0.5"
             style={{ color: subColor }}
           >
-            {data.subtitle}
+            {dir}
           </div>
         )}
       </div>
@@ -135,7 +220,14 @@ function LayerNodeInner({ data, selected }: { data: LayerNodeData; selected?: bo
         </span>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="!bg-transparent !border-0 !w-1 !h-1 !min-w-0 !min-h-0 opacity-0" />
+      {/* Source handle: out (A1) */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="out"
+        className="rs-handle"
+        isConnectable={false}
+      />
     </div>
   );
 }

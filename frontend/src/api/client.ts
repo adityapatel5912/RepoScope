@@ -134,6 +134,8 @@ export interface StreamOptions {
   signal?: AbortSignal;
 }
 
+import { aiHeaders } from "../utils/aiHeaders";
+
 export async function streamChat(
   mode: string,
   message: string,
@@ -146,6 +148,7 @@ export async function streamChat(
     headers: {
       "Content-Type": "application/json",
       "X-Session-Id": SESSION_ID,
+      ...aiHeaders(),
     },
     body: JSON.stringify({ mode, message, repo }),
     signal: options.signal,

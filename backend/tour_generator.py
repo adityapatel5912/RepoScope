@@ -16,7 +16,7 @@ log = logging.getLogger("reposcope.tour")
 TOUR_SYSTEM = "You are a code tour guide. Be concise, practical, and clear."
 
 
-def _explain_step(topic: str, node: dict, idx: int, total: int) -> str:
+def _explain_step(topic: str, node: dict, idx: int, total: int, provider: dict | None = None) -> str:
     """Generate the 2-3 sentence explanation for a single tour stop."""
     prompt = (
         f"You are giving a code tour. Step {idx + 1} of {total}.\n"
@@ -31,13 +31,14 @@ def _explain_step(topic: str, node: dict, idx: int, total: int) -> str:
             TOUR_SYSTEM,
             prompt,
             graph_context=json.dumps(node)[:2000],
+            provider=provider,
         ).strip()
     except Exception as exc:
         log.warning("Step explanation failed for %s: %s", node.get("id"), exc)
         return f"Read {node.get('label')} to understand part of {topic}."
 
 
-def build_tour(graph: dict, topic: str, max_steps: int = 12) -> dict:
+def build_tour(graph: dict, topic: str, max_steps: int = 12, provider: dict | None = None) -> dict:
     """
     Produce an ordered list of steps (files/functions) that form a
     logical reading tour for the given topic.
@@ -87,7 +88,7 @@ def build_tour(graph: dict, topic: str, max_steps: int = 12) -> dict:
     with ThreadPoolExecutor(max_workers=6) as pool:
         explanations = list(pool.map(
             lambda args: _explain_step(*args),
-            [(topic, node, i, total) for i, node in enumerate(steps_in_order)],
+            [(topic, node, i, total, provider) for i, node in enumerate(steps_in_order)],
         ))
 
     steps = []

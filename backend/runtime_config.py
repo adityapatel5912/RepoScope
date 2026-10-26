@@ -72,17 +72,71 @@ def _get_providers() -> list[tuple]:
     ]
 
 
-def ask_llm(system_prompt: str, user_query: str, graph_context: str = "") -> str:
+from ai_byok import resolve_provider
+
+
+def ask_llm(
+    system_prompt: str,
+    user_query: str,
+    graph_context: str = "",
+    provider: dict | None = None,
+) -> str:
     """
-    Try OpenRouter → Groq → NVIDIA NIM in order, rotating through every
-    key of a provider on rate-limit errors before falling to the next.
-    Returns the first successful response.
+    Execute LLM call using the resolved BYOK provider or fallback server chain.
     """
+    if provider is None:
+        try:
+            provider = resolve_provider(None, None, None, None)
+        except Exception:
+            provider = None
+
+    if provider and provider.get("source") == "byok":
+        # BYOK path
+        if provider.get("provider") == "anthropic":
+            import httpx
+            url = provider["base_url"].rstrip("/") + "/messages"
+            headers = {
+                "x-api-key": provider["api_key"],
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            body = {
+                "model": provider["model"],
+                "max_tokens": 1024,
+                "temperature": 0.3,
+                "system": system_prompt,
+                "messages": [
+                    {"role": "user", "content": f"{graph_context}\n\n{user_query}" if graph_context else user_query},
+                ],
+            }
+            with httpx.Client(timeout=60.0) as http_client:
+                res = http_client.post(url, headers=headers, json=body)
+                res.raise_for_status()
+                data = res.json()
+                return data["content"][0]["text"]
+
+        from openai import OpenAI
+        client = OpenAI(
+            base_url=provider["base_url"],
+            api_key=provider["api_key"],
+        )
+        resp = client.chat.completions.create(
+            model=provider["model"],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"{graph_context}\n\n{user_query}" if graph_context else user_query},
+            ],
+            temperature=0.3,
+            max_tokens=1024,
+        )
+        return resp.choices[0].message.content or ""
+
+    # Fallback to server rotator chain (Groq -> OpenRouter -> NVIDIA NIM)
     messages = [
         {"role": "system", "content": system_prompt},
         {
             "role": "user",
-            "content": f"Context:\n{graph_context}\n\nQuestion: {user_query}",
+            "content": f"Context:\n{graph_context}\n\nQuestion: {user_query}" if graph_context else user_query,
         },
     ]
 
@@ -103,15 +157,12 @@ def ask_llm(system_prompt: str, user_query: str, graph_context: str = "") -> str
                 content = r.choices[0].message.content
                 if content and content.strip():
                     return content
-                # HTTP 200 but empty content (filter/refusal) → treat as a
-                # provider failure and fall through to the next key/provider.
-                last_exc = RuntimeError(f"empty response content from provider")
+                last_exc = RuntimeError("empty response content from provider")
                 continue
             except Exception as exc:
                 last_exc = exc
                 if is_rate_limit_error(exc) or _is_eol_error(exc):
-                    continue  # next key / rotate past dead model
-                break         # non-rate error → next provider
-        # provider exhausted (or unconfigured) → fall through
+                    continue
+                break
 
     raise RuntimeError(f"All LLM providers failed. Last error: {last_exc}")

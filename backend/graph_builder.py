@@ -516,6 +516,10 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
             "label": rel,
             "language": file_facts.suffix.lstrip(".") or "txt",
             "size": file_facts.size,
+            # The content hash. It is what makes the incremental index
+            # possible — and Milestone 6.2 asks for it to be stored per
+            # file, which the SQLite store does.
+            "sha256": file_facts.sha256,
         })
 
         name_counts: dict[tuple[str, str], int] = {}
@@ -757,6 +761,7 @@ class GraphIndexer:
             "label": rel,
             "language": file_facts.suffix.lstrip(".") or "txt",
             "size": file_facts.size,
+            "sha256": file_facts.sha256,
         }
         node_ids = [fid]
 

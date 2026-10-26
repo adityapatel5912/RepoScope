@@ -152,6 +152,85 @@ async def hubs(limit: int = 15):
     }
 
 
+@router.get("/workspaces")
+async def workspaces():
+    """
+    The packages in a monorepo (Milestone 9.1).
+
+    An empty list means an ordinary repository — which is the common
+    case, and the right answer.
+    """
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        return {"available": False, "reason": "no repository loaded", "workspaces": []}
+
+    from monorepo import detect_workspaces
+
+    found = await asyncio.to_thread(detect_workspaces, local_path)
+    return {
+        "available": True,
+        "workspaces": found,
+        "count": len(found),
+        "is_monorepo": len(found) > 1,
+    }
+
+
+@router.get("/ownership")
+async def ownership():
+    """
+    The ownership overlay (Milestone 9.4).
+
+    Who last changed each file, combined with the churn. A file that
+    changes often and has ONE owner is a knowledge silo; a file that
+    changes often and has MANY is a coordination problem. Both are worth
+    knowing before you change something.
+    """
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        return {"available": False, "reason": "no repository loaded", "files": []}
+
+    from ownership import ownership_report
+
+    churn: dict[str, float] = {}
+    try:
+        from git_history import collect_churn
+
+        report = await asyncio.to_thread(collect_churn, local_path, 90)
+        for path, entry in (getattr(report, "files", {}) or {}).items():
+            churn[path] = float(getattr(entry, "churn_score", 0) or 0)
+    except Exception:  # noqa: BLE001 - churn is optional here
+        pass
+
+    result = await asyncio.to_thread(ownership_report, local_path, churn)
+    return result
+
+
+@router.get("/critical-path")
+async def critical_path(limit: int = 15):
+    """
+    The nodes on the critical path — the codebase's choke points.
+
+    Betweenness centrality is O(n·m), and it used to be computed on
+    every graph build — 2.5 seconds on a 3,753-node repository, for a
+    number the canvas never rendered. It is computed HERE, on demand, and
+    cached.
+    """
+    graph = await asyncio.to_thread(_current_graph)
+    if not graph:
+        return {"available": False, "reason": "no graph", "nodes": []}
+
+    from graph_analysis import critical_path as compute_critical_path
+
+    nodes = await asyncio.to_thread(compute_critical_path, graph, max(1, min(limit, 200)))
+    return {
+        "available": True,
+        "nodes": nodes,
+        "total": len(nodes),
+    }
+
+
 @router.get("/callers")
 async def callers(file: str = "", symbol: str = ""):
     """

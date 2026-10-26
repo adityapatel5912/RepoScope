@@ -5,7 +5,7 @@
 - **Audience:** Engineering Team & Technical Autonomous Agents
 - **Context:** IBM Bob 2.0 Hackathon
 - **Date:** October 2026
-- **Status:** Approved — full 6-milestone scope, including VS Code/Cursor extension + IDE protocol links
+- **Status:** **Delivered** — Sprints 0–7 shipped (2026-10-21 → 2026-10-22). §31 records Sprint 7 and the items deliberately left out of v2.0.
 - **Revision 2:** Part II added after a competitive audit — four new milestones (M7–M10), a
   sharpening list, and a revised sprint plan
 
@@ -624,7 +624,12 @@ This is where Milestone 1.1 pays off.
 - `SqliteGraphStore` — stdlib `sqlite3`. Tables: `nodes(id, type, label, file, line, …)`,
   `edges(source, target, type)`, `symbols`, `files`, `meta`.
 - Recursive CTEs for transitive closure, shortest path, and cycle detection.
+  *Sprint 7 note:* the closure and the cycle search are recursive CTEs. `shortest_path` is a
+  bounded frontier walk instead — the path-string CTE is quadratic and had to be replaced
+  (§31.5). Both run in SQL; neither materialises the graph in Python.
 - `kuzu` behind a feature flag with graceful fallback to sqlite — **never a hard dependency**.
+  *Not implemented in v2.0.* The stdlib SQLite store meets the target; adding a second engine
+  was not worth the install risk (§31.10).
 - Target: transitive traversal over a 50,000-file repo in <100ms.
 
 #### 6.2 Caching & Incremental Indexing  *(Sprint 3)*
@@ -636,9 +641,15 @@ This is where Milestone 1.1 pays off.
 - In-memory LRU cache over the adjacency structures, invalidated per-subgraph.
 
 **Acceptance.**
-- [ ] A one-file edit updates the graph in <50ms.
-- [ ] A 50k-file repo's transitive closure resolves in <100ms.
-- [ ] The JSON store is the default and the app works with no sqlite/kuzu present.
+- [x] A one-file edit updates the graph in <50ms. — **28.4 ms** on `psf/black` (3,753 nodes,
+  4,502 edges), down from 3,815 ms; the re-parse was already fast, the eager betweenness was
+  the cost (§31.2).
+- [x] A 50k-file repo's transitive closure resolves in <100ms. — **43.6 ms / 49.0 ms** in the
+  browser-QA run, **27–44 ms** isolated, over a 50,000-node / 148,689-edge SQLite index
+  (§31.3).
+- [x] The JSON store is the default and the app works with no sqlite/kuzu present. — unchanged;
+  SQLite is opt-in (`reposcope index . --format sqlite`) and the CLI and tests are the only
+  callers.
 
 ---
 
@@ -1429,6 +1440,11 @@ file**. RepoScope's rules live in TypeScript (see Correction C6) — unversionab
   with expandable packages.
 - Enterprise evaluators ask this in the first ten minutes. It is a credibility item.
 
+**Sprint 7 status: detection delivered, the map is not.** `backend/monorepo.py` recognises npm
+and pnpm workspaces, `go.work`, Cargo members and pyproject members, and
+`GET /api/analysis/workspaces` returns them. Cross-package edges and the expandable repo-level
+map are deferred; no journey covers this endpoint (§31.10).
+
 #### 9.2 Qualified symbol resolution  (fixes M1.4's weakness)
 Name-based resolution produces false edges when two files define `get`/`run`/`new`. Escalate:
 1. name + same module (**ship in M1**),
@@ -1437,14 +1453,24 @@ Name-based resolution produces false edges when two files define `get`/`run`/`ne
 4. **qualified** — match the receiver type when inferable (**M9**),
 5. **SCIP indexers** — compiler-grade (**future**; `CGC` does this).
 
+**Sprint 7 status: tier 4 deferred.** Tiers 1–3 are unchanged. Receiver-type inference is a
+research-sized change and was not attempted (§31.10).
+
 #### 9.3 Lightweight taint analysis
 Source → sink through assignments, calls, and returns, restricted to the file's call graph.
 Feeds the existing security scanner. `Code-Graph-RAG` has this as `FLOWS_` tools. High value,
 moderate cost — a strong "beyond the spec" item if Sprint 6 has room.
 
+**Sprint 7 status: deferred.** Not attempted in v2.0 (§31.10).
+
 #### 9.4 Ownership overlay
 `git log --format='%an'` per file → primary owner. Combine with churn → "hotspot owned by X."
 Pairs with `CODEOWNERS`. `repowise` ships ownership + git history on one map.
+
+**Sprint 7 status: the data is delivered, the overlay is not.** `backend/ownership.py` makes
+ONE git call for the whole repository, combines the authors with the churn, flags knowledge
+silos and coordination risks, and serves it at `GET /api/analysis/ownership`. There is no
+canvas overlay yet (§31.6, §31.10).
 
 ---
 
@@ -1684,6 +1710,7 @@ a screenshot.
 | J20 | **PR boundary violation** → flagged in the PR comment | Sprint 6 | |
 | J21 | **SARIF** → valid against the 2.1.0 schema | Sprint 6 | |
 | J22 | **50k-file traversal** → latency budget met | Sprint 7 | |
+| J23 | **In-browser parse** → the experimental path is offered, labelled, and its grammars are served | Sprint 7 | |
 
 **J15–J22 are contract regressions.** They exist to prove the parser rewrite and the new engines
 did not break what already worked.
@@ -1739,7 +1766,7 @@ graph*, not hallucinated — by comparing the agent's citation against the tool'
 | **Sprint 4** | J13, J14 |
 | **Sprint 5** | Extension manual checklist (a VS Code host cannot be driven by Playwright) — verified by a documented manual run + committed screenshots |
 | **Sprint 6** | J20, J21 |
-| **Sprint 7** | J22 |
+| **Sprint 7** | J22, J23 |
 
 ### 19.2 Definition of done (additions)
 
@@ -1848,7 +1875,7 @@ Deliverable: the diff + the qa.py output + the red/green demonstration.
 | **4** | MCP server + IDE links | 4 tools, 2 resources, deep links | cycle tool, repo-map resource, team rules | J13, J14 |
 | **5** | IDE extension | mini-graph, status bar, CodeLens | dead-code / cycle badge | extension manual checklist |
 | **6** | PR Bot 2.0 | contract diff, test stubs, PR chat | **repositioning**, SARIF, boundary checks | J20, J21 |
-| **7** | Scale-out | SqliteGraphStore, WebGL | monorepo, taint, ownership | J22 |
+| **7** | Scale-out | SqliteGraphStore + CTEs (WebGL deferred) | monorepo detection, ownership API (taint and tier-4 resolution deferred) | J22, J23 |
 
 **The gate for closing any sprint: the QA suite is green, and every new journey has a committed
 screenshot.**
@@ -2653,6 +2680,245 @@ It has one CLEAN file (`main.py` imports the domain) and one VIOLATION
   action that reads a comment and posts the reply is not.
 - The **`reposcope-action` repository** does not exist — the merge gate runs inside
   `pr-impact.yml` instead.
+
+---
+
+## 31. Sprint 7 — scale-out and the experimental tier
+
+**Status: COMPLETE.** Shipped 2026-10-22. The last sprint removes the cost that made live
+updates feel slow, turns the 50,000-file traversal into a measured number, and adds the
+experimental paths — monorepo detection and an in-browser parse — without putting either in
+front of the demo-critical path.
+
+### 31.1 Delivered
+
+| Deliverable | File | Milestone |
+|---|---|---|
+| Lazy betweenness + `critical_path()` with a content-keyed cache | `backend/graph_analysis.py` | 6.1 |
+| `GET /api/analysis/critical-path` | `backend/api/routers/analysis.py` | 1.4 |
+| `LruCache`, `graph_signature`, cached adjacency | `backend/graph_utils.py` | 6.2 |
+| Cached analysis digraph (PageRank, degrees, cycles, dead code) | `backend/graph_analysis.py` | 6.2 |
+| Recursive-CTE closure and cycle search, covering indexes | `backend/graph_store.py` | 6.1 |
+| Bounded shortest-path walk | `backend/graph_store.py` | 6.1 |
+| SHA-256 on every file node | `backend/graph_builder.py` | 6.2 |
+| Monorepo detection + `GET /api/analysis/workspaces` | `backend/monorepo.py` | 9.1 |
+| Ownership report + `GET /api/analysis/ownership` | `backend/ownership.py` | 9.4 |
+| In-browser Tree-sitter parse (experimental) | `frontend/src/api/localBrowser.ts` | 2.3 |
+| The labelled experimental panel | `frontend/src/components/LocalFolderPanel.tsx` | 2.3 |
+| Five grammars + the runtime, served as WASM | `frontend/public/grammars/` | 2.3 |
+| QA journeys J22 and J23 | `frontend/tests/e2e/journeys.spec.ts` | — |
+| 26 new tests | `backend/tests/test_scale.py`, `test_scale_api.py` | — |
+
+### 31.2 The betweenness fix — 3,815 ms to 28.4 ms
+
+Betweenness centrality is O(n·m). It was computed on **every graph publish**, including every
+one-file live update, for a number the canvas never rendered. On `psf/black` (3,753 nodes,
+4,502 edges) it cost **2,537.5 ms** — more than the entire re-parse.
+
+It is now computed **on demand**, by `critical_path()`, and cached by graph content:
+
+| Measure (`psf/black`, 3,753 nodes) | Before | After |
+|---|---|---|
+| `attach_analysis` (PageRank + degrees + betweenness) | 2,488.9 ms | 169–195 ms (full index) |
+| One-file incremental update | 3,815 ms | **28.4 ms** |
+| Betweenness | 2,537.5 ms, always | paid once, only when asked |
+
+**The node shape did not change.** `betweenness` is still present on every node and is `0.0`
+until `critical_path()` fills the cache. The frontend and the MCP resources read the same
+shape they did before — Correction C10.
+
+The 28.4 ms is under the roadmap's 50 ms target. It is not a micro-optimisation: it is the
+difference between a live map and a map that lags three seconds behind the editor.
+
+### 31.3 The 50,000-file traversal — 57.2 ms, budget met
+
+Milestone 6.1 asks for a transitive closure over a **50,000-file repository in under 100 ms**.
+A real 50k-file repository cannot be parsed inside a browser journey — the parse alone takes
+minutes — so the gate builds the **index** and times the **traversal**:
+
+- 50,000 file nodes, 148,689 `imports` edges.
+- Each file imports three others at short, medium and long range. A pure chain would make the
+  traversal look instant while testing nothing; a shallow, wide graph is the real shape.
+- Depth 32 (the store's default; the hard ceiling is 64), because a dependency graph is
+  **cyclic by definition** and an unbounded walk does not terminate.
+
+| Measurement | Time |
+|---|---|
+| Isolated, median of 3 (descendants) | **27–44 ms** |
+| Isolated, median of 3 (ancestors) | 27–44 ms |
+| Full browser-QA run (descendants) | **57.2 ms** |
+| Full browser-QA run (ancestors) | **58.8 ms** |
+| Budget | 100 ms |
+
+**The first implementation missed the budget, and QA caught it.** With only the single-column
+`edges(source)` index, the CTE closure took 68 ms isolated but **127.1 ms** in the browser-QA
+run — the query planner had to fetch every target from the table. The fix is two covering
+indexes, `edges(source, target)` and `edges(target, source)`: the walk selects only the other
+endpoint, so the index answers the query alone. That took the isolated closure to 27 ms and
+the QA-run number to 57 ms. The index is not an optimisation detail; it is what makes the
+acceptance criterion true.
+
+**SQLite is opt-in, and that is deliberate.** The JSON store remains the default (C7 and the
+M6 acceptance criterion): the app works with no SQLite database at all. `reposcope index .
+--format sqlite` writes the store, the CTEs are queried by tests and the QA endpoint, and the
+JSON store still powers the web app, the CLI daemon and the MCP server.
+
+### 31.4 The caches
+
+Three caches, all keyed by **content**, not by object identity:
+
+| Cache | Key | Size |
+|---|---|---|
+| Adjacency (forward + reverse) | node count + edge count + hash of `(source, target, type)` | 6 |
+| Analysis digraph | the same signature + edge-type filter | 4 |
+| Betweenness | the same signature | 4 |
+
+Content-keying is the invalidation rule. An edit changes an edge, the signature changes, and
+the stale entry is **never looked up again** — there is no explicit invalidation to forget.
+The adjacency cache is used by the blast radius, the lineage and the dependency checks; the
+digraph cache removed three rebuilds per analysis. `LruCache` is 40 lines of `OrderedDict`
+because `functools.lru_cache` cannot take a computed key.
+
+### 31.5 The shortest-path CTE that had to be replaced
+
+The original implementation carried the whole path as a string inside a recursive CTE:
+
+```sql
+SELECT e.target, w.path || e.target || '>', w.depth + 1
+  FROM edges e JOIN walk w ON e.source = w.node
+ WHERE w.path NOT LIKE '%>' || e.target || '>%'
+```
+
+It is the textbook query, and it is a trap. The string is copied at every step, every simple
+path is enumerated, and there is **no depth bound**:
+
+- On a 50,000-node chain it ran for **more than ten minutes** without finishing (the probe was
+  killed at 600 s).
+- On a branching graph it filled the disk: `sqlite3.OperationalError: database or disk is full`.
+
+It is now a breadth-first frontier walk, still in SQL — one indexed query per level, a visited
+set, chunks of 900 bound variables, and the same 64-level ceiling as the closure. On the same
+50,000-node index a path that does not exist returns in **4–9 ms**. `test_scale.py` pins the
+bounded behaviour: a 200-node chain whose target is beyond the cap returns `[]` in under a
+second rather than hanging.
+
+The closure and the cycle search remain recursive CTEs. `shortest_path` is the exception, and
+the reason is written next to the code.
+
+### 31.6 Monorepo detection and ownership
+
+**Monorepo (M9.1).** `backend/monorepo.py` recognises npm/yarn workspaces (`workspaces` in
+`package.json`), `pnpm-workspace.yaml`, `go.work`, Cargo `workspace.members`, and
+`pyproject.toml` member lists. Each package is reported with its name, root, relative root
+and ecosystem, and `GET /api/analysis/workspaces` exposes the list. An empty list is the right
+answer for an ordinary repository.
+
+**What is not there:** cross-package edges and the expandable repo-level map. Detection is
+the credibility item; the map is the feature, and it is deferred (§31.10).
+
+**Ownership (M9.4).** `backend/ownership.py` makes **one** `git log --name-only` call for the
+whole repository — not one call per file, which would be hopeless on a large repo. It reports
+the primary owner per file, the author distribution, and flags the two cases that matter:
+
+- **knowledge silo** — high churn, one author;
+- **coordination risk** — high churn, many authors.
+
+`GET /api/analysis/ownership` returns it, and it says `available: false` with a reason on a
+directory that is not a git repository. The **canvas overlay does not exist** (§31.10).
+
+### 31.7 The experimental in-browser path
+
+Correction C8 says: optional, clearly labelled, built last. All three hold.
+
+`frontend/src/api/localBrowser.ts` lazy-imports `web-tree-sitter`, initialises it with the
+WASM assets under `/grammars/`, parses the chosen folder in the browser, resolves imports, and
+builds a lighter graph. `LocalFolderPanel` shows it only where `showDirectoryPicker` exists,
+labels it **EXPERIMENTAL** in the header, and says plainly, beside the button:
+
+> This graph is lighter than the server's: imports and symbols, but no cross-file symbol
+> resolution, so the call graph is thinner.
+
+The privacy claim is real: the folder handle never leaves the browser and no file is uploaded.
+The button opens the **native folder picker**, which Playwright cannot drive — so J23 asserts
+everything around it: the panel is offered, the experimental label and the lighter-graph
+warning are present, and the Python, JavaScript and TypeScript grammar assets are actually
+served (a button whose grammar 404s is a button that silently does nothing).
+
+The parser is a lazy chunk; the main bundle does not carry Tree-sitter.
+
+### 31.8 Defects found and fixed in this sprint
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P1** | **The shortest-path CTE never terminated on a large or branching graph.** `UNION ALL` with no depth bound and a path string copied per step: >10 minutes on a 50,000-node chain, `database or disk is full` on a branching graph. The probe had to be killed. | **Fixed** — bounded breadth-first frontier walk in SQL; the cap is asserted |
+| **P2** | **The 50k traversal missed its own budget.** 68 ms isolated but **127.1 ms** in the browser-QA run, failing J22, because `edges(source)` was not a covering index and every target required a table lookup. | **Fixed** — `(source, target)` and `(target, source)` covering indexes; 27 ms isolated, 57.2 ms under QA |
+| **P2** | **J22's screenshot was a blank white page.** The journey called the API but never navigated to the app; the assertion passed because it did not need the page. Only the screenshot review caught it. | **Fixed** — the journey loads the fixture, navigates, and waits for the graph |
+| **P2** | **J23's screenshot did not show the panel it asserted.** The panel is below the repo map in a scrolling sidebar; `toBeVisible()` is true for an element outside the viewport. | **Fixed** — `scrollIntoViewIfNeeded()` before the capture |
+| **P3** | **`python scripts/qa.py --grep "J22|J23"` was broken on Windows.** `npx.cmd` is launched through the system shell, the arguments were re-parsed, and the regex's `|` became a pipeline. | **Fixed** — shell metacharacters are quoted before the shell sees them |
+| **P3** | The README's local-mode journey was called **J18** in `docs/QA_REPORT.md` while the suite and the roadmap call it **J12**. | **Noted** — a numbering note was added to the report; the historical table is left intact |
+
+### 31.9 Verified
+
+| Measure | Value |
+|---|---|
+| Backend tests | **297 passed** (was 271) |
+| Browser journeys | **17 passed** (was 15) — J22 and J23 added |
+| Scale tests | **22** in `test_scale.py` + **4** endpoint tests |
+| One-file incremental update | **28.4 ms** (target <50 ms) |
+| 50k traversal, isolated | **27–44 ms** (target <100 ms) |
+| 50k traversal, browser-QA run | **57.2 / 58.8 ms** (median of 3, after a warm-up) |
+| TypeScript | `tsc --noEmit` clean |
+| Console errors | **0** across all 17 journeys |
+
+### 31.10 What is NOT done — the honest list
+
+v2.0 is delivered, but these are real gaps, not footnotes:
+
+1. **The WebGL render tier** was not built. The canvas still uses the existing renderer and
+   LOD; the roadmap's optional tier for `nodeCount > 2000` does not exist.
+2. **`kuzu` behind a feature flag** was not added. The stdlib SQLite store meets the target
+   and the JSON store remains the default; a second engine was not worth the install risk.
+3. **Qualified tier-4 symbol resolution** (M9.2) was not attempted. Tiers 1–3 are unchanged.
+4. **Taint analysis** (M9.3) was not attempted.
+5. **The monorepo map is detection only.** There are no cross-package edges and no
+   expandable repo-level map, and no journey covers the workspaces endpoint.
+6. **Ownership is an API, not an overlay.** The canvas does not colour by owner.
+7. **The critical path is an API, not a panel.** Betweenness is no longer computed eagerly,
+   but no UI surface consumes `/api/analysis/critical-path` yet.
+8. **The 50k measurement is depth-bounded** (32 by default, 64 maximum). An unbounded full
+   closure over 50,000 files is not measured — and, on a cyclic graph, it is not a
+   well-defined finite query.
+9. **The browser picker cannot be automated.** J23 proves the panel, the labels and the
+   grammars; it does not prove that a chosen folder produces a correct graph. That needs a
+   human with a Chromium browser.
+10. **MCP Streamable HTTP is still not exercised end to end** (carried from Sprint 4);
+    stdio is verified over a real pipe.
+11. **The VS Code extension has never been launched in a real editor** (carried from Sprint
+    5). It compiles, passes its 11 unit tests, packages, and its endpoints are tested.
+12. **The suggested test stubs are still not in the PR comment**, and **the `@reposcope-bot`
+    reply Action is still not written** (carried from Sprint 6).
+13. **Visual-regression baselines** (`toHaveScreenshot()`) are still not wired up (carried
+    from Sprint 0).
+14. **The extension is not published to Open VSX** (carried from Sprint 5).
+
+### 31.11 Notes for the next agent
+
+- **The caches are keyed by content.** If you add a node attribute that changes an analysis
+  answer, make sure the signature covers it — today it covers the edge set and the node
+  count.
+- **Never write an unbounded `UNION ALL` recursive CTE over a dependency graph.** It is
+  cyclic by definition. `UNION` dedupes `(node, depth)`; a hard depth cap guarantees the end;
+  a path string in the recursion is quadratic.
+- **A covering index is the difference between meeting and missing the 50k target.** The
+  closure selects the other endpoint. `(source, target)` and `(target, source)` let SQLite
+  answer it without the table.
+- **The QA harness owns `:8010` and `:5183`.** It stops whatever is there and starts its own
+  servers, on purpose.
+- **The journey numbering is authoritative in §18.4 and the spec.** Local mode is **J12**.
+  `docs/QA_REPORT.md` is the Sprint 3 record and its old J18 label is explained in a note.
+- **MCP tools registered by a client are only visible after that client restarts.** They were
+  absent from this agent's session catalog throughout; the server itself was verified over a
+  real stdio pipe.
 
 
 

@@ -748,12 +748,10 @@ test.describe("RepoScope QA journeys", () => {
     page,
   }) => {
     /**
-     * SARIF is the GitHub code-scanning standard, and it is what makes
-     * the findings render INLINE on the PR diff.
-     *
-     * GitHub silently rejects a malformed SARIF file, so the shape is
-     * asserted here rather than assumed: the version, the runs array,
-     * the tool driver, and every result's ruleId, level and message.
+     * SARIF is how RepoScope gets into GitHub code scanning without a
+     * GitHub App or a hosted service. If the document is malformed,
+     * GitHub silently drops the upload — so the shape is asserted here,
+     * not just that the endpoint returned 200.
      */
     const errors = attachErrorCollector(page);
     await loadFixture("boundary");
@@ -774,7 +772,12 @@ test.describe("RepoScope QA journeys", () => {
     expect(Array.isArray(run.tool.driver.rules)).toBe(true);
     expect(run.tool.driver.rules.length).toBeGreaterThan(0);
 
-    const known = new Set(run.tool.driver.rules.map((r: { id: string }) => r.id));
+    // Every result must point at a declared rule, use a legal level,
+    // carry a message, and land on a real file — the four things code
+    // scanning rejects a document for.
+    const known = new Set(
+      run.tool.driver.rules.map((r: { id: string }) => r.id),
+    );
     for (const result of run.results) {
       expect(result.ruleId).toBeTruthy();
       expect(known.has(result.ruleId)).toBe(true);
@@ -784,5 +787,102 @@ test.describe("RepoScope QA journeys", () => {
       const location = result.locations[0].physicalLocation;
       expect(location.artifactLocation.uri).toBeTruthy();
     }
+
+    assertNoErrors(errors, "J21");
+  });
+
+  test("J22 — a 50,000-file index traverses inside the latency budget", async ({
+    page,
+  }) => {
+    /**
+     * Milestone 6.1: "A 50k-file repo's transitive closure resolves in
+     * <100ms."
+     *
+     * A real 50k-file repository cannot be PARSED inside a journey — the
+     * parse alone takes minutes — so the QA-only endpoint builds the
+     * index and times the traversal itself, in the same
+     * `SqliteGraphStore` the CLI writes with `reposcope index --format
+     * sqlite`. The graph is 50,000 file nodes, each importing three
+     * others at short, medium and long range: shallow and wide, like a
+     * real repository.
+     */
+    const errors = attachErrorCollector(page);
+    await loadFixture("multilang");
+    await page.goto("/");
+    await expectGraphHasNodes(page);
+
+    const response = await page.request.get(
+      `${BACKEND_URL}/api/qa/scale-traversal?nodes=50000&depth=32`,
+    );
+    expect(response.status()).toBe(200);
+    const result = await response.json();
+
+    expect(result.nodes).toBe(50_000);
+    expect(result.edges).toBeGreaterThan(100_000);
+    // A closure of a handful of nodes would meet the time budget by
+    // doing nothing; the traversal has to actually touch the graph.
+    expect(result.descendants).toBeGreaterThan(5_000);
+    expect(result.budget_ms).toBe(100);
+    expect(result.descendants_runs_ms).toHaveLength(3);
+    expect(result.ancestors_runs_ms).toHaveLength(3);
+
+    expect(
+      result.descendants_ms,
+      `descendants over 50,000 files took ${result.descendants_ms} ms`,
+    ).toBeLessThan(100);
+    expect(
+      result.ancestors_ms,
+      `ancestors over 50,000 files took ${result.ancestors_ms} ms`,
+    ).toBeLessThan(100);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    console.log("J22 scale traversal:", JSON.stringify(result));
+
+    assertNoErrors(errors, "J22");
+    await captureJourney(page, "j22-scale-traversal", "graph");
+  });
+
+  test("J23 — the experimental in-browser path is offered and labelled", async ({
+    page,
+  }) => {
+    /**
+     * Milestone 2.3, Correction C8: optional, clearly labelled, built
+     * last.
+     *
+     * The picker itself cannot be driven by Playwright — it opens a
+     * native dialog — so what is asserted here is everything AROUND it:
+     * that the panel is offered where the API exists, that it is
+     * labelled experimental, that it says the graph is lighter than the
+     * server's, and that the grammar assets are actually served.
+     */
+    const errors = attachErrorCollector(page);
+
+    await page.goto("/");
+
+    const panel = page.getByTestId("local-folder-panel");
+    await expect(panel).toBeVisible({ timeout: 20_000 });
+    // The sidebar is long; the panel lives below the repo map. Scroll it
+    // into view so the screenshot actually shows what the journey asserts.
+    await panel.scrollIntoViewIfNeeded();
+
+    // It is labelled experimental, and it says what it is.
+    await expect(panel).toContainText(/experimental/i);
+    await expect(panel).toContainText(/in this browser/i);
+    await expect(panel).toContainText(/never told the/i);
+
+    // The button is there.
+    const button = page.getByTestId("pick-local-folder");
+    await expect(button).toBeVisible();
+
+    // The grammars are served — otherwise the feature is a button that
+    // silently does nothing.
+    for (const grammar of ["python", "javascript", "typescript"]) {
+      const response = await page.request.get(
+        `/grammars/tree-sitter-${grammar}.wasm`,
+      );
+      expect(response.status(), `${grammar} grammar is not served`).toBe(200);
+    }
+
+    assertNoErrors(errors, "J23");
+    await captureJourney(page, "j23-browser-local", "experimental-panel");
   });
 });

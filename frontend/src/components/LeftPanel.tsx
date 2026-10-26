@@ -11,6 +11,7 @@ import AIKeyPanel from "./AIKeyPanel";
 import OnboardingPath from "./OnboardingPath";
 import InsightsPanel from "./InsightsPanel";
 import RepoMapPanel from "./RepoMapPanel";
+import LocalFolderPanel from "./LocalFolderPanel";
 import { toast } from "./Toasts";
 import { Github, CheckCircle2, Keyboard, Bug, RotateCw, Eraser, FileWarning, Play, X } from "lucide-react";
 
@@ -195,6 +196,9 @@ export default function LeftPanel({
           repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
         />
       )}
+
+      {/* ── Experimental: parse a folder in the browser, upload nothing ── */}
+      <LocalFolderPanel />
 
       {/* ── Student Mode: guided learning path (pyramid-ranked) ── */}
       {studentMode && (

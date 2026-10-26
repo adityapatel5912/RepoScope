@@ -1,0 +1,25 @@
+# A repository with a DECLARED architecture boundary.
+#
+# The point of this fixture is the `.reposcope.yml` below: RepoScope's
+# boundary checking is only meaningful when the team declares its own
+# boundaries. A built-in taxonomy is a guess; a declared rule is a
+# decision, and the PR bot can enforce a decision.
+version: 1
+
+layers:
+  - name: domain
+    description: Business logic. Knows nothing about the database.
+    include:
+      - "domain/**"
+  - name: infra
+    description: Persistence and external services.
+    include:
+      - "infra/**"
+
+rules:
+  - id: no-domain-to-infra
+    from: domain
+    to: infra
+    severity: error
+
+ignore: []

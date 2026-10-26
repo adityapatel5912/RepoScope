@@ -124,62 +124,47 @@ def scan_text_for_env_usage(text: str, file: str) -> list[dict]:
 
 
 # ── Breaking-change detectors ────────────────────────────────────────────────
-
-_PY_SIG = re.compile(r"^\s*(?:-\s*)?(?:def|async def)\s+(\w+)\s*\(([^)]*)\)")
-_JS_SIG = re.compile(
-    r"^\s*(?:-\s*)?(?:export\s+)?(?:async\s+)?(?:function\s+(\w+)\s*\(([^)]*)\)"
-    r"|(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>)"
-)
-
-
-def _norm_args(args: str) -> str:
-    return re.sub(r"\s+", "", args or "")
-
+#
+# Correction C3: the implementation lives in `backend/contract_diff.py`,
+# which does the detection with tree-sitter instead of regexes. This
+# function DELEGATES to it, so there is exactly ONE source of truth.
+#
+# That matters more than it sounds. Two divergent detectors produce two
+# different risk scores for the same change, and the PR bot reports one
+# of them while the security scan reports the other. The user is then
+# asked to trust a number that disagrees with itself.
 
 def detect_breaking_in_patch(patch: str, file: str) -> list[dict]:
-    """Detect function signature changes in a unified diff.
-
-    A signature breaks when a function is removed or re-added with a
-    different parameter list within the same patch hunk pair.
     """
+    Detect breaking contract changes in a unified diff.
+
+    The detection is AST-based: the parameter lists come from tree-sitter's
+    parameter nodes, so a renamed parameter is a renamed parameter and not
+    a line that happens to look different.
+
+    The returned flags keep the shape the scanner has always produced —
+    `severity`, `file`, `line`, `message`, `suggestion` — so nothing
+    downstream had to change.
+    """
+    from contract_diff import diff_sources, sources_from_patch
+
+    try:
+        old_source, new_source = sources_from_patch(patch)
+        findings = diff_sources(old_source, new_source, file)
+    except Exception as exc:  # noqa: BLE001 - a scan must never raise
+        log.warning("Contract diff failed for %s: %s", file, exc)
+        return []
+
     flags: list[dict] = []
-    removed: dict[str, tuple[str, int]] = {}   # name -> (args, line)
-    added: dict[str, tuple[str, int]] = {}
-
-    for lineno, line in enumerate(patch.splitlines(), 1):
-        if line.startswith("---") or line.startswith("+++"):
-            continue
-        body = line[1:] if line[:1] in "+-" else line
-        is_removed = line.startswith("-")
-        m = _PY_SIG.match(body) if file.endswith(".py") else None
-        if m:
-            (removed if is_removed else added)[m.group(1)] = (_norm_args(m.group(2)), lineno)
-            continue
-        m = _JS_SIG.match(body)
-        if m:
-            name = m.group(1) or m.group(3)
-            args = m.group(2) if m.group(1) else m.group(4)
-            (removed if is_removed else added)[name] = (_norm_args(args or ""), lineno)
-
-    for name, (old_args, line) in removed.items():
-        if name in added:
-            new_args, _new_line = added[name]
-            if old_args != new_args:
-                flags.append(_flag(
-                    "BREAKING", "high", file, line,
-                    f"Function `{name}` signature changed: ({old_args or ''}) → "
-                    f"({new_args or ''})",
-                    "Every caller of this function needs updating. Bump the "
-                    "major version and list the change in a BREAKING CHANGES "
-                    "section so downstream users aren't surprised.",
-                ))
-        else:
-            flags.append(_flag(
-                "BREAKING", "medium", file, line,
-                f"Function `{name}` was removed",
-                "If this is a public API, deprecate first (warn for one "
-                "release) before removing, and note it in the changelog.",
-            ))
+    for finding in findings:
+        flags.append(_flag(
+            finding.severity,
+            "high" if finding.severity == "BREAKING" else "low",
+            finding.file,
+            finding.line,
+            finding.message,
+            finding.guidance,
+        ))
     return flags
 
 

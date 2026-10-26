@@ -64,7 +64,11 @@ def test_signature_change_python():
     flags = detect_breaking_in_patch(patch, "payments.py")
     assert len(flags) == 1
     assert flags[0]["type"] == "BREAKING"
-    assert "signature changed" in flags[0]["detail"]
+    # The AST detector names the EXACT parameter that broke the contract.
+    # The old regex detector could only say "signature changed", which
+    # told a reviewer nothing about what to fix.
+    assert "user_id" in flags[0]["detail"]
+    assert "process_payment" in flags[0]["detail"]
 
 
 def test_removed_function():

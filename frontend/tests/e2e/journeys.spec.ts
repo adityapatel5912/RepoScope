@@ -696,4 +696,93 @@ test.describe("RepoScope QA journeys", () => {
     assertNoErrors(errors, "J14");
     await captureJourney(page, "j14-ide-link", "editor-uri");
   });
+
+  test("J20 — a boundary violation is flagged in the PR comment", async ({
+    page,
+  }) => {
+    /**
+     * The architecture-governance angle — the one no AI code reviewer
+     * competes in.
+     *
+     * The `boundary` fixture declares its own layers and its own rule in
+     * `.reposcope.yml`: the domain may not depend on the infra.
+     * `domain/orders.py` breaks that rule. The report must say so, and
+     * it must name BOTH files and the rule.
+     */
+    const errors = attachErrorCollector(page);
+    await loadFixture("boundary");
+
+    const response = await page.request.post(`${BACKEND_URL}/api/pr/report`, {
+      data: {
+        meta: { number: 42, title: "Add the order flow", state: "open" },
+        changed_files: [
+          { filename: "domain/orders.py", status: "modified", additions: 8, deletions: 0 },
+        ],
+      },
+    });
+    expect(response.status()).toBe(200);
+    const report = await response.json();
+
+    // The violation is found, and it names both files.
+    const violations = report.architecture_impact.boundary_violations;
+    expect(violations).toBeGreaterThan(0);
+
+    const comment = report.comment;
+    expect(comment).toContain("Architecture impact");
+    expect(comment).toContain("Boundary violation");
+    expect(comment).toContain("domain/orders.py");
+    expect(comment).toContain("infra/store.py");
+
+    // The merge gate blocks it, and says why.
+    expect(report.merge_gate.passed).toBe(false);
+    expect(report.merge_gate.blocked_by).toContain("boundary-violation");
+
+    // The Mermaid fallback survives — GitHub renders it natively and it
+    // needs no external service.
+    expect(comment).toContain("```mermaid");
+
+    assertNoErrors(errors, "J20");
+  });
+
+  test("J21 — the SARIF output is valid against the 2.1.0 schema", async ({
+    page,
+  }) => {
+    /**
+     * SARIF is the GitHub code-scanning standard, and it is what makes
+     * the findings render INLINE on the PR diff.
+     *
+     * GitHub silently rejects a malformed SARIF file, so the shape is
+     * asserted here rather than assumed: the version, the runs array,
+     * the tool driver, and every result's ruleId, level and message.
+     */
+    const errors = attachErrorCollector(page);
+    await loadFixture("boundary");
+
+    const response = await page.request.get(`${BACKEND_URL}/api/pr/sarif`);
+    expect(response.status()).toBe(200);
+    const payload = await response.json();
+    const document = payload.sarif;
+
+    expect(document.version).toBe("2.1.0");
+    expect(document.$schema).toContain("sarif-schema-2.1.0");
+    expect(Array.isArray(document.runs)).toBe(true);
+    expect(document.runs.length).toBeGreaterThan(0);
+
+    const run = document.runs[0];
+    expect(run.tool.driver.name).toBe("RepoScope");
+    expect(run.tool.driver.version).toBeTruthy();
+    expect(Array.isArray(run.tool.driver.rules)).toBe(true);
+    expect(run.tool.driver.rules.length).toBeGreaterThan(0);
+
+    const known = new Set(run.tool.driver.rules.map((r: { id: string }) => r.id));
+    for (const result of run.results) {
+      expect(result.ruleId).toBeTruthy();
+      expect(known.has(result.ruleId)).toBe(true);
+      expect(["error", "warning", "note", "none"]).toContain(result.level);
+      expect(result.message.text).toBeTruthy();
+      expect(result.locations.length).toBeGreaterThan(0);
+      const location = result.locations[0].physicalLocation;
+      expect(location.artifactLocation.uri).toBeTruthy();
+    }
+  });
 });

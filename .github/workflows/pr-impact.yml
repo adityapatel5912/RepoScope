@@ -1,9 +1,16 @@
-# PR Impact Report — RepoScope PR Bot
+# PR Impact Report — RepoScope PR Bot 2.0
 #
 # On every PR (opened / updated), calls the RepoScope API to compute the
-# blast radius of the changed files, then posts the report as a PR comment:
-# risk score, affected files, suggested tests, and a mermaid impact graph
-# (GitHub renders mermaid natively in comments).
+# architecture impact of the changed files, then posts the report as a PR
+# comment: the blast radius, the ARCHITECTURE findings (broken contracts
+# with their real consumers, boundary violations, cycles), the merge gate,
+# and a mermaid impact graph (GitHub renders mermaid natively).
+#
+# The strict mode additionally:
+#   * uploads the findings as SARIF, so they appear INLINE on the PR diff
+#     — where reviewers already look, instead of in a comment they have
+#     to scroll to;
+#   * BLOCKS the merge when the gate fails.
 #
 # Requires: repository secret REPOSCOPE_API_URL (optional; defaults to the
 # public deployment). Uses the built-in GITHUB_TOKEN to post the comment.
@@ -19,10 +26,18 @@ on:
         description: PR number to analyze
         required: true
         type: string
+      strict:
+        description: Block the merge when the gate fails
+        required: false
+        default: "false"
+        type: string
 
 permissions:
   contents: read
   pull-requests: write
+  # Required to upload SARIF to GitHub code scanning. Without it the
+  # upload step is skipped with a warning rather than failing the run.
+  security-events: write
 
 concurrency:
   group: pr-impact-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
@@ -68,3 +83,82 @@ jobs:
         run: |
           gh pr comment "$PR" --repo "${{ github.repository }}" \
             --body-file impact-comment.md
+
+      # ── The strict mode ───────────────────────────────────────────────
+      #
+      # SARIF is the GitHub code-scanning standard. Emitting it is what
+      # moves the findings from a comment nobody scrolls to, into the
+      # diff itself.
+      - name: Upload the findings as SARIF
+        if: steps.impact.outputs.risk_level != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -r '.sarif // empty' impact-response.json > results.sarif
+          if [ ! -s results.sarif ]; then
+            echo "::warning::RepoScope returned no SARIF payload — skipping the upload"
+            exit 0
+          fi
+          # The code-scanning API needs a `category` and a checkout.
+          checkout_dir="$RUNNER_TEMP/sarif-upload"
+          mkdir -p "$checkout_dir"
+          cp results.sarif "$checkout_dir/results.sarif"
+          gh api "repos/${{ github.repository }}/code-scanning/sarif" \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            --input "$checkout_dir/results.sarif" || {
+              echo "::warning::GitHub rejected the SARIF upload (needs security-events: write)"
+              exit 0
+            }
+
+      # ── The merge gate ───────────────────────────────────────────────
+      #
+      # NOTE THE SCALE. The API reports the risk score on a 0-10 scale;
+      # `max_allowed_risk_score` below is on a 0-100 scale, because that
+      # is what a CI action's input implies. The conversion happens at the
+      # ACTION BOUNDARY, and it is documented in
+      # `backend/architecture_impact.py` (`normalize_risk_score`).
+      #
+      # An UNCONVERTED threshold is how a score of 10 becomes 1000 and
+      # every gate passes.
+      - name: Enforce the merge gate
+        if: ${{ steps.impact.outputs.risk_level != '' && (github.event_name == 'workflow_dispatch' && inputs.strict == 'true' || github.event_name == 'pull_request') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          MAX_ALLOWED_RISK_SCORE: "75"
+          REQUIRE_TESTS_FOR_HIGH_RISK: "false"
+          BLOCK_ON_BREAKING_CONTRACT: "true"
+        run: |
+          set -euo pipefail
+
+          # The gate's own answer, when the API provides one.
+          passed=$(jq -r '.merge_gate.passed // empty' impact-response.json || true)
+          blocked_by=$(jq -r '(.merge_gate.blocked_by // []) | join(", ")' impact-response.json || true)
+          reasons=$(jq -r '(.merge_gate.reasons // []) | join("; ")' impact-response.json || true)
+
+          # Otherwise the gate is evaluated HERE, on the 0-100 scale.
+          if [ -z "$passed" ]; then
+            score_0_10=$(jq -r '.risk_score // 0' impact-response.json)
+            score_0_100=$(( score_0_10 * 10 ))
+            if [ "$score_0_100" -gt "$MAX_ALLOWED_RISK_SCORE" ]; then
+              passed="false"
+              blocked_by="risk-score"
+              reasons="Risk score ${score_0_100}/100 is above the threshold ${MAX_ALLOWED_RISK_SCORE}/100"
+            else
+              passed="true"
+              blocked_by=""
+              reasons=""
+            fi
+          fi
+
+          echo "Gate: passed=${passed} blocked_by=${blocked_by:-none}"
+
+          if [ "$passed" != "true" ]; then
+            gh pr comment "$PR" --repo "${{ github.repository }}" \
+              --body "**RepoScope merge gate: blocked** by ${blocked_by}. ${reasons}" || true
+            echo "::error::The RepoScope merge gate blocked this pull request (${blocked_by})."
+            exit 1
+          fi

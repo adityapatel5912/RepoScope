@@ -10,6 +10,12 @@ import re
 
 import httpx
 
+from architecture_impact import (
+    analyze_architecture_impact,
+    merge_gate,
+    render_architecture_section,
+    render_svg_badges,
+)
 from graph_utils import build_adjacency, find_node_by_label
 from impact_analyzer import compute_blast_radius
 
@@ -70,9 +76,17 @@ def _risk_level(score: int) -> str:
     return "low"
 
 
-def build_pr_impact(graph: dict, meta: dict, files: list[dict]) -> dict:
+def build_pr_impact(graph: dict, meta: dict, files: list[dict],
+                    ruleset=None, repo_root: str | None = None) -> dict:
     """Aggregate blast radius across every changed file and render the
-    GitHub comment markdown. Pure function — no network, no LLM."""
+    GitHub comment markdown. Pure function — no network, no LLM.
+
+    Since Sprint 6 this is the **Architecture Impact** report, not a
+    bug-hunt report: broken contracts with their real consumers,
+    architectural boundary violations, dependency cycles, and the merge
+    gate. See `backend/architecture_impact.py` for why that positioning
+    matters.
+    """
     forward, reverse = build_adjacency(graph)
 
     per_file: list[dict] = []
@@ -125,8 +139,31 @@ def build_pr_impact(graph: dict, meta: dict, files: list[dict]) -> dict:
         n = nodes_by_id.get(node_id)
         return n.get("label", node_id) if n else node_id
 
+    # ── The Architecture Impact layer ───────────────────────────────────────
+    #
+    # The contract changes come from the AST diff (Milestone 5.1), and
+    # the boundary violations from the team's own rules (M8.3). Both are
+    # deterministic — no LLM decides whether a PR is risky.
+    contract_findings = _contract_findings(files)
+    impact = analyze_architecture_impact(
+        graph, files, contract_findings, ruleset=ruleset, repo_root=repo_root,
+    )
+
+    missing_tests = _missing_tests(graph, per_file)
+    gate = merge_gate(
+        impact,
+        risk_score,
+        max_allowed_risk_score=75,
+        require_tests_for_high_risk=False,
+        block_on_breaking_contract=True,
+        missing_tests=missing_tests,
+    )
+
+    savings = _context_savings(graph, repo_root)
+
     comment = _render_comment(meta, risk_score, risk_level, per_file,
-                              tests, direct_ids, transitive_ids, _label)
+                              tests, direct_ids, transitive_ids, _label,
+                              impact=impact, gate=gate, savings=savings)
 
     return {
         "pr_number": meta.get("number"),
@@ -141,17 +178,110 @@ def build_pr_impact(graph: dict, meta: dict, files: list[dict]) -> dict:
         "transitive_total": len(transitive_ids),
         "suggested_tests": tests[:8],
         "mermaid": _mermaid(direct_ids, transitive_ids, _label),
+        "architecture_impact": impact,
+        "merge_gate": gate,
+        "context_savings": savings,
+        "badges": render_svg_badges(
+            risk_score, risk_level, savings.get("reduction_pct") if savings else None,
+        ),
+        "sarif": _sarif_results(impact, risk_score, missing_tests),
         "comment": comment,
     }
+
+
+def _contract_findings(files: list[dict]) -> list:
+    """The AST contract changes in the pull request's patches."""
+    from contract_diff import diff_sources, sources_from_patch
+
+    findings = []
+    for changed in files[:MAX_FILES_ANALYZED]:
+        filename = changed.get("filename") or ""
+        patch = changed.get("patch") or ""
+        if not filename or not patch:
+            continue
+        try:
+            old_source, new_source = sources_from_patch(patch)
+            findings.extend(diff_sources(old_source, new_source, filename))
+        except Exception as exc:  # noqa: BLE001 - one bad patch must not stop the report
+            log.warning("Contract diff failed for %s: %s", filename, exc)
+    return findings
+
+
+def _missing_tests(graph: dict, per_file: list[dict]) -> list[str]:
+    """The changed, high-blast-radius modules that have no test file."""
+    from test_stubs import find_untested_modules
+
+    test_files = [
+        str(n.get("label", ""))
+        for n in graph.get("nodes", []) or []
+        if n.get("type") == "file" and "test" in str(n.get("label", "")).lower()
+    ]
+    risky = [e["file"] for e in per_file if e.get("direct", 0) > 0]
+    return find_untested_modules(graph, risky, test_files)
+
+
+def _context_savings(graph: dict, repo_root: str | None) -> dict:
+    """What the agent pays for the map instead of the whole codebase."""
+    if not repo_root:
+        return {}
+    try:
+        from repo_map import build_repo_map_with_metrics
+
+        metrics = build_repo_map_with_metrics(graph, repo_root)
+        return {
+            "repo_map_tokens": metrics.get("tokens", 0),
+            "full_context_tokens": metrics.get("full_context_tokens", 0),
+            "reduction_pct": metrics.get("reduction_pct", 0.0),
+        }
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Context savings failed: %s", exc)
+        return {}
+
+
+def _sarif_results(impact: dict, risk_score: int, missing_tests: list[str]) -> list:
+    """The findings as SARIF results — for the inline PR annotations."""
+    from sarif import SarifResult
+
+    results: list[SarifResult] = []
+    for finding in impact.get("findings", []):
+        results.append(SarifResult(
+            rule_id=finding.get("rule_id") or "reposcope/breaking-contract",
+            message=finding.get("detail") or finding.get("title", ""),
+            file=finding.get("file", ""),
+            line=finding.get("line", 0),
+            level="error" if finding.get("severity") == "error" else "warning",
+            properties={
+                "consumers": finding.get("consumers", []),
+                "kind": finding.get("kind", ""),
+            },
+        ))
+    for module in missing_tests:
+        results.append(SarifResult(
+            rule_id="reposcope/missing-test",
+            message=f"`{module}` is in the blast radius and has no test file.",
+            file=module,
+            level="note",
+        ))
+    return results
 
 
 def _render_comment(meta: dict, risk_score: int, risk_level: str,
                     per_file: list[dict], tests: list[str],
                     direct_ids: set, transitive_ids: set,
-                    label) -> str:
+                    label, impact: dict | None = None,
+                    gate: dict | None = None,
+                    savings: dict | None = None) -> str:
+    impact = impact or {}
+    gate = gate or {}
+    savings = savings or {}
+
     risk_icon = {"low": "🟢", "medium": "🟡", "high": "🟠", "critical": "🔴"}.get(risk_level, "⚪")
     lines = [
         f"## {risk_icon} RepoScope PR Impact Report — #{meta.get('number', '?')}",
+        "",
+        render_svg_badges(
+            risk_score, risk_level, savings.get("reduction_pct") if savings else None,
+        ),
         "",
         f"**Risk score: `{risk_score}/10` ({risk_level})** · "
         f"{len(per_file)} files changed · "
@@ -169,6 +299,11 @@ def _render_comment(meta: dict, risk_score: int, risk_level: str,
         lines.append(f"| `{e['file']}` | {e['status']} | {sign} | {in_graph} | {trans} |")
     if len(per_file) > 20:
         lines.append(f"| _…and {len(per_file) - 20} more_ | | | | |")
+
+    # The Architecture Impact section. It comes BEFORE the blast radius,
+    # because it is the part that changes what a reviewer does — and it
+    # is the part no AI reviewer competes in.
+    lines += ["", render_architecture_section(impact, gate, savings)]
 
     lines += ["", "### ✅ Suggested tests", ""]
     if tests:
@@ -188,10 +323,12 @@ def _render_comment(meta: dict, risk_score: int, risk_level: str,
         "<details>",
         "<summary>How this works</summary>",
         "",
-        "RepoScope parses the dependency graph (AST for Python, regex for ",
-        "JS/TS) and reverse-BFSes every changed file to compute the blast ",
-        "radius: files that import the changed code (direct) and everything ",
-        "that depends on those (transitive).",
+        "RepoScope parses the dependency graph with Tree-sitter and "
+        "reverse-BFSes every changed file to compute the blast radius: "
+        "files that import the changed code (direct) and everything that "
+        "depends on those (transitive). The architecture section comes "
+        "from the AST contract diff and the repository's own boundary "
+        "rules.",
         "",
         "</details>",
         "",

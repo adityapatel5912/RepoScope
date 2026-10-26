@@ -13,7 +13,7 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import analysis, arch, local
+from api.routers import analysis, arch, local, pr_chat
 
 
 def register_routers(app: FastAPI) -> None:
@@ -24,6 +24,9 @@ def register_routers(app: FastAPI) -> None:
     # move here. `/api/repo/status` keeps its path and its response
     # shape, so no client had to change.
     app.include_router(local.router)
+    # Sprint 6 (decision D1): the PR bot's conversational endpoint and
+    # the SARIF output.
+    app.include_router(pr_chat.router)
 
     # QA-only routes exist so the browser-QA harness can reach a known state
     # without touching the network. They are mounted ONLY in QA mode, so a

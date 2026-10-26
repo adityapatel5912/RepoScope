@@ -2517,5 +2517,142 @@ installed — the manual checklist is in `extensions/vscode/README.md`.
 - The extension is **not published to Open VSX** — that needs an account and a token.
 - The extension has **no way to start the backend**; it assumes one is running.
 
+---
+
+## 30. Sprint 6 — PR Bot 2.0: architecture governance
+
+**Status: COMPLETE.** Shipped 2026-10-22. The PR bot no longer tries to find bugs. It asks
+whether a change respects the architecture the team declared — the question no AI code
+reviewer competes in.
+
+### 30.1 The repositioning (Milestone 10)
+
+The 2026 market for AI code review is crowded and RepoScope would lose that fight:
+CodeRabbit, Greptile, Qodo, Copilot Code Review and Cursor's BugBot all promise to catch
+bugs, and they do it better than a tree-sitter graph can.
+
+So RepoScope does not compete there. It asks a different question:
+
+| RepoScope asks | Every AI reviewer ignores |
+|---|---|
+| Does this PR violate a declared architecture boundary? | — |
+| Did this PR break a contract that has REAL consumers? | — |
+| Did this PR introduce a dependency cycle? | — |
+| Which consuming files must be regression-tested? | — |
+| How much of the repo's context does an agent need to review this? | — |
+
+**Everything in the gate is deterministic.** No LLM decides whether a pull request is risky.
+A governance gate has to be reproducible, or it is a gate nobody trusts.
+
+### 30.2 Delivered
+
+| Deliverable | File | Milestone |
+|---|---|---|
+| The AST contract diff | `backend/contract_diff.py` | 5.1 |
+| The scanner DELEGATES to it (one source of truth) | `backend/security_scanner.py` | C3 |
+| The Architecture Impact report | `backend/architecture_impact.py` | 5.1, 8.3, 10 |
+| SARIF 2.1.0 output | `backend/sarif.py` | 8.2 |
+| The conversational bot | `backend/pr_chat.py` | 5.3 |
+| The suggested test stubs | `backend/test_stubs.py` | 5.2 |
+| The PR endpoints | `backend/api/routers/pr_chat.py` | 5.3, 8.2 |
+| The merge-gate workflow | `.github/workflows/pr-impact.yml` | 5.4, 8.2 |
+| The `boundary` fixture | `backend/tests/fixtures/boundary/` | 8.3 |
+
+### 30.3 The contract diff
+
+Six kinds of change, all detected from the AST — the parameter lists come from tree-sitter's
+parameter nodes, not from a regular expression over the source text:
+
+| Change | Severity |
+|---|---|
+| A deleted exported function / class / interface | BREAKING |
+| A renamed parameter | BREAKING |
+| An added REQUIRED parameter | BREAKING |
+| A removed required parameter | BREAKING |
+| A changed return type | BREAKING |
+| A retyped parameter | BREAKING |
+| **A renamed PRIVATE helper** | **not flagged** |
+
+That last row is the one that decides whether a bot gets muted. A PR that renames a private
+helper is not a breaking change, and a bot that says otherwise gets uninstalled.
+
+**The comparison is position-aware.** A renamed parameter is ONE finding — "renamed-parameter"
+— not the two findings a name-set comparison produces ("removed" plus "required added"). Two
+findings for one rename is how a reviewer learns to ignore the bot.
+
+**The findings name the CONSUMERS.** Resolved through the call graph and the import edges, not
+"every file in the directory". A finding that names thirty files when three are affected is
+noise, and noise is why bots get muted.
+
+**Correction C3 is honoured.** `security_scanner.detect_breaking_in_patch` no longer has its
+own regex implementation — it delegates to `contract_diff`. Two divergent detectors would
+produce two different risk scores for the same change, and the user would be asked to trust a
+number that disagrees with itself.
+
+### 30.4 SARIF 2.1.0
+
+The findings are emitted as SARIF, which is the GitHub code-scanning standard — so they appear
+**INLINE on the PR diff**, where reviewers already look, instead of in a comment they have to
+scroll to.
+
+**The shape is asserted, not assumed.** GitHub SILENTLY rejects a malformed SARIF file, so
+"we emit SARIF" is not the same as "our findings render". The version, the `$schema`, the
+`runs` array, the tool driver, the rule catalogue, and every result's `ruleId`, `level`,
+`message` and `locations` are all checked — in the backend tests and in journey J21.
+
+**Baseline mode** drops the findings that already existed. A gate that flags pre-existing
+debt is a gate that every team turns off within a week.
+
+### 30.5 The merge gate — and the scale
+
+> **Risk R10.** The API reports the risk score on a **0-10** scale. A CI action's
+> `max_allowed_risk_score` implies a **0-100** scale. The conversion happens at the **ACTION
+> BOUNDARY** — in `normalize_risk_score`, documented in one place — and it is **clamped**.
+> An un-clamped conversion is how a score of 10 becomes 1000 and every gate passes.
+
+The gate blocks on the things that are objectively wrong — a broken contract, a violated
+boundary, an over-threshold risk score — and not on "this code feels risky". A gate that
+blocks on taste gets disabled.
+
+### 30.6 The boundary fixture
+
+A declared boundary is a decision; a built-in taxonomy is a guess. The new `boundary` fixture
+declares its own layers and its own rule in `.reposcope.yml`:
+
+```yaml
+layers:
+  - name: domain
+    include: ["domain/**"]
+  - name: infra
+    include: ["infra/**"]
+rules:
+  - id: no-domain-to-infra
+    from: domain
+    to: infra
+    severity: error
+```
+
+It has one CLEAN file (`main.py` imports the domain) and one VIOLATION
+(`domain/orders.py` imports the infra), so the gate is tested on both sides.
+
+### 30.7 Verified
+
+| Measure | Value |
+|---|---|
+| Backend tests | **271 passed** (was 243) |
+| Browser journeys | **15 passed** (was 13) — J20 and J21 added |
+| The contract diff's languages | Python, TypeScript, TSX, JavaScript, Go, Rust |
+| The merge gate's scale conversion | asserted, clamped, documented |
+| The SARIF document | asserted against the 2.1.0 requirements |
+
+### 30.8 Open items carried into Sprint 7
+
+- The **suggested test stubs** are generated but never rendered in the PR comment — the
+  generator and the marker are in place; the wiring is not.
+- The **GitHub Action for `@reposcope-bot` replies** is not written. The endpoint is; the
+  action that reads a comment and posts the reply is not.
+- The **`reposcope-action` repository** does not exist — the merge gate runs inside
+  `pr-impact.yml` instead.
+
 
 

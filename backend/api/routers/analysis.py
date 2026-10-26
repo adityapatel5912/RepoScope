@@ -152,6 +152,115 @@ async def hubs(limit: int = 15):
     }
 
 
+@router.get("/callers")
+async def callers(file: str = "", symbol: str = ""):
+    """
+    Who calls this symbol?
+
+    The VS Code extension's CodeLens shows this count, and it MUST match
+    the MCP tool's answer — an extension that says "View Callers (8)"
+    when the graph says 3 is worse than no extension at all.
+
+    The resolution order is the graph's own: same file, then an imported
+    module, then an unambiguous global match. The SAME rule, so the same
+    answer.
+    """
+    graph = await asyncio.to_thread(_current_graph)
+    if not graph:
+        return {"available": False, "reason": "no graph", "callers": [], "count": 0}
+
+    nodes = graph.get("nodes", []) or []
+    edges = graph.get("edges", []) or []
+
+    symbol_nodes = [
+        n for n in nodes
+        if n.get("type") in ("function", "class")
+        and (not file or n.get("file") == file)
+        and (not symbol or n.get("label") == symbol)
+    ]
+    if not symbol_nodes:
+        return {
+            "available": True,
+            "found": False,
+            "count": 0,
+            "callers": [],
+            "reason": f"no symbol matching {file}:{symbol}",
+        }
+
+    target_ids = {n["id"] for n in symbol_nodes}
+    caller_ids = {
+        e["source"] for e in edges
+        if e.get("type") == "calls" and e.get("target") in target_ids
+    }
+
+    nodes_by_id = {n["id"]: n for n in nodes}
+    caller_nodes = [nodes_by_id[i] for i in caller_ids if i in nodes_by_id]
+    caller_nodes.sort(key=lambda n: (str(n.get("file", "")), int(n.get("line") or 0)))
+
+    return {
+        "available": True,
+        "found": True,
+        "count": len(caller_nodes),
+        "callers": [
+            {
+                "id": n["id"],
+                "label": n.get("label", ""),
+                "file": n.get("file", ""),
+                "line": n.get("line", 0),
+            }
+            for n in caller_nodes
+        ],
+    }
+
+
+@router.get("/dependents")
+async def dependents(file: str = ""):
+    """
+    What depends on this file, and how risky a change would be.
+
+    The status bar in the VS Code extension shows this: the number of
+    dependents and the risk level, so a developer sees the blast radius
+    before they type.
+    """
+    graph = await asyncio.to_thread(_current_graph)
+    if not graph:
+        return {"available": False, "reason": "no graph", "dependents": 0, "risk": "unknown"}
+
+    nodes_by_id = {n["id"]: n for n in graph.get("nodes", []) or []}
+    target_id = f"file:{file}"
+    if target_id not in nodes_by_id:
+        return {
+            "available": True,
+            "found": False,
+            "dependents": 0,
+            "risk": "unknown",
+            "reason": f"no file matching {file!r}",
+        }
+
+    from impact_analyzer import compute_blast_radius
+
+    impact = compute_blast_radius(graph, target_id, max_depth=3)
+    return {
+        "available": True,
+        "found": True,
+        "file": file,
+        "dependents": impact["total_impacted"],
+        "direct": len(impact["direct_impacts"]),
+        "transitive": len(impact["transitive_impacts"]),
+        "risk": impact["risk_level"],
+        "risk_score": impact["risk_score"],
+        "top": [
+            {
+                "id": n["id"],
+                "label": n.get("label", ""),
+                "file": n.get("file", ""),
+                "line": n.get("line", 0),
+            }
+            for n in impact["direct_impacts"][:10]
+        ],
+    }
+
+
 @router.get("/repo-map")
 async def repo_map(budget: int = 8000):
     """

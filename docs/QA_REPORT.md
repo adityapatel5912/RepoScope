@@ -2,6 +2,35 @@
 
 What is verified, how, and — explicitly — what is **not** covered.
 
+## Phase 0 baseline restoration — 2026-10-26
+
+The CI suite was red before any V2.5 feature work. This section records the
+measured before/after so the fix can be audited.
+
+| Check | Before | After |
+|---|---|---|
+| `pytest -q`, Python 3.11, `backend/requirements.txt` only | **30 failed, 305 passed** | **343 passed** |
+| `pytest -q`, Python 3.12, `backend/requirements.txt` only | not run (missing numerical stack) | **343 passed** |
+| `pytest -q`, local Python 3.14 | 335 passed | **343 passed** |
+| `python -m pip check` | not run | **no broken requirements** |
+| `python -m compileall -q backend/` | not run | **clean** |
+| `GET /health` | `{"status": "ok"}` | **`{"status": "ok"}`** |
+| `GET /api/health` | `"healthy"`, but `qa.yml` asserted `"ok"` | **`"healthy"` + additive `schema_version` and cached `graph`** |
+| Frontend production build | not gated in CI | **built successfully** (`assets/index-CMSb0cnC.js`) |
+| VS Code extension | compiled/tested | **compile clean, 20/20 tests pass** |
+
+**Root causes fixed:** `numpy` and `scipy` were missing from the deployment
+requirements while PageRank needs them; `mcp`, `typer`, and `watchdog` were
+declared only in `pyproject.toml`; `mcp 2.x` removes
+`mcp.server.fastmcp.FastMCP`; and the L2 contract asserted the liveness
+string against the application endpoint. `mcp` is now pinned to
+`>=1.29,<2`, and both dependency files are checked by
+`backend/tests/test_dependency_contract.py`.
+
+**Still not covered:** the L3 Playwright journeys are not part of the Phase 0
+gate (they run nightly and after the mind-map UI lands); the Python 3.13/3.14
+runs are local confidence checks, not deployment targets.
+
 ## Current verification — 2026-10-25
 
 This is the status of the shipped v2.0 tree. The Sprint 3 journey table below

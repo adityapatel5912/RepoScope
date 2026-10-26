@@ -19,6 +19,32 @@ def test_health_full():
     assert "openrouter_keys" in data["checks"]
 
 
+def test_health_full_adds_schema_and_cached_graph_without_changing_status():
+    """The v2.5 health fields are additive; the v2.0 contract stays."""
+    client = TestClient(main.app)
+    data = client.get("/api/health").json()
+
+    assert isinstance(data["schema_version"], int)
+    assert data["schema_version"] >= 1
+    assert set(data["graph"]) >= {"loaded", "nodes", "edges"}
+    assert isinstance(data["graph"]["loaded"], bool)
+    assert isinstance(data["graph"]["nodes"], int)
+    assert isinstance(data["graph"]["edges"], int)
+    assert data["status"] == "healthy"
+
+
+def test_health_liveness_is_ok_and_distinct_from_the_application_contract():
+    """`/health` is a liveness probe; `/api/health` is the app contract.
+
+    The two responses must not be collapsed into one. `qa.yml` used to
+    assert `"ok"` from `/api/health`, which failed even when the app was
+    healthy.
+    """
+    client = TestClient(main.app)
+    assert client.get("/health").json() == {"status": "ok"}
+    assert client.get("/api/health").json()["status"] == "healthy"
+
+
 def test_health_version_matches_package_metadata():
     """The API must not advertise a stale release version.
 

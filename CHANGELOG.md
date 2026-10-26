@@ -11,9 +11,23 @@ on a separate marketplace.
 
 - **v2.0 pitch deck** in PDF and editable PPTX form, linked from the README
   and the documentation index.
+- **V2.5–V2.8 implementation plan and two-agent coordination board.** The
+  plan is additive to the shipped v2.0 tree and keeps the existing graph,
+  endpoints, extension, and provider chain.
 
 ### Fixed
 
+- **CI baseline restored.** `backend/requirements.txt` now declares the
+  numerical stack (`numpy`, `scipy`), the MCP server (`mcp>=1.29,<2`), the
+  CLI/watcher (`typer`, `watchdog`), and `sse-starlette`. The previous
+  clean Python 3.11 install failed 30 tests; it now passes all 343.
+- **The L2 health contract now checks the right endpoint.** `/health` must
+  return `"ok"` (liveness); `/api/health` must return `"healthy"` (the
+  application contract). Installing the latest MCP 2.x is no longer
+  possible by accident, so `mcp.server.fastmcp.FastMCP` cannot disappear
+  during a deploy.
+- **`/api/health` reports `schema_version` and the cached graph counts**
+  without building a graph on the health path.
 - **`/api/health` now reports `2.0.0`, matching `pyproject.toml`.** A new
   regression test fails if the health response and package version drift.
 - **The production CSP allows the browser parser's WebAssembly** via

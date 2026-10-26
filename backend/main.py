@@ -388,6 +388,38 @@ async def health_simple():
     return {"status": "ok"}
 
 
+def _graph_health_snapshot() -> dict:
+    """
+    The cached graph's shape, without building anything.
+
+    A health check must never trigger a repository clone or a full parse;
+    it reports what the process already knows. The fields are additive so
+    the v2.0 health contract still holds.
+    """
+    try:
+        from orchestrator import get_cached_graph
+
+        graph = get_cached_graph() or {}
+        nodes = graph.get("nodes") or []
+        edges = graph.get("edges") or []
+        return {
+            "loaded": bool(nodes),
+            "nodes": len(nodes),
+            "edges": len(edges),
+        }
+    except Exception:  # noqa: BLE001 - health must never fail on an optional probe
+        return {"loaded": False, "nodes": 0, "edges": 0}
+
+
+def _graph_schema_version() -> int:
+    try:
+        from graph_store import SCHEMA_VERSION
+
+        return int(SCHEMA_VERSION)
+    except Exception:  # noqa: BLE001 - the health endpoint stays up
+        return 1
+
+
 @app.get("/api/health")
 async def health():
     """Full health snapshot: uptime, memory, configured key counts."""
@@ -401,6 +433,8 @@ async def health():
         "status": "healthy",
         "service": "reposcope-api",
         "version": "2.0.0",
+        "schema_version": _graph_schema_version(),
+        "graph": _graph_health_snapshot(),
         "uptime_seconds": uptime,
         "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m",
         "memory_mb": memory_mb,

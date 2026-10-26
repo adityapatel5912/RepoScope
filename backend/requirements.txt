@@ -10,7 +10,11 @@ psutil>=5.9.0
 pytest>=8.0.0
 # Sprint 0 — graph analysis (PageRank, SCC, reachability) and the
 # architecture rule loader (.reposcope.yml).
+# networkx's PageRank path needs the numerical stack; without numpy/scipy
+# it raises and the graph loses its centrality scores.
 networkx>=3.2
+numpy>=1.26,<3
+scipy>=1.11,<2
 pyyaml>=6.0
 # Sprint 1 — the polyglot parser engine (Milestone 1.1).
 # tree-sitter 0.25 changed its query API: `Query.captures()` is gone and
@@ -21,3 +25,11 @@ tree-sitter-javascript>=0.25.0
 tree-sitter-typescript>=0.23.0
 tree-sitter-go>=0.25.0
 tree-sitter-rust>=0.24.0
+# The CLI (Typer) and the live file watcher (watchdog). `reposcope run .`
+# imports both; a deployment installed from this file needs them.
+typer>=0.12.0
+watchdog>=4.0.0
+# The Model Context Protocol server. MCP 2.x moved
+# `mcp.server.fastmcp.FastMCP`; this server is written against the 1.x API.
+# Do not lift this ceiling without a migration and a test.
+mcp>=1.29.0,<2

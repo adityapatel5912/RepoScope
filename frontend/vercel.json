@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://reposcope-api.onrender.com/api/:path*"
+      "destination": "https://reposope.onrender.com/api/:path*"
     },
     {
       "source": "/((?!api/).*)",

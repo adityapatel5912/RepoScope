@@ -1,10 +1,10 @@
 # RepoScope
 
-![RepoScope](Thumbnail.png)
+![RepoScope 3.0 Thumbnail](./Thumbnail.png)
 
 > See your repo. Understand it. Track it.
 
-**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/ZJ7PMCZRXKY](https://youtu.be/ZJ7PMCZRXKY)
+**🌐 Live:** [repo-scope-nu.vercel.app](https://repo-scope-nu.vercel.app) · **⚙️ API:** [reposope.onrender.com/api/health](https://reposope.onrender.com/api/health) · **🎬 Demo video:** [youtu.be/W82roIETJJ8](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF) · **📊 Pitch Deck:** [RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)
 
 ![License](https://img.shields.io/badge/License-MIT-yellow) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688) ![IBM%20Bob](https://img.shields.io/badge/Built%20with-IBM%20Bob%20%2B%20Z%20Code-F0503C)
 
@@ -67,6 +67,10 @@ All screenshots are captured at **1600×900 (16:9)** and live in [`docs/screensh
 
 ## 🎬 Demo
 
+**[🎬 Demo Video](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)** · **[📊 Pitch Deck](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** ([PDF](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf))
+
+[![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)
+
 ### One-click demo repos
 Click either button in the sidebar to load a real repository instantly:
 
@@ -83,14 +87,12 @@ PAT in the sidebar (BYOK — stored in memory only, never written to disk).
 
 ## 🎥 Pitch Deck
 
-- 📊 **[pitch-deck.pdf](frontend/public/pitch/pitch-deck.pdf)** — 10 slides
-- 🎞️ **[pitch-deck.pptx](frontend/public/pitch/pitch-deck.pptx)** — editable
-- 📝 **[pitch-deck.md](frontend/public/pitch/pitch-deck.md)** — text version
-- 🎤 **[pitch-script.md](frontend/public/pitch/pitch-script.md)** — 3-minute video script
-- 🗒️ **[slide-notes.md](frontend/public/pitch/slide-notes.md)** — per-slide talking points
-- 🖼️ **[Thumbnail.png](Thumbnail.png)** — video thumbnail
+- 📊 **[RepoScope — Pitch Deck v3.0.pdf](./RepoScope%20—%20Pitch%20Deck%20v3.0.pdf)** — 10 slides (PDF)
+- 🎞️ **[RepoScope — Pitch Deck v3.0.pptx](./RepoScope%20—%20Pitch%20Deck%20v3.0.pptx)** — editable presentation (PPTX)
+- 🎬 **[Demo Video](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)** — full walkthrough video
+- 🖼️ **[Thumbnail.png](./Thumbnail.png)** — video thumbnail
 
-![Demo video thumbnail](Thumbnail.png)
+[![RepoScope 3.0 Thumbnail](./Thumbnail.png)](https://youtu.be/W82roIETJJ8?si=6Jfc1h05uAZBVhJF)
 
 ---
 
@@ -243,7 +245,7 @@ npm run dev
 | `Models_OPENROUTER` / `Models_GROQ` / `Models_NVIDIA` | No | Model overrides (first entry wins) |
 | `Base_URL_OPENROUTER` / `Base_URL_GROQ` / `Base_URL_NVIDIA` | No | OpenAI-compatible endpoints |
 | `GITHUB_TOKENS` | Optional | Raises GitHub API limits — comma-separate |
-| `CODEBASE_MEMORY_PATH` | No | MCP codebase-memory binary (graph fallback) |
+| `CODEBASE_MEMORY_PATH` | No | Codebase memory index binary (graph fallback) |
 
 \* At least one provider needs a key. Legacy single-key variables
 (`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `NVIDIA_API_KEY`, `GITHUB_PAT`) are
@@ -263,7 +265,7 @@ FastAPI (Python 3.11)
    ├─ orchestrator     graph + README → LLM context
    ├─ key_rotator      multi-key round-robin per provider
    ├─ runtime_config   OpenRouter → Groq → NVIDIA NIM chain
-   ├─ mcp_client       GitHub REST + codebase-memory MCP
+   ├─ repo_client      GitHub REST + codebase memory client
    ├─ tour_generator / impact_analyzer / repo_tracker
    ├─ pr_impact        PR blast radius → GitHub comment
    ├─ onboarding       Student Mode rows + quizzes + GFIs
@@ -312,7 +314,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 | Frontend | React 18, Vite 6, TypeScript (strict), React Flow (custom pyramid layout), Tailwind |
 | Backend | Python 3.11, FastAPI, SSE (StreamingResponse), httpx, GitPython |
 | LLM | OpenRouter (primary) → Groq → NVIDIA NIM, multi-key rotation |
-| Code graph | AST (Python) + regex (JS/TS) via graph_builder, MCP fallback |
+| Code graph | AST (Python) + regex (JS/TS) via graph_builder |
 | Repo data | GitHub REST API v3 |
 
 ---

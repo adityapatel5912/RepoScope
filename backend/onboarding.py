@@ -12,9 +12,11 @@ Row model (matches the frontend pyramid):
 """
 import json
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from graph_utils import build_adjacency
+from json_utils import loads_tolerant, salvage_truncated_json
 from runtime_config import ask_llm
 
 log = logging.getLogger("reposcope.onboarding")
@@ -33,6 +35,16 @@ LEVEL_DEFS = [
 
 _MAX_PER_LEVEL = 6
 _SKIP_PREFIXES = ("docs/", "test", ".github/")
+_CODE_EXTS = {
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs",
+    ".java", ".rb", ".php", ".c", ".cc", ".cpp", ".h", ".hpp", ".cs",
+    ".vue", ".svelte", ".sh", ".sql", ".proto", ".kt", ".swift",
+}
+
+
+def _is_code_file(label: str) -> bool:
+    from pathlib import Path
+    return Path(label).suffix.lower() in _CODE_EXTS
 
 
 def rank_rows(graph: dict) -> dict[int, list[dict]]:
@@ -50,6 +62,12 @@ def rank_rows(graph: dict) -> dict[int, list[dict]]:
 
     ranked = sorted(files, key=lambda n: (-score(n), n.get("label", "")))
     ranked = [n for n in ranked if not n.get("label", "").lower().startswith(_SKIP_PREFIXES)]
+    # Learning paths and GFIs must point at code — images/docs/lockfiles make
+    # nonsense entries ("add a docstring to a PNG"). Keep the unfiltered list
+    # as fallback for repos where the whitelist would be too aggressive.
+    code_ranked = [n for n in ranked if _is_code_file(n.get("label", ""))]
+    if len(code_ranked) >= 6:
+        ranked = code_ranked
 
     if not ranked:
         return {r: [] for r in range(1, 6)}
@@ -68,14 +86,6 @@ def rank_rows(graph: dict) -> dict[int, list[dict]]:
         5: tail[half:],
     }
     return rows
-
-
-def _node_meta(n: dict) -> dict:
-    return {
-        "path": n.get("label", ""),
-        "language": n.get("language", ""),
-        "symbols": "",  # filled by the LLM answer, not the graph
-    }
 
 
 def _level_prompt(level: int, title: str, files: list[dict]) -> str:
@@ -123,6 +133,11 @@ def _heuristic_level(level: int, files: list[dict]) -> dict:
     }
 
 
+def _loads_tolerant(s: str) -> dict:
+    """Backward-compatible wrapper around json_utils.loads_tolerant."""
+    return loads_tolerant(s)
+
+
 def _parse_json(text: str) -> dict:
     cleaned = text.strip()
     if cleaned.startswith("```"):
@@ -131,7 +146,39 @@ def _parse_json(text: str) -> dict:
     end = cleaned.rfind("}")
     if start == -1 or end <= start:
         raise ValueError("no JSON in model output")
-    return json.loads(cleaned[start : end + 1])
+    return _loads_tolerant(cleaned[start : end + 1])
+
+
+def _ask_json(system: str, prompt: str, provider: dict | None = None) -> dict:
+    """ask_llm + parse; on malformed JSON, one repair round-trip with the
+    model's own output (small models emit stray commas / unescaped quotes).
+    max_tokens=4096: reasoning models (e.g. NVIDIA muse-glimmer) spend the
+    budget on reasoning_content first — 1024 leaves the answer empty."""
+    text = ask_llm(system, prompt, provider=provider, max_tokens=8192)
+    try:
+        return _parse_json(text)
+    except (ValueError, json.JSONDecodeError) as exc:
+        log.warning("JSON parse failed (%s) — attempting one repair round", exc)
+        repair = (
+            "The following was supposed to be a single valid JSON object but "
+            "is malformed. Fix it and output ONLY the corrected JSON — no "
+            "fences, no commentary, no trailing commas.\n\n" + text[:3000]
+        )
+        fixed = ask_llm(
+            "You output only strictly valid JSON. No fences, no commentary.",
+            repair,
+            provider=provider,
+            max_tokens=8192,
+        )
+        try:
+            return _parse_json(fixed)
+        except (ValueError, json.JSONDecodeError):
+            # Deterministic salvage for token-truncated output
+            salvaged = salvage_truncated_json(text)
+            if salvaged is not None:
+                log.warning("Using salvaged truncated JSON (%d keys)", len(salvaged))
+                return salvaged
+            raise
 
 
 def _explain_level(args: tuple) -> dict:
@@ -139,13 +186,12 @@ def _explain_level(args: tuple) -> dict:
     if not files:
         return {**LEVEL_DEFS[level - 1], "level": level, "files": [], "quiz": []}
     try:
-        data = _parse_json(ask_llm(
+        data = _ask_json(
             "You are a patient senior engineer onboarding a student. "
             "Output only valid JSON.",
             _level_prompt(level, title, files),
-            graph_context=json.dumps([_node_meta(n) for n in files])[:2000],
             provider=provider,
-        ))
+        )
         whys = {f.get("path"): f.get("why", "") for f in data.get("files", [])
                 if isinstance(f, dict)}
         quiz = []
@@ -178,13 +224,12 @@ def _good_first_issues(args: tuple) -> list[dict]:
     if not candidates:
         return []
     try:
-        data = _parse_json(ask_llm(
+        data = _ask_json(
             "You are a maintainer who writes welcoming, well-scoped issues. "
             "Output only valid JSON.",
             _gfi_prompt(candidates),
-            graph_context="",
             provider=provider,
-        ))
+        )
         issues = []
         for i in data.get("issues", [])[:3]:
             if not isinstance(i, dict):

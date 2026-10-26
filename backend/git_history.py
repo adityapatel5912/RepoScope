@@ -28,7 +28,9 @@ exception. A repository that has never been committed to still renders.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
+import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -98,13 +100,30 @@ class ChurnReport:
 def _run_git(repo_root: Path, args: list[str], timeout: int = GIT_TIMEOUT_SECONDS):
     """Run a git command, returning stdout or None on any failure."""
     try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        # Stdout/stderr go to TEMPORARY FILES, not pipes. On Windows, a
+        # git process killed after `timeout` can leave a child holding
+        # the write end of a capture pipe open; subprocess.run then waits
+        # forever for EOF while joining its reader threads. That wedged
+        # the MCP server: `git rev-parse` timed out, the timeout handler
+        # hung, and every later call waited on the same blocked worker.
+        # Files cannot deadlock that way.
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            creationflags = (
+                subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            )
+            result = subprocess.run(
+                ["git", *args],
+                cwd=str(repo_root),
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                timeout=timeout,
+                creationflags=creationflags,
+            )
+            stdout_file.seek(0)
+            stderr_file.seek(0)
+            stdout = stdout_file.read().decode("utf-8", "replace")
+            stderr = stderr_file.read().decode("utf-8", "replace")
     except FileNotFoundError:
         log.info("git is not installed — churn metrics unavailable")
         return None
@@ -116,9 +135,9 @@ def _run_git(repo_root: Path, args: list[str], timeout: int = GIT_TIMEOUT_SECOND
         return None
 
     if result.returncode != 0:
-        log.info("git %s exited %s", args[0], result.returncode)
+        log.info("git %s exited %s: %s", args[0], result.returncode, stderr.strip())
         return None
-    return result.stdout
+    return stdout
 
 
 def _is_git_repo(repo_root: Path) -> bool:

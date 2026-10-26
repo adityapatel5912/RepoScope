@@ -23,6 +23,7 @@ without touching anything else.
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Callable
@@ -93,20 +94,31 @@ def get_tokenizer(name: str | None = None) -> Tokenizer:
 
 
 def _iter_source_files(root: Path):
-    """Yield the text files under a repository root."""
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() in BINARY_SUFFIXES:
-            continue
-        try:
-            rel = str(path.relative_to(root)).replace("\\", "/")
-        except ValueError:
-            continue
-        if any(part in {".git", "node_modules", "__pycache__", ".reposcope",
-                        "dist", "build", ".venv", "venv"} for part in rel.split("/")):
-            continue
-        yield path, rel
+    """Yield the text files under a repository root.
+
+    The skip list is applied to DIRECTORIES during the walk. Filtering
+    only the yielded paths meant every measurement descended into .git
+    and node_modules first; on a normal checkout that is tens of
+    thousands of files and several seconds of wasted I/O.
+    """
+    skip_dirs = {
+        ".git", "node_modules", "__pycache__", ".reposcope",
+        "dist", "build", ".venv", "venv", ".mypy_cache",
+        ".pytest_cache", ".playwright-mcp", ".turbo", "out", "logs",
+    }
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in skip_dirs)
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            if path.suffix.lower() in BINARY_SUFFIXES:
+                continue
+            try:
+                rel = str(path.relative_to(root)).replace("\\", "/")
+            except ValueError:
+                continue
+            if any(part in skip_dirs for part in rel.split("/")):
+                continue
+            yield path, rel
 
 
 def full_context_tokens(root: str | Path, tokenizer: Tokenizer | None = None) -> dict:

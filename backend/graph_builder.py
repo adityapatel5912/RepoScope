@@ -54,6 +54,18 @@ _SKIP_DIRS = set(SKIP_DIRS)
 _PY_EXTS = {".py"}
 _JS_EXTS = {".ts", ".tsx", ".js", ".jsx"}
 
+#: Files that are never source, even though they live inside the tree.
+#: `newest_source_mtime` uses this to decide whether an index is stale.
+#: Without it, a running server's own log (`backend/logs/app.log`) is
+#: newer than the index on every start, so the MCP server rebuilds a
+#: 347-file graph every time it launches.
+_NON_SOURCE_SUFFIXES = {
+    ".log", ".tmp", ".temp", ".pyc", ".pyo", ".map", ".wasm",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp",
+    ".pdf", ".pptx", ".docx", ".zip", ".tar", ".gz", ".7z",
+    ".vsix",
+}
+
 
 # ── Stage 1 · parse one file ────────────────────────────────────────────────
 
@@ -831,27 +843,31 @@ def collect_facts(
     root_path = Path(root)
     facts: dict[str, FileFacts] = {}
 
-    for path in root_path.rglob("*"):
-        if not path.is_file():
-            continue
-        try:
-            rel = str(path.relative_to(root_path)).replace("\\", "/")
-        except ValueError:
-            continue
-        # The skip test is on the RELATIVE parts, not the absolute ones.
-        # Testing `path.parts` meant a repository that happened to live
-        # under a directory called `build` or `dist` indexed NOTHING —
-        # the whole tree was skipped before a single file was read.
-        if any(part in _SKIP_DIRS for part in rel.split("/")):
-            continue
+    # Prune the skip list DURING the walk. `rglob("*")` still descended
+    # into .git, node_modules and .venv and discarded them afterwards;
+    # on this repository that was 15+ seconds of traversal per build.
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            try:
+                rel = str(path.relative_to(root_path)).replace("\\", "/")
+            except ValueError:
+                continue
+            # The skip test is on the RELATIVE parts, not the absolute ones.
+            # Testing `path.parts` meant a repository that happened to live
+            # under a directory called `build` or `dist` indexed NOTHING —
+            # the whole tree was skipped before a single file was read.
+            if any(part in _SKIP_DIRS for part in rel.split("/")):
+                continue
 
-        if cache is not None:
-            suffix = path.suffix
-            facts[rel] = cache.get_for(
-                path, rel, lambda data, r, _suffix=suffix: parse_bytes(data, r, _suffix)
-            )
-        else:
-            facts[rel] = parse_file(path, rel)
+            if cache is not None:
+                suffix = path.suffix
+                facts[rel] = cache.get_for(
+                    path, rel, lambda data, r, _suffix=suffix: parse_bytes(data, r, _suffix)
+                )
+            else:
+                facts[rel] = parse_file(path, rel)
 
     return facts
 
@@ -869,19 +885,22 @@ def newest_source_mtime(root: str | Path) -> float:
     """
     root_path = Path(root)
     newest = 0.0
-    for path in root_path.rglob("*"):
-        if not path.is_file():
-            continue
-        try:
-            rel = str(path.relative_to(root_path)).replace("\\", "/")
-        except ValueError:
-            continue
-        if any(part in _SKIP_DIRS for part in rel.split("/")):
-            continue
-        try:
-            newest = max(newest, path.stat().st_mtime)
-        except OSError:
-            continue
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+        for name in sorted(filenames):
+            path = Path(dirpath) / name
+            try:
+                rel = str(path.relative_to(root_path)).replace("\\", "/")
+            except ValueError:
+                continue
+            if any(part in _SKIP_DIRS for part in rel.split("/")):
+                continue
+            if path.suffix.lower() in _NON_SOURCE_SUFFIXES:
+                continue
+            try:
+                newest = max(newest, path.stat().st_mtime)
+            except OSError:
+                continue
     return newest
 
 

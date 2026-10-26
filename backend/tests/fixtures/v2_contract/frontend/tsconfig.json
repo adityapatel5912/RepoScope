@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    // JSONC is legal in a tsconfig; the resolver must tolerate it.
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+    },
+  },
+}

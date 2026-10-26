@@ -14,6 +14,24 @@ on a separate marketplace.
 - **V2.5–V2.8 implementation plan and two-agent coordination board.** The
   plan is additive to the shipped v2.0 tree and keeps the existing graph,
   endpoints, extension, and provider chain.
+- **Graph schema v2 (Phase 1).** `inherits`, `exports`, and `api_calls` edges
+  now carry repository-relative evidence (file, 1-based line, confidence);
+  files and symbols carry `pillar` and `role`, handlers carry their routes,
+  and the graph exposes an `api_routes` table. Existing v1 node ids, edge
+  meanings, endpoints, and MCP tool names are unchanged. The builder writes
+  `schema_version: 2`; v1 graphs still load, and the JSON/SQLite stores
+  preserve `metadata` and `api_routes` across a round trip.
+- **Deterministic route, API-call, heritage, and alias resolution.** The
+  parse cache is v3 and records routes, client calls, and class bases.
+  tsconfig/jsconfig aliases are loaded with comments and trailing commas.
+  Ambiguous targets are omitted rather than guessed. Incremental and full
+  builds finalize through the same path, so their v2 graphs match.
+- **Frozen mind-map contract.** `GET /api/mindmap` returns the
+  `root → pillar → folder → file → symbol` projection with six
+  server-classified pillars, deterministic pruning, and `truncated`/
+  `omitted` counts. The Phase 2 vertical view is not part of this change.
+- **API reference.** `docs/API.md` documents the graph schema, health
+  payload, and the full mind-map contract.
 
 ### Fixed
 

@@ -11,6 +11,7 @@ historical build artifacts.
 | [README](../README.md) | Product overview, quick start, screenshots, verification status |
 | [v2.0 pitch deck](../RepoScope_v2_Pitch_Deck.pdf) | 14-slide product story; [editable PPTX](../RepoScope_v2_Pitch_Deck.pptx) |
 | [Architecture](ARCHITECTURE.md) | Modules, data flow, API surface, graph layout, MCP transports |
+| [API](API.md) | Graph schema v2, health payload, and the frozen `GET /api/mindmap` contract |
 | [Features](FEATURES.md) | Every shipped feature, how to use it, and its limits |
 | [Verification checklist](VERIFICATION_CHECKLIST.md) | The four manual checks still pending; deliberately unchecked |
 | [QA report](QA_REPORT.md) | Automated coverage and the honest gaps |

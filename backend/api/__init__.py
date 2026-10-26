@@ -13,13 +13,16 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import analysis, arch, local, pr_chat
+from api.routers import analysis, arch, local, mindmap, pr_chat
 
 
 def register_routers(app: FastAPI) -> None:
     """Mount every router onto the application."""
     app.include_router(arch.router)
     app.include_router(analysis.router)
+    # Phase 1 (schema v2): the frozen mind-map projection. It reads the
+    # active graph; it does not own a parser or a classifier of its own.
+    app.include_router(mindmap.router)
     # Sprint 3 (decision D1): the local-mode and repo-status endpoints
     # move here. `/api/repo/status` keeps its path and its response
     # shape, so no client had to change.

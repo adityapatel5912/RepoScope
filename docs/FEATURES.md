@@ -18,9 +18,22 @@ checks live in [`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
   aliased imports.
 - `calls` edges resolved across files where the parser can see the target.
 - `contains` edges from a file to its symbols.
+- **Schema v2 edges:** `inherits` from a class to a resolvable base class,
+  `exports` from a barrel file to what it re-exports, and `api_calls` from a
+  frontend caller to the backend route handler it calls. Each v2 edge carries
+  evidence: repository-relative file, 1-based line, and confidence.
+- **Schema v2 node evidence:** files and symbols carry `path`, `pillar`,
+  `role`, and `route_count`; handlers carry their `routes`; symbols carry
+  `end_line`. v1 node ids and edge meanings are unchanged.
+- **Declared routes:** Python route decorators and Express-style routes are
+  recorded in the graph-level `api_routes` table and on the handler nodes.
 - PageRank centrality, dependency cycles, reachability, hubs, critical path,
   and git-churn hotspots.
 - Architecture rules loaded from `.reposcope.yml`.
+
+The persisted graph is `schema_version: 2`. A v1 graph still loads. The
+builder is deterministic and conservative: if a target is ambiguous, the edge
+is omitted rather than guessed.
 
 **Languages:** Python, TypeScript, TSX, JavaScript, Go, Rust. Other files are
 indexed as file nodes without symbol extraction.
@@ -48,6 +61,14 @@ generated code can be missed. This is stated rather than hidden.
 - **Rank labels:** visible on the canvas.
 - **Edit:** double-click or use the drawer action to open a file in the editor
   integration.
+
+**Mind-map projection (V2.5):** the backend exposes a frozen
+`GET /api/mindmap?include_symbols=true&max_nodes=20000` contract. It projects
+the same graph into `root → pillar → folder → file → symbol`, with six
+server-classified pillars and deterministic ordering. The vertical Mind Map
+view beside the dependency canvas is Phase 2 work; at this snapshot the
+endpoint and payload are frozen, and the dependency canvas remains the default
+view. The full payload is documented in [API.md](API.md#get-apimindmap).
 
 **Limits:** the grouped view is a rendering collapse, not a second graph. The
 full graph is still returned by the API. Very large repositories beyond the
@@ -285,7 +306,8 @@ before use.
 
 ## 16. Health and configuration
 
-- `GET /api/health`: uptime, memory, provider key counts, and version.
+- `GET /api/health`: uptime, memory, provider key counts, version, graph
+  `schema_version`, and cached node/edge counts without building a graph.
 - The version is **2.0.0**, matching `pyproject.toml`; a regression test fails
   if the two drift.
 - Provider/model/base URL configuration through `.env`.
@@ -299,6 +321,8 @@ before use.
 These are intentionally not presented as shipped:
 
 - WebGL rendering tier for very large graphs.
+- The vertical Mind Map UI (the `GET /api/mindmap` contract is frozen; the
+  view beside the dependency canvas is Phase 2).
 - The `kuzu` graph-store flag.
 - Monorepo cross-package edges.
 - Ownership overlay (the endpoint exists; the data is not populated).

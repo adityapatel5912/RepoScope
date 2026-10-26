@@ -507,6 +507,7 @@ confirms each item. Agent-run evidence is recorded separately in
 | [Documentation index](docs/README.md) | Which docs are current, reference, or historical |
 | [v2.0 pitch deck](RepoScope_v2_Pitch_Deck.pdf) | 14-slide product story; [editable PPTX](RepoScope_v2_Pitch_Deck.pptx) |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, data flow, endpoints, graph layout, MCP |
+| [API](docs/API.md) | Graph schema v2, health payload, mind-map contract |
 | [Features](docs/FEATURES.md) | Every feature, how to use it, and its limits |
 | [Development](docs/DEVELOPMENT.md) | Setup, tests, extension, QA |
 | [Deployment](docs/DEPLOYMENT.md) | Render + Vercel + Open VSX |

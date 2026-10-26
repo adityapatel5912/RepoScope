@@ -4,6 +4,11 @@ RepoScope stores one graph in `.reposcope/graph.json`. The canvas, MCP server,
 and extension read that snapshot. There is no separate “MCP index” or
 “extension index”.
 
+The builder writes **schema v2**. Schema v2 is additive: every v1 node id,
+edge direction, and edge meaning is unchanged, and a v1 graph still loads.
+The additions are evidence-bearing dependency edges, route metadata, and
+node roles/pillars.
+
 ## Node types
 
 | Type | Id | Example | Notes |
@@ -19,6 +24,13 @@ added by the canvas so the pyramid has a top.
 Node fields include `label`, `language`, `size`, `sha256`, `pagerank`,
 `in_degree`, `out_degree`, and `betweenness` where applicable.
 
+Schema v2 adds optional `path`, `pillar`, `role`, `route_count`, `routes`
+(handlers only), and `end_line` (symbols only). `pillar` is one of
+`frontend`, `backend`, `data`, `infrastructure`, `tests`, or `docs`. `role` is
+a deterministic classification such as `entry_point`, `api_controller`,
+`service`, `repository`, `model`, `utility`, `ui_component`, `hook`, `test`,
+`docs`, or `config`.
+
 ## Edge types
 
 | Type | Source → target | Meaning |
@@ -26,9 +38,26 @@ Node fields include `label`, `language`, `size`, `sha256`, `pagerank`,
 | `contains` | file → function/class | The file defines the symbol |
 | `imports` | file → file | A resolved import |
 | `calls` | function/method → function/method | A resolved static call |
+| `inherits` | class → class | A resolvable base class or implemented interface |
+| `exports` | file → file | A barrel/re-exporting file re-exports from the target |
+| `api_calls` | caller symbol or file → handler symbol or file | A client call that resolves to a declared route |
 
-No `extends`, `part_of`, or GitHub metadata edges are stored in the code graph.
-Tracking data lives in `data/repo_state.json`, not in `.reposcope/graph.json`.
+`inherits`, `exports`, and `api_calls` always carry an `evidence` object:
+repository-relative `file`, 1-based `line`, and `confidence` in `[0, 1]`.
+The three v1 edge types may omit evidence so an old graph stays readable. No
+v2 edge may reference an unknown node. Ambiguous targets are omitted rather
+than guessed.
+
+`contains` is membership, not a dependency. The dependency-aware analyses
+exclude it; `imports`, `calls`, `inherits`, `exports`, and `api_calls` are the
+dependency edge types.
+
+## Routes
+
+The graph carries a top-level `api_routes` table. Each entry names the method
+(`GET`, `POST`, …, or `WS`), path, declaring file, line, handler name, and the
+handler's node id. Handler nodes also carry their own `routes` list. A route
+whose handler cannot be resolved is attributed to its file node.
 
 ## Import resolution
 
@@ -59,10 +88,10 @@ code can produce false negatives. The graph is an estimate, not a proof.
 - **PageRank**: centrality used for ranking and the repo map.
 - **In/out degree**: direct dependency counts.
 - **Betweenness**: optional bridge score.
-- **Cycles**: strongly connected components over `imports`.
+- **Cycles**: strongly connected components over the dependency edges.
 - **Unreachable symbols**: static reachability from entry points.
 - **Hotspots**: centrality combined with git churn.
-- **Blast radius**: reverse BFS over `imports`/`calls`.
+- **Blast radius**: reverse BFS over the graph's edges.
 
 ## Rendering rules
 

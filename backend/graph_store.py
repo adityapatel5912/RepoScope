@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -44,11 +45,26 @@ DEFAULT_DIRNAME = ".reposcope"
 DEFAULT_FILENAME = "graph.json"
 
 #: The schema version written into the store's metadata block.
-SCHEMA_VERSION = 1
+#:
+#: v2 is additive: every v1 node id, edge direction, and edge type still
+#: validates. New readers may rely on `pillar`, `role`, `route_count`,
+#: `api_routes`, and evidence-bearing v2 edges; old readers ignore them.
+SCHEMA_VERSION = 2
+
+#: Schema versions this store can read. A v1 graph is valid v2 input.
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
 
 #: Edge types the graph may contain. `calls` is already accepted by the
 #: frontend renderer (frontend/src/components/GraphView.tsx:174).
-VALID_EDGE_TYPES = frozenset({"contains", "imports", "calls"})
+VALID_EDGE_TYPES = frozenset({
+    "contains", "imports", "calls",
+    # Schema v2 — always evidence-bearing.
+    "inherits", "exports", "api_calls",
+})
+
+#: v2 edge types must carry evidence. v1 edges may omit it so an old
+#: graph remains readable.
+EVIDENCE_EDGE_TYPES = frozenset({"inherits", "exports", "api_calls"})
 
 #: Node types the graph may contain.
 VALID_NODE_TYPES = frozenset({
@@ -94,7 +110,14 @@ class GraphStore(Protocol):
 
 def empty_graph() -> dict:
     """The canonical empty graph."""
-    return {"nodes": [], "edges": [], "summary": "0 nodes, 0 edges"}
+    return {
+        "nodes": [],
+        "edges": [],
+        "summary": "0 nodes, 0 edges",
+        "schema_version": SCHEMA_VERSION,
+        "metadata": {},
+        "api_routes": [],
+    }
 
 
 def graph_summary(graph: dict) -> str:
@@ -123,6 +146,9 @@ def validate_graph(graph: dict) -> list[str]:
         problems.append("'nodes' must be a list")
     if not isinstance(edges, list):
         problems.append("'edges' must be a list")
+    schema_version = graph.get("schema_version")
+    if schema_version is not None and schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        problems.append(f"unsupported schema_version {schema_version!r}")
     if problems:
         return problems
 
@@ -163,6 +189,45 @@ def validate_graph(graph: dict) -> list[str]:
             problems.append(f"edges[{index}] references unknown source '{source}'")
         if target not in node_ids:
             problems.append(f"edges[{index}] references unknown target '{target}'")
+        if edge_type in EVIDENCE_EDGE_TYPES:
+            problems.extend(_evidence_problems(edge, index))
+
+    return problems
+
+
+def _evidence_problems(edge: dict, index: int) -> list[str]:
+    """
+    Validate a v2 edge's evidence.
+
+    Evidence is the difference between "the graph says so" and "a regex
+    guessed". A v2 edge without a repo-relative file, a 1-based line, and
+    a confidence in [0, 1] is not evidence and must not be persisted.
+    """
+    label = f"edges[{index}]"
+    evidence = edge.get("evidence")
+    if not isinstance(evidence, dict):
+        return [f"{label} is a v2 edge without an evidence object"]
+    problems: list[str] = []
+
+    file_path = evidence.get("file")
+    if not isinstance(file_path, str) or not file_path:
+        problems.append(f"{label} evidence has no 'file'")
+    else:
+        normalized = file_path.replace("\\", "/")
+        if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+            problems.append(f"{label} evidence file is absolute: {file_path!r}")
+        if ".." in normalized.split("/"):
+            problems.append(f"{label} evidence file escapes the root: {file_path!r}")
+
+    line = evidence.get("line")
+    if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+        problems.append(f"{label} evidence line must be a positive integer")
+
+    confidence = evidence.get("confidence")
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        problems.append(f"{label} evidence confidence must be a number")
+    elif not 0.0 <= float(confidence) <= 1.0:
+        problems.append(f"{label} evidence confidence must be within [0, 1]")
 
     return problems
 
@@ -208,8 +273,11 @@ class JsonGraphStore:
                 "graph does not satisfy the node/edge contract:\n  "
                 + "\n  ".join(problems)
             )
+        schema_version = graph.get("schema_version")
+        if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+            schema_version = SCHEMA_VERSION
         payload = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": schema_version,
             # WHEN the index was built. A reader compares this with the
             # repository's newest source file to decide whether the index
             # is still true — an index that cannot be dated is an index
@@ -219,6 +287,12 @@ class JsonGraphStore:
             "nodes": graph.get("nodes", []),
             "edges": graph.get("edges", []),
         }
+        # Additive v2 metadata survives the round trip. A v1 graph has
+        # neither key, so neither is invented.
+        if "metadata" in graph:
+            payload["metadata"] = graph.get("metadata")
+        if "api_routes" in graph:
+            payload["api_routes"] = graph.get("api_routes")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -261,7 +335,9 @@ class JsonGraphStore:
         return {
             "path": str(self.path),
             "exists": self.exists(),
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": int(
+                graph.get("schema_version") or SCHEMA_VERSION
+            ),
             "node_count": len(nodes),
             "edge_count": len(edges),
             "node_types": node_types,
@@ -277,11 +353,24 @@ class JsonGraphStore:
         if not isinstance(raw, dict):
             return empty_graph()
         if "nodes" in raw or "edges" in raw:
-            return {
+            graph = {
                 "nodes": raw.get("nodes", []) or [],
                 "edges": raw.get("edges", []) or [],
                 "summary": raw.get("summary") or graph_summary(raw),
             }
+            schema_version = raw.get("schema_version")
+            if schema_version in SUPPORTED_SCHEMA_VERSIONS:
+                graph["schema_version"] = schema_version
+            else:
+                # A bare graph predates the wrapper. It is a v1 graph by
+                # definition; calling it v2 would claim enrichment it
+                # does not have.
+                graph["schema_version"] = 1
+            if isinstance(raw.get("metadata"), dict):
+                graph["metadata"] = raw["metadata"]
+            if isinstance(raw.get("api_routes"), list):
+                graph["api_routes"] = raw["api_routes"]
+            return graph
         return empty_graph()
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
@@ -334,14 +423,27 @@ class SqliteGraphStore:
                     json.loads(row[0])
                     for row in connection.execute("SELECT data FROM edges ORDER BY source, target, type")
                 ]
+                meta_rows = dict(connection.execute("SELECT key, value FROM meta"))
         except Exception as exc:  # noqa: BLE001 - a broken store must not crash the app
             log.warning("Could not read the sqlite graph store %s: %s", self.path, exc)
             return empty_graph()
-        return {
+        graph = {
             "nodes": nodes,
             "edges": edges,
             "summary": graph_summary({"nodes": nodes, "edges": edges}),
+            "schema_version": int(meta_rows.get("schema_version") or SCHEMA_VERSION),
         }
+        if meta_rows.get("metadata"):
+            try:
+                graph["metadata"] = json.loads(meta_rows["metadata"])
+            except json.JSONDecodeError:
+                pass
+        if meta_rows.get("api_routes"):
+            try:
+                graph["api_routes"] = json.loads(meta_rows["api_routes"])
+            except json.JSONDecodeError:
+                pass
+        return graph
 
     def save(self, graph: dict) -> None:
         problems = validate_graph(graph)
@@ -394,10 +496,15 @@ class SqliteGraphStore:
             connection.executemany(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                 [
-                    ("schema_version", str(SCHEMA_VERSION)),
+                    (
+                        "schema_version",
+                        str(graph.get("schema_version") or SCHEMA_VERSION),
+                    ),
                     ("summary", graph.get("summary") or graph_summary(graph)),
                     ("node_count", str(len(graph.get("nodes", []) or []))),
                     ("edge_count", str(len(graph.get("edges", []) or []))),
+                    ("metadata", json.dumps(graph.get("metadata") or {})),
+                    ("api_routes", json.dumps(graph.get("api_routes") or [])),
                 ],
             )
             connection.commit()
@@ -420,7 +527,9 @@ class SqliteGraphStore:
         return {
             "path": str(self.path),
             "exists": self.exists(),
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": int(
+                graph.get("schema_version") or SCHEMA_VERSION
+            ),
             "node_count": len(nodes),
             "edge_count": len(edges),
             "node_types": node_types,

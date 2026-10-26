@@ -49,8 +49,10 @@ GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 #: Every fixture that has a golden snapshot.
 FIXTURE_NAMES = ("multilang", "circular", "nested", "real_small", "qualified")
 
-#: Contract constants from Correction C10.
-VALID_EDGE_TYPES = {"contains", "imports", "calls"}
+#: Contract constants from Correction C10 and schema v2.
+V1_EDGE_TYPES = {"contains", "imports", "calls"}
+V2_EDGE_TYPES = {"inherits", "exports", "api_calls"}
+VALID_EDGE_TYPES = V1_EDGE_TYPES | V2_EDGE_TYPES
 
 
 def _regen_enabled() -> bool:
@@ -72,16 +74,28 @@ def _snapshot_for(name: str) -> dict:
 
 
 def _observed(graph: dict) -> dict:
+    """
+    The v1 view of a graph.
+
+    Schema v2 is additive, so the committed snapshot keeps comparing the
+    v1 node set and the v1 edge SUBSET. New v2 edges are asserted
+    separately; they can never be used to hide a v1 drift.
+    """
+    nodes = graph.get("nodes", [])
+    v1_edges = [
+        edge for edge in graph.get("edges", [])
+        if str(edge.get("type", "")) in V1_EDGE_TYPES
+    ]
     return {
         "nodes": sorted(
             [str(n.get("id", "")), str(n.get("type", ""))]
-            for n in graph.get("nodes", [])
+            for n in nodes
         ),
         "edges": sorted(
             [str(e.get("source", "")), str(e.get("target", "")), str(e.get("type", ""))]
-            for e in graph.get("edges", [])
+            for e in v1_edges
         ),
-        "summary": graph.get("summary", ""),
+        "summary": f"{len(nodes)} nodes, {len(v1_edges)} edges",
     }
 
 
@@ -134,6 +148,8 @@ def test_graph_matches_golden_snapshot(name, pytestconfig):
 @pytest.mark.parametrize("name", FIXTURE_NAMES)
 def test_graph_satisfies_the_node_edge_contract(name):
     """Structural invariants that must hold regardless of snapshot content."""
+    from graph_store import validate_graph
+
     graph = build_graph_from_repo(str(FIXTURES_DIR / name))
 
     node_ids = [n["id"] for n in graph["nodes"]]
@@ -144,6 +160,8 @@ def test_graph_satisfies_the_node_edge_contract(name):
         assert edge["type"] in VALID_EDGE_TYPES, f"unknown edge type {edge['type']!r}"
         assert edge["source"] in known, f"edge references unknown source {edge['source']!r}"
         assert edge["target"] in known, f"edge references unknown target {edge['target']!r}"
+
+    assert validate_graph(graph) == [], validate_graph(graph)
 
     for node in graph["nodes"]:
         assert node.get("id"), "node without id"

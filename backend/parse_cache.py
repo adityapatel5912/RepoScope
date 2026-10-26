@@ -53,8 +53,10 @@ CACHE_DIRNAME = ".reposcope"
 CACHE_FILENAME = "parse-cache.json"
 
 #: Bumped when the on-disk shape changes. An older cache is discarded
-#: rather than misread.
-CACHE_VERSION = 2
+#: rather than misread. v3 adds the route, API-call and heritage facts
+#: schema v2 needs; a v2 entry has no such fields and must never be
+#: silently treated as one that does.
+CACHE_VERSION = 3
 
 #: Default number of entries kept in memory. Each entry is the parse result
 #: of one file — symbols, imports and call sites. At roughly 2 KB per file
@@ -128,6 +130,12 @@ class FileFacts:
     imports: list[dict] = field(default_factory=list)
     calls: list[dict] = field(default_factory=list)
     receivers: list[dict] = field(default_factory=list)
+    #: Schema v2 facts. All three are raw, per-file observations: route
+    #: declarations, client calls, and class bases. Resolution across
+    #: files happens in the graph finalizer, not here.
+    routes: list[dict] = field(default_factory=list)
+    api_calls: list[dict] = field(default_factory=list)
+    heritage: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -140,6 +148,9 @@ class FileFacts:
             "imports": self.imports,
             "calls": self.calls,
             "receivers": self.receivers,
+            "routes": self.routes,
+            "api_calls": self.api_calls,
+            "heritage": self.heritage,
             "warnings": self.warnings,
         }
 
@@ -154,6 +165,9 @@ class FileFacts:
             imports=list(raw.get("imports") or []),
             calls=list(raw.get("calls") or []),
             receivers=list(raw.get("receivers") or []),
+            routes=list(raw.get("routes") or []),
+            api_calls=list(raw.get("api_calls") or []),
+            heritage=list(raw.get("heritage") or []),
             warnings=list(raw.get("warnings") or []),
         )
 

@@ -38,12 +38,15 @@ GitHub repository ────► repo loader ──┘          │
 | Module | Responsibility |
 |---|---|
 | `backend/main.py` | FastAPI composition root, CORS, security headers, legacy endpoints |
-| `backend/api/routers/` | `analysis`, `arch`, `local`, `pr_chat`, `qa` routers |
+| `backend/api/routers/` | `analysis`, `arch`, `local`, `mindmap`, `pr_chat`, `qa` routers |
 | `backend/repo_loader.py` | Clone/read a repository, load a local directory, write repo state |
 | `backend/parsers/` | Tree-sitter parsers for Python, TypeScript/TSX, JavaScript, Go, Rust |
-| `backend/graph_builder.py` | Orchestrates parsing, resolves imports/calls, writes nodes and edges |
-| `backend/graph_store.py` | Loads `.reposcope/graph.json`, validates freshness, serves snapshots |
-| `backend/parse_cache.py` | Per-file parse cache keyed by path, size, and mtime |
+| `backend/symbol_resolver.py` | Deterministic route, API-call, heritage, and alias scanners |
+| `backend/graph_builder.py` | Orchestrates parsing, resolves imports/calls, finalizes schema v2 nodes and edges |
+| `backend/graph_store.py` | Loads `.reposcope/graph.json`, validates schema v1/v2 and freshness, serves snapshots |
+| `backend/parse_cache.py` | Content-addressed per-file parse cache (routes, calls, heritage; cache v3) |
+| `backend/mindmap_classifier.py` | Six-pillar and role taxonomy |
+| `backend/mindmap.py` | Deterministic root → pillar → folder → file → symbol projection |
 | `backend/graph_analysis.py` | PageRank, SCC cycles, reachability, hubs, critical path |
 | `backend/repo_map.py` | Budgeted, ranked context map |
 | `backend/arch_rules.py` | `.reposcope.yml` architecture-rule loading and checks |
@@ -88,7 +91,9 @@ UI share the same route). The loader:
    virtual environments);
 3. parses supported files with the parser registry;
 4. resolves relative and aliased imports against the module index;
-5. adds file nodes, symbol nodes, `imports`, `calls`, and `contains` edges;
+5. adds file nodes, symbol nodes, `imports`, `calls`, and `contains` edges,
+   then the schema v2 route/role evidence and `inherits`/`exports`/`api_calls`
+   edges;
 6. writes `.reposcope/graph.json` and the parse cache;
 7. starts the watcher.
 
@@ -130,9 +135,11 @@ symbol or call extraction.
 }
 ```
 
-Edges are `imports`, `calls`, and `contains`. See
-[`KNOWLEDGE_GRAPH_SCHEMA.md`](KNOWLEDGE_GRAPH_SCHEMA.md) for the stable ids and
-rendering rules.
+Edges are `imports`, `calls`, and `contains`, plus the schema v2 edges
+`inherits`, `exports`, and `api_calls`. The v2 edges carry evidence; v1 ids
+and edge meanings are unchanged. See
+[`KNOWLEDGE_GRAPH_SCHEMA.md`](KNOWLEDGE_GRAPH_SCHEMA.md) for the stable ids,
+evidence rules, and rendering rules.
 
 ---
 
@@ -171,6 +178,7 @@ The API is JSON-first; chat and local updates use Server-Sent Events.
 | `GET` | `/api/repo/status` | Current repository state |
 | `GET` | `/api/repo/check` | Poll GitHub for changes |
 | `GET` | `/api/repo/graph` | Full graph snapshot |
+| `GET` | `/api/mindmap` | Six-pillar mind-map projection; see [API.md](API.md#get-apimindmap) |
 | `GET` | `/api/repo/file` | File content for the viewer |
 | `GET` | `/api/repo/demos` | Available demo repositories |
 | `POST` | `/api/repo/commit` | Commit from the app (BYOK) |

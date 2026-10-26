@@ -74,7 +74,14 @@ def cached_digraph(
     return digraph
 
 #: Edge types that represent a real dependency for traversal purposes.
-DEPENDENCY_EDGE_TYPES = frozenset({"imports", "calls"})
+#:
+#: `contains` is membership, not dependency, and stays excluded. The v2
+#: edges are dependencies: a subclass depends on its base, a barrel
+#: depends on what it re-exports, and a client depends on the handler it
+#: calls across the stack boundary.
+DEPENDENCY_EDGE_TYPES = frozenset({
+    "imports", "calls", "inherits", "exports", "api_calls",
+})
 
 
 def build_digraph(

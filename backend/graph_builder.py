@@ -46,6 +46,14 @@ from typing import Iterable, Mapping
 from parse_cache import SKIP_DIRS, FileFacts, ParseCache, hash_bytes
 from parsers.base import type_name as _base_type_name
 from parsers.registry import get_parser
+from symbol_resolver import (
+    class_owner_candidates,
+    load_path_aliases,
+    normalize_api_path,
+    path_matches,
+    resolve_alias_spec,
+    scan_contract_facts,
+)
 
 log = logging.getLogger("reposcope.graph_builder")
 
@@ -111,6 +119,7 @@ def parse_bytes(data: bytes, rel: str, suffix: str) -> FileFacts:
     is exactly what makes the result cacheable by content hash.
     """
     parser = get_parser(suffix)
+    source = data.decode("utf-8", "replace")
     if parser is not None:
         try:
             result = parser.extract(data, rel)
@@ -120,12 +129,16 @@ def parse_bytes(data: bytes, rel: str, suffix: str) -> FileFacts:
                 rel=rel, suffix=suffix, size=len(data), sha256="",
                 warnings=[f"parser failed: {exc}"],
             )
+        symbols = [_symbol_to_dict(s) for s in result.symbols]
+        routes, api_calls, heritage = scan_contract_facts(
+            source, rel, suffix, symbols,
+        )
         return FileFacts(
             rel=rel,
             suffix=suffix,
             size=len(data),
             sha256="",
-            symbols=[_symbol_to_dict(s) for s in result.symbols],
+            symbols=symbols,
             imports=[_import_to_dict(i) for i in result.imports],
             calls=[_call_to_dict(c) for c in result.calls],
             receivers=[
@@ -135,13 +148,20 @@ def parse_bytes(data: bytes, rel: str, suffix: str) -> FileFacts:
                 }
                 for r in result.receivers
             ],
+            routes=routes,
+            api_calls=api_calls,
+            heritage=heritage,
             warnings=list(result.warnings),
         )
 
     symbols, imports, warnings = _fallback_facts(data, rel, suffix)
+    routes, api_calls, heritage = scan_contract_facts(
+        source, rel, suffix, symbols,
+    )
     return FileFacts(
         rel=rel, suffix=suffix, size=len(data), sha256="",
         symbols=symbols, imports=imports, calls=[], warnings=warnings,
+        routes=routes, api_calls=api_calls, heritage=heritage,
     )
 
 
@@ -294,7 +314,10 @@ class ModuleIndex:
     directory, not a module.
     """
 
-    __slots__ = ("py_index", "py_stems", "py_dotted", "py_tail", "js_files", "js_stems")
+    __slots__ = (
+        "py_index", "py_stems", "py_dotted", "py_tail", "js_files", "js_stems",
+        "aliases",
+    )
 
     def __init__(self) -> None:
         self.py_index: dict[str, str] = {}
@@ -308,10 +331,18 @@ class ModuleIndex:
         self.py_tail: dict[str, list[str]] = {}
         self.js_files: set[str] = set()
         self.js_stems: dict[str, str] = {}
+        #: tsconfig/jsconfig path aliases, repo-relative. Empty when the
+        #: repository has no config; `@/` and `~/` still work as before.
+        self.aliases: dict[str, list[str]] = {}
 
 
-def build_module_index(facts: Mapping[str, FileFacts]) -> ModuleIndex:
+def build_module_index(
+    facts: Mapping[str, FileFacts],
+    root: str | Path | None = None,
+) -> ModuleIndex:
     index = ModuleIndex()
+    if root is not None:
+        index.aliases = load_path_aliases(root)
     for rel, file_facts in facts.items():
         suffix = file_facts.suffix
         if suffix in _PY_EXTS:
@@ -400,26 +431,36 @@ def _resolve_py(
     return None
 
 
+def _js_candidates(base: str) -> list[str]:
+    """Every file a module base could resolve to, most specific first."""
+    norm = os.path.normpath(base).replace("\\", "/")
+    candidates = [norm]
+    candidates.extend(f"{norm}{ext}" for ext in (".ts", ".tsx", ".js", ".jsx"))
+    candidates.extend(
+        f"{norm}/index{ext}" for ext in (".ts", ".tsx", ".js", ".jsx")
+    )
+    return candidates
+
+
 def _resolve_js(index: ModuleIndex, spec: str, importer_rel: str) -> str | None:
     """Resolve a JS/TS import specifier to a file id, or None (external)."""
-    if spec.startswith("@/") or spec.startswith("~/"):
-        cand_base = [spec[2:], f"src/{spec[2:]}"]
-    elif spec.startswith("./") or spec.startswith("../"):
-        parts = (Path(importer_rel).parent.joinpath(spec)).as_posix()
-        cand_base = [parts]
+    bases: list[str] = []
+    if spec.startswith("./") or spec.startswith("../"):
+        bases.append(
+            (Path(importer_rel).parent / spec).as_posix()
+        )
     else:
-        return None  # bare package import — external, skip
-    resolved = []
-    for base in cand_base:
-        norm = os.path.normpath(base).replace("\\", "/")
-        resolved.append(norm)
-        for ext in (".ts", ".tsx", ".js", ".jsx"):
-            resolved.append(f"{norm}{ext}")
-        for ext in (".ts", ".tsx", ".js", ".jsx"):
-            resolved.append(f"{norm}/index{ext}")
-    for candidate in resolved:
-        if candidate in index.js_files:
-            return f"file:{candidate}"
+        # tsconfig/jsconfig aliases win over the historical `@/` shorthand.
+        bases.extend(resolve_alias_spec(spec, index.aliases))
+        if spec.startswith("@/") or spec.startswith("~/"):
+            bases.extend([spec[2:], f"src/{spec[2:]}"])
+        if not bases:
+            return None  # bare package import — external, skip
+
+    for base in dict.fromkeys(bases):
+        for candidate in _js_candidates(base):
+            if candidate in index.js_files:
+                return f"file:{candidate}"
     return None
 
 
@@ -676,15 +717,22 @@ def _symbol_node(node_id: str, symbol: Mapping, rel: str) -> dict:
     return node
 
 
-def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
+def assemble_graph(
+    facts: Mapping[str, FileFacts],
+    root: str | Path | None = None,
+) -> dict:
     """
     Assemble a whole repository's graph from its per-file facts.
 
     This is the C10 contract in one place: node ids, node types, edge
     types. The input is per-file facts, so this stage can run over cached
     results without touching the disk.
+
+    `root` is optional and used only to read tsconfig/jsconfig aliases.
+    When it is absent, resolution falls back to the v1 behaviour, so an
+    in-memory caller still gets a valid v1-compatible graph.
     """
-    index = build_module_index(facts)
+    index = build_module_index(facts, root=root)
 
     nodes: list[dict] = []
     edges: list[dict] = []
@@ -802,6 +850,8 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
         "summary": f"{len(nodes)} nodes, {len(unique_edges)} edges",
     }
 
+    finalize_graph(graph, facts, root=root)
+
     # Attach centrality (M7.1). PageRank replaces the naive
     # `incoming x 2 + outgoing` heuristic the pyramid used to rank files
     # with, and the same scores drive the hotspot blend and the "top
@@ -826,6 +876,334 @@ def _dedupe_edges(edges: Iterable[dict]) -> list[dict]:
             seen.add(key)
             unique.append(edge)
     return unique
+
+
+# ── Schema v2 finalization ──────────────────────────────────────────────────
+
+#: Edges derived from the graph's own facts during finalization. They are
+#: stripped before recomputation so finalize is idempotent.
+DERIVED_EDGE_TYPES = frozenset({"inherits", "exports", "api_calls"})
+
+#: What a schema v2 graph can answer that a v1 graph cannot.
+GRAPH_CAPABILITIES = (
+    "roles", "pillars", "routes", "api_calls", "inherits", "exports",
+)
+
+
+def finalize_graph(
+    graph: dict,
+    facts: Mapping[str, FileFacts],
+    root: str | Path | None = None,
+) -> dict:
+    """
+    Enrich a v1 graph with schema v2 evidence, in place, and return it.
+
+    The v1 graph is never rewritten: ids, labels, edge directions and
+    the three v1 edge types are exactly what `assemble_graph` produced.
+    Everything here is additive.
+
+    The function is idempotent. Full builds and the incremental indexer
+    both call it, and the incremental graph must equal a fresh rebuild
+    including the v2 edges — so derived edges and node fields are
+    removed before they are recomputed, never appended twice.
+    """
+    from graph_store import SCHEMA_VERSION
+    from mindmap_classifier import classify_file, classify_symbol
+
+    nodes: list[dict] = graph.setdefault("nodes", [])
+    edges: list[dict] = [
+        edge for edge in graph.get("edges", []) or []
+        if edge.get("type") not in DERIVED_EDGE_TYPES
+    ]
+
+    for node in nodes:
+        for derived in (
+            "path", "pillar", "role", "route_count", "routes", "end_line",
+        ):
+            node.pop(derived, None)
+
+    index = build_module_index(facts, root=root)
+
+    file_nodes: dict[str, dict] = {}
+    symbol_by_key: dict[tuple[str, str, int], str] = {}
+    symbols_by_file_name: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    class_node_by_file_name: dict[tuple[str, str], str] = {}
+    classes_by_file: dict[str, set[str]] = {}
+    class_rels: dict[str, set[str]] = {}
+
+    for node in nodes:
+        node_id = str(node.get("id") or "")
+        node_type = node.get("type")
+        if node_type == "file" and node_id.startswith("file:"):
+            file_nodes[node_id[len("file:"):]] = node
+        elif node_type in ("function", "class"):
+            rel = str(node.get("file") or "")
+            label = str(node.get("label") or "")
+            line = int(node.get("line") or 0)
+            if not rel or not label:
+                continue
+            symbol_by_key[(rel, label, line)] = node_id
+            symbols_by_file_name.setdefault((rel, label), []).append((line, node_id))
+            if node_type == "class":
+                class_node_by_file_name.setdefault((rel, label), node_id)
+                classes_by_file.setdefault(rel, set()).add(label)
+                class_rels.setdefault(label, set()).add(rel)
+
+    for entries in symbols_by_file_name.values():
+        entries.sort(key=lambda item: item[0])
+
+    file_imports: dict[str, dict[str, set[str]]] = {}
+    for rel, file_facts in facts.items():
+        resolved: dict[str, set[str]] = {}
+        for imp in file_facts.imports:
+            target_rel = _resolve_import(index, imp, rel, file_facts.suffix)
+            if target_rel and target_rel != rel:
+                resolved.setdefault(target_rel, set()).update(
+                    imp.get("names") or ()
+                )
+        file_imports[rel] = resolved
+
+    def symbol_node(
+        rel: str, name: str | None, line: int | None,
+    ) -> str | None:
+        if not name:
+            return None
+        if line:
+            exact = symbol_by_key.get((rel, name, int(line)))
+            if exact:
+                return exact
+        candidates = symbols_by_file_name.get((rel, name))
+        return candidates[0][1] if candidates else None
+
+    # ── Route table ──────────────────────────────────────────────────────
+    api_routes: list[dict] = []
+    routes_by_node: dict[str, list[dict]] = {}
+    route_count_by_file: dict[str, int] = {}
+    seen_routes: set[tuple] = set()
+    for rel in sorted(facts):
+        file_facts = facts[rel]
+        for route in file_facts.routes:
+            method = str(route.get("method") or "GET").upper()
+            path = str(route.get("path") or "")
+            if not path.startswith("/"):
+                continue
+            handler = route.get("handler") or ""
+            handler_line = route.get("handler_line") or route.get("line")
+            handler_id = symbol_node(rel, handler, handler_line)
+            if handler_id is None:
+                handler_node = file_nodes.get(rel)
+                handler_id = handler_node.get("id") if handler_node else None
+            if not handler_id:
+                continue
+            declaration_line = int(route.get("line") or 0)
+            key = (method, path, rel, str(handler), declaration_line)
+            if key in seen_routes:
+                continue
+            seen_routes.add(key)
+            line = declaration_line
+            handler_node = next(
+                (node for node in nodes if node.get("id") == handler_id), None,
+            )
+            if handler_node and handler_node.get("type") in ("function", "class"):
+                line = int(handler_node.get("line") or declaration_line)
+            record = {
+                "method": method,
+                "path": path,
+                "file": rel,
+                "line": line,
+                "handler": str(handler),
+                "node_id": handler_id,
+            }
+            api_routes.append(record)
+            routes_by_node.setdefault(handler_id, []).append({
+                "method": method,
+                "path": path,
+                "line": declaration_line,
+            })
+            route_count_by_file[rel] = route_count_by_file.get(rel, 0) + 1
+
+    api_routes.sort(key=lambda item: (
+        item["file"], item["line"], item["method"], item["path"],
+    ))
+    for route_list in routes_by_node.values():
+        route_list.sort(key=lambda item: (item["line"], item["method"], item["path"]))
+
+    # ── Node enrichment ─────────────────────────────────────────────────
+    file_classification: dict[str, dict] = {}
+    for rel, node in file_nodes.items():
+        info = classify_file(rel, route_count=route_count_by_file.get(rel, 0))
+        file_classification[rel] = info
+        node["path"] = rel
+        node["pillar"] = info["pillar"]
+        node["role"] = info["role"]
+        node["route_count"] = route_count_by_file.get(rel, 0)
+
+    symbol_end_lines: dict[tuple[str, str, int], int] = {}
+    for rel, file_facts in facts.items():
+        for symbol in file_facts.symbols:
+            symbol_end_lines[(
+                rel,
+                str(symbol.get("name") or ""),
+                int(symbol.get("line") or 0),
+            )] = int(symbol.get("end_line") or symbol.get("line") or 0)
+
+    for node in nodes:
+        if node.get("type") not in ("function", "class"):
+            continue
+        rel = str(node.get("file") or "")
+        label = str(node.get("label") or "")
+        line = int(node.get("line") or 0)
+        info = file_classification.get(rel) or classify_file(rel)
+        node["path"] = rel
+        node["pillar"] = info["pillar"]
+        end_line = symbol_end_lines.get((rel, label, line))
+        if end_line:
+            node["end_line"] = end_line
+        node_id = str(node.get("id") or "")
+        route_list = routes_by_node.get(node_id)
+        if route_list:
+            node["role"] = "api_controller"
+            node["routes"] = [dict(route) for route in route_list]
+        else:
+            node["role"] = classify_symbol(node, info["role"])
+
+    # ── Inheritance edges ───────────────────────────────────────────────
+    for rel in sorted(facts):
+        file_facts = facts[rel]
+        for entry in file_facts.heritage:
+            class_name = str(entry.get("class") or "")
+            class_line = int(entry.get("line") or 0)
+            source_id = symbol_node(rel, class_name, class_line)
+            if not source_id:
+                continue
+            for base_name in entry.get("bases") or []:
+                owners = class_owner_candidates(
+                    str(base_name), rel, classes_by_file, file_imports, class_rels,
+                )
+                targets = [
+                    class_node_by_file_name[(owner, str(base_name))]
+                    for owner in owners
+                    if (owner, str(base_name)) in class_node_by_file_name
+                ]
+                unique_targets = sorted(set(targets))
+                if len(unique_targets) != 1 or unique_targets[0] == source_id:
+                    continue
+                target_id = unique_targets[0]
+                owner_rel = next(
+                    (owner for owner in owners
+                     if class_node_by_file_name.get((owner, str(base_name))) == target_id),
+                    rel,
+                )
+                if owner_rel == rel:
+                    confidence = 1.0
+                elif owner_rel in file_imports.get(rel, {}):
+                    confidence = 0.9
+                else:
+                    confidence = 0.7
+                edges.append({
+                    "source": source_id,
+                    "target": target_id,
+                    "type": "inherits",
+                    "evidence": {
+                        "kind": "inheritance",
+                        "file": rel,
+                        "line": class_line,
+                        "base": str(base_name),
+                        "confidence": confidence,
+                    },
+                })
+
+    # ── Re-export edges ─────────────────────────────────────────────────
+    for rel in sorted(facts):
+        file_facts = facts[rel]
+        basename = Path(rel).name
+        is_python_barrel = basename == "__init__.py"
+        is_js_barrel = basename in {"index.ts", "index.js", "index.tsx", "index.jsx"}
+        seen_targets: set[str] = set()
+        for imp in file_facts.imports:
+            exports_this = (
+                is_python_barrel or is_js_barrel or bool(imp.get("re_export"))
+            )
+            if not exports_this:
+                continue
+            target_rel = _resolve_import(index, imp, rel, file_facts.suffix)
+            if not target_rel or target_rel == rel or target_rel in seen_targets:
+                continue
+            seen_targets.add(target_rel)
+            edges.append({
+                "source": f"file:{rel}",
+                "target": f"file:{target_rel}",
+                "type": "exports",
+                "evidence": {
+                    "kind": "re_export",
+                    "file": rel,
+                    "line": int(imp.get("line") or 0),
+                    "module": str(imp.get("module") or ""),
+                    "confidence": 1.0,
+                },
+            })
+
+    # ── Cross-stack API-call edges ──────────────────────────────────────
+    for rel in sorted(facts):
+        file_facts = facts[rel]
+        for call in file_facts.api_calls:
+            method = str(call.get("method") or "GET").upper()
+            call_path = str(call.get("path") or "")
+            if not call_path:
+                continue
+            matches: list[tuple[float, dict]] = []
+            for record in api_routes:
+                if record["method"] not in ("ALL", method):
+                    continue
+                matched, confidence = path_matches(record["path"], call_path)
+                if matched:
+                    matches.append((confidence, record))
+            if not matches:
+                continue
+            best = max(confidence for confidence, _record in matches)
+            top = [record for confidence, record in matches if confidence == best]
+            targets = {record["node_id"] for record in top}
+            if len(targets) != 1:
+                # Two handlers match equally well. A guessed cross-stack
+                # edge is worse than no edge.
+                continue
+            target_id = next(iter(targets))
+            source_id = symbol_node(
+                rel,
+                call.get("enclosing"),
+                call.get("enclosing_line"),
+            )
+            if source_id is None:
+                file_node = file_nodes.get(rel)
+                source_id = file_node.get("id") if file_node else None
+            if not source_id or source_id == target_id:
+                continue
+            record = top[0]
+            edges.append({
+                "source": source_id,
+                "target": target_id,
+                "type": "api_calls",
+                "evidence": {
+                    "kind": "http_call",
+                    "file": rel,
+                    "line": int(call.get("line") or 0),
+                    "method": method,
+                    "path": normalize_api_path(call_path),
+                    "route": normalize_api_path(record["path"]),
+                    "confidence": best,
+                },
+            })
+
+    graph["schema_version"] = SCHEMA_VERSION
+    graph["metadata"] = {
+        "builder": "graph_builder",
+        "capabilities": list(GRAPH_CAPABILITIES),
+    }
+    graph["api_routes"] = api_routes
+    graph["edges"] = _dedupe_edges(edges)
+    graph["nodes"] = nodes
+    graph["summary"] = f"{len(nodes)} nodes, {len(graph['edges'])} edges"
+    return graph
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -913,7 +1291,7 @@ def build_graph_from_repo(root: str, cache: ParseCache | None = None) -> dict:
     produces is identical with or without one.
     """
     facts = collect_facts(root, cache)
-    graph = assemble_graph(facts)
+    graph = assemble_graph(facts, root=root)
     log.info(
         "Graph built: %d nodes, %d edges from %s",
         len(graph["nodes"]), len(graph["edges"]), root,
@@ -983,7 +1361,7 @@ class GraphIndexer:
         which is why the two graphs have to be compared.
         """
         self.facts = collect_facts(self.root, self.cache)
-        self._index = build_module_index(self.facts)
+        self._index = build_module_index(self.facts, root=self.root)
         self._reset_tables()
         for rel in sorted(self.facts):
             self._add_file(rel, self.facts[rel], resolve_calls=False)
@@ -1276,7 +1654,7 @@ class GraphIndexer:
         # A content change cannot alter which module a path resolves to;
         # an added or removed file can.
         if file_set_changed:
-            self._index = build_module_index(self.facts)
+            self._index = build_module_index(self.facts, root=self.root)
 
         # ── 4. Drop the old nodes and edges of every changed file ──────────
         #
@@ -1352,13 +1730,18 @@ class GraphIndexer:
 
     def _publish(self) -> None:
         """Rebuild the public graph dict from the tables."""
-        nodes = list(self._nodes.values())
-        edges = list(self._edges.values())
+        # Copies matter: finalize adds derived fields and edges. If it
+        # mutated the live tables directly, the next publish would start
+        # from already-enriched nodes and the incremental graph could
+        # drift from a full rebuild.
+        nodes = [dict(node) for node in self._nodes.values()]
+        edges = [dict(edge) for edge in self._edges.values()]
         graph = {
             "nodes": nodes,
             "edges": edges,
             "summary": f"{len(nodes)} nodes, {len(edges)} edges",
         }
+        finalize_graph(graph, self.facts, root=self.root)
         try:
             from graph_analysis import attach_analysis
 

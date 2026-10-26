@@ -135,5 +135,6 @@ Acceptance: `npm --prefix frontend run build`, `npx tsc --noEmit`, and the new
 Playwright journey pass; the dependency network remains the default; no
 horizontal overflow at 1600×900 or 1280×800.
 
-When done: commit, merge into `experimental` with `--no-ff`, post the handoff
-in this file with the commit hash and commands, and update `WREN.md`.
+When done: commit on `wren/phase-2-mindmap`, push that branch, post the
+handoff in this file with the commit hash and commands, and update `WREN.md`.
+Rook reviews and merges into `experimental` with `--no-ff`.

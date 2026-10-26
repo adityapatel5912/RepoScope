@@ -40,7 +40,8 @@ No files are claimed yet. Claim them here before editing.
   `MindMapView.tsx`; do not rewrite the existing canvas.
 - One writer per file. Claim files here before editing.
 - Do not commit `.env`, tokens, or generated `dist/` output.
-- Merge into `experimental` only after the gate is green and post the handoff.
+- Commit on `wren/phase-2-mindmap`, push the branch, and post the handoff.
+  Rook reviews and merges into `experimental`; do not push to `experimental`.
 
 ## Results
 

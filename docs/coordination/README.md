@@ -60,9 +60,9 @@ Rook writes a self-contained prompt for Wren
       ↓
 Wren works in a separate worktree on a child branch
       ↓
-Wren merges into experimental after the gate is green and posts a handoff
+Wren pushes the child branch and posts a handoff after the gate is green
       ↓
-Rook reviews, re-runs the gate, fixes integration issues
+Rook reviews, re-runs the gate on a clean checkout, and merges
       ↓
 Rook starts the next batch
 ```

@@ -102,7 +102,7 @@ Run all of these before you commit:
 
 ```bash
 npm --prefix frontend run build
-npx --prefix frontend tsc --noEmit
+npm --prefix frontend exec tsc -- --noEmit
 npm --prefix frontend exec playwright test tests/e2e/mindmap.spec.ts
 npm --prefix frontend exec playwright test tests/e2e/journeys.spec.ts
 ```
@@ -127,16 +127,15 @@ One commit for Phase 2:
 feat(ui): add vertical six-pillar mind map
 ```
 
-Merge into `experimental` with `--no-ff` only after the gate is green:
+Push the child branch only; Rook is the integrator and will merge it into
+`experimental` with `--no-ff` after reviewing the gate:
 
 ```bash
-git checkout experimental
-git pull --ff-only
-git merge --no-ff wren/phase-2-mindmap
-git push origin experimental
+git push -u origin wren/phase-2-mindmap
 ```
 
-Then append a handoff to `docs/coordination/DIALOGUE.md` and update `docs/coordination/WREN.md` with:
+Do not push to `experimental`. Then append a handoff to
+`docs/coordination/DIALOGUE.md` and update `docs/coordination/WREN.md` with:
 
 - branch and commit hash;
 - files changed;

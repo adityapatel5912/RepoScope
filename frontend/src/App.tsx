@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import TopBar from "./components/TopBar";
+import TopBar, { type ViewMode } from "./components/TopBar";
 import LeftPanel from "./components/LeftPanel";
 import GraphCanvas from "./components/GraphView";
+import MindMapView from "./components/MindMapView";
 import ChatPanel from "./components/ChatPanel";
 import StatusBar from "./components/StatusBar";
 import Toasts from "./components/Toasts";
@@ -87,6 +88,7 @@ export default function App() {
   const [repo,        setRepo]        = useState<string | null>(null);
   const [repoInfo,    setRepoInfo]    = useState<RepoInfo | null>(null);
   const [mode,        setMode]        = useState<Mode>("understanding");
+  const [viewMode,    setViewMode]    = useState<ViewMode>("graph");
   const [rawNodes,    setRawNodes]    = useState<unknown[]>([]);
   const [rawEdges,    setRawEdges]    = useState<unknown[]>([]);
   const [tracking,    setTracking]    = useState<unknown>(null);
@@ -424,6 +426,8 @@ export default function App() {
         repo={repo}
         mode={mode}
         onModeChange={setMode}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         debugMode={debugMode}
         onDebugToggle={() => setDebugMode((v) => !v)}
         studentMode={studentMode}
@@ -504,22 +508,38 @@ export default function App() {
             className={`w-full min-h-0 ${chatCollapsed || previewActive ? "flex-1" : "flex-[0_0_auto]"}`}
             style={chatCollapsed || previewActive ? undefined : { height: `${100 - chatHeightPct}%` }}
           >
-            <GraphCanvas
-              rawNodes={rawNodes}
-              rawEdges={rawEdges}
-              onAskAbout={(msg) => { setPrefill(msg); setChatCollapsed(false); }}
-              onAnalyzeImpact={(label) => setImpactRequest({ target: label, ts: Date.now() })}
-              onStartTour={(label) => setTourRequest({ topic: label, ts: Date.now() })}
-              repoTitle={repo ?? "Repository"}
-              previewName={browserPreview?.name}
-              onOpenInEditor={handleOpenInEditor}
-              localRoot={localRoot}
-              highlightNode={highlightNode}
-              impactTarget={impactTarget}
-              impactDirect={impactDirect}
-              impactTransitive={impactTransitive}
-              tourState={tourState}
-            />
+            {viewMode === "mindmap" ? (
+              <MindMapView
+                key={repo ?? "none"}
+                repo={repo}
+                repoOwner={repoInfo?.owner}
+                repoName={repoInfo?.repo}
+                localRoot={localRoot}
+                previewName={browserPreview?.name}
+                onSwitchToGraph={() => setViewMode("graph")}
+                onOpenInEditor={(path, line) => { void handleOpenInEditor(path, line ?? 1); }}
+                impactTarget={impactTarget}
+                impactDirect={impactDirect}
+                impactTransitive={impactTransitive}
+              />
+            ) : (
+              <GraphCanvas
+                rawNodes={rawNodes}
+                rawEdges={rawEdges}
+                onAskAbout={(msg) => { setPrefill(msg); setChatCollapsed(false); }}
+                onAnalyzeImpact={(label) => setImpactRequest({ target: label, ts: Date.now() })}
+                onStartTour={(label) => setTourRequest({ topic: label, ts: Date.now() })}
+                repoTitle={repo ?? "Repository"}
+                previewName={browserPreview?.name}
+                onOpenInEditor={handleOpenInEditor}
+                localRoot={localRoot}
+                highlightNode={highlightNode}
+                impactTarget={impactTarget}
+                impactDirect={impactDirect}
+                impactTransitive={impactTransitive}
+                tourState={tourState}
+              />
+            )}
           </section>
 
           {/* Divider — drag to resize */}

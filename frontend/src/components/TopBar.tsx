@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck, ExternalLink } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck, ExternalLink, Network, Boxes } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
 
 type Mode = "understanding" | "tracking" | "incident";
+export type ViewMode = "graph" | "mindmap";
 
 interface Props {
   repo: string | null;
   mode: Mode;
   onModeChange: (m: Mode) => void;
+  viewMode?: ViewMode;
+  onViewModeChange?: (v: ViewMode) => void;
   debugMode: boolean;
   onDebugToggle: () => void;
   studentMode: boolean;
@@ -43,7 +46,7 @@ const MODES: { id: Mode; label: string }[] = [
 ];
 
 export default function TopBar({
-  repo, mode, onModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
+  repo, mode, onModeChange, viewMode = "graph", onViewModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
   onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal, onOpenEditorSettings,
   previewName = null,
 }: Props) {
@@ -198,6 +201,50 @@ export default function TopBar({
 
       {/* ── Right: mode pills + icon buttons ── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* ── View Mode switch: Graph ⇄ Mind Map ── */}
+        {onViewModeChange && (
+          <div
+            role="group"
+            aria-label="View mode"
+            className="flex items-center rounded-lg border-[1.5px] border-border-subtle p-0.5 bg-bg-panel-alt mr-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              data-testid="view-mode-graph"
+              aria-selected={viewMode === "graph"}
+              aria-label="Graph view"
+              onClick={() => onViewModeChange("graph")}
+              className={clsx(
+                "flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-bold transition-all duration-150",
+                viewMode === "graph"
+                  ? "bg-text-primary text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-panel"
+              )}
+            >
+              <Network size={13} />
+              <span>Graph</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              data-testid="view-mode-mindmap"
+              aria-selected={viewMode === "mindmap"}
+              aria-label="Mind Map view"
+              onClick={() => onViewModeChange("mindmap")}
+              className={clsx(
+                "flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md text-[11px] sm:text-xs font-bold transition-all duration-150",
+                viewMode === "mindmap"
+                  ? "bg-accent-cyan text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-panel"
+              )}
+            >
+              <Boxes size={13} />
+              <span>Mind Map</span>
+            </button>
+          </div>
+        )}
+
         {/* A browser preview has no server-side index, so Track/Incident and
             Student Mode would either do nothing or answer about the server's
             loaded repository. Hide them rather than let the labels lie. */}

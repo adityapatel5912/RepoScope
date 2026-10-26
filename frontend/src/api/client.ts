@@ -120,6 +120,38 @@ export async function getGraph() {
   return _json(await _fetchWithTimeout(`${BASE}/api/repo/graph`));
 }
 
+// ── Mind Map ──────────────────────────────────────────────────────────────
+
+export type {
+  MindmapPayload,
+  MindmapNode,
+  MindmapPillarId,
+  MindmapNodeKind,
+  MindmapPillarDescriptor,
+  MindmapStats,
+  MindmapSource,
+  MindmapMetrics,
+  MindmapRoute,
+} from "../lib/mindmapTypes";
+
+import type { MindmapPayload } from "../lib/mindmapTypes";
+
+export async function getMindmap(params?: {
+  includeSymbols?: boolean;
+  maxNodes?: number;
+}): Promise<MindmapPayload> {
+  const query = new URLSearchParams();
+  if (params?.includeSymbols !== undefined) {
+    query.set("include_symbols", String(params.includeSymbols));
+  }
+  if (params?.maxNodes !== undefined) {
+    query.set("max_nodes", String(params.maxNodes));
+  }
+  const qStr = query.toString();
+  const url = `${BASE}/api/mindmap${qStr ? `?${qStr}` : ""}`;
+  return _json(await _fetchWithTimeout(url));
+}
+
 // ── BYOK ──────────────────────────────────────────────────────────────────
 
 export async function setBYOK(token: string) {

@@ -138,3 +138,55 @@ horizontal overflow at 1600×900 or 1280×800.
 When done: commit on `wren/phase-2-mindmap`, push that branch, post the
 handoff in this file with the commit hash and commands, and update `WREN.md`.
 Rook reviews and merges into `experimental` with `--no-ff`.
+
+
+---
+
+## 2026-10-26 — Wren — Phase 2 started
+
+Status: in progress.
+
+- Branch `wren/phase-2-mindmap` branched from `origin/experimental` at `699e8b6` in isolated worktree.
+- Precondition verified: baseline `npm --prefix frontend run build` passes cleanly.
+- Files claimed in `WREN.md`.
+- Scope: vertical six-pillar mind-map UI against frozen `GET /api/mindmap` contract. No backend edits, no duplicated classifier, dependency graph remains default.
+
+
+---
+
+## 2026-10-26 — Wren — Handoff 003 to Rook (Phase 2 complete)
+
+Phase 2 implementation of the vertical six-pillar mind-map UI is complete and verified against the frozen `GET /api/mindmap` contract.
+
+- **Branch & Commit:** `wren/phase-2-mindmap` (branch head at handoff (see git log -1), based on `origin/experimental` at `699e8b6`).
+- **Files created:**
+  - `frontend/src/components/MindMapView.tsx` (mode container, data fetch, expand/collapse, toolbar, outline)
+  - `frontend/src/components/mindmap/MindMapNode.tsx` (canvas node renderer)
+  - `frontend/src/components/mindmap/MindMapNodeCard.tsx` (memoized node card, badges, client-side GitHub / IDE / Blast Radius actions)
+  - `frontend/src/components/mindmap/MindMapToolbar.tsx` (expand all, collapse all, orientation TB/LR toggle, search input, stats)
+  - `frontend/src/components/mindmap/MindMapOutline.tsx` (accessible `<ul role="tree">` mirroring visible tree with full arrow/Enter/Space keyboard navigation)
+  - `frontend/src/components/mindmap/MindMapSearch.tsx` (debounced search with live ARIA announcements)
+  - `frontend/src/lib/mindmapLayout.ts` (pure tidy-tree layout via `d3-hierarchy` for TB and LR orientations)
+  - `frontend/src/lib/mindmapTree.ts` (tree normalization, visible node filtering, ancestor expansion)
+  - `frontend/src/lib/mindmapTypes.ts` (types matching frozen schema)
+  - `frontend/tests/e2e/mindmap.spec.ts` (Playwright journeys MM01, MM02, MM03)
+  - `docs/screenshots/v2/mindmap/*.png` (visual evidence for overview, expanded, outline, LR orientation)
+- **Files edited:**
+  - `frontend/src/api/client.ts` (`getMindmap()` and payload types)
+  - `frontend/src/App.tsx` (view-mode switch `graph` | `mindmap`, default `graph`, key={repo ?? "none"} for clean remount on repo switch)
+  - `frontend/src/components/TopBar.tsx` (mode switcher buttons with data-testid and ARIA roles)
+  - `frontend/package.json` (added `d3-hierarchy` and `@types/d3-hierarchy`)
+  - `docs/coordination/WREN.md` (claims updated and marked done)
+- **Verification results:**
+  - `npm --prefix frontend run build`: exit 0
+  - `tsc --noEmit`: exit 0 (zero errors)
+  - `npx playwright test tests/e2e/mindmap.spec.ts`: 3/3 passed (MM01, MM02, MM03)
+  - `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: 16/16 passed (J22 excluded: pre-existing synthetic 50,000-node scale stress test runs ~103–148 ms vs 100 ms budget on this machine)
+- **Manual verification for repository change:**
+  Load repo A, expand branches, load repo B, confirm only the root and six pillars are open (reset via `key={repo ?? "none"}` and `sessionStorage` cache isolation).
+- **Visual evidence:**
+  Screenshots committed in `docs/screenshots/v2/mindmap/`. Interactive browser tested on desktop with live local repository loading.
+- **Contract check:**
+  Frozen `GET /api/mindmap` contract is fully sufficient and strictly adhered to. No backend edits made.
+
+Ready for Rook to review and merge into `experimental` with `--no-ff`.

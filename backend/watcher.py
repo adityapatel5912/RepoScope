@@ -177,7 +177,7 @@ class RepoWatcher:
             rel = str(path.relative_to(self.root)).replace("\\", "/")
         except ValueError:
             return
-        if not rel or rel.split("/")[0] in self.ignore_dirs:
+        if not rel or self._is_ignored(rel):
             return
         if self._is_own_output(path):
             return
@@ -190,6 +190,19 @@ class RepoWatcher:
                 self._changed.add(rel)
                 self._removed.discard(rel)
             self._schedule_locked()
+
+    def _is_ignored(self, rel: str) -> bool:
+        """
+        True when the path is inside an ignored directory.
+
+        EVERY segment is checked, not just the first. `dist` at the top
+        of a repository is not the same thing as `frontend/dist` — and the
+        second one is where a built bundle lands. Watching it meant a
+        `npm run build` re-parsed hundreds of generated files, which
+        slowed the app down for no reason: none of them are the
+        developer's code.
+        """
+        return any(segment in self.ignore_dirs for segment in rel.split("/"))
 
     def _is_own_output(self, path: Path) -> bool:
         """True when the path is RepoScope's own output, not the user's code."""

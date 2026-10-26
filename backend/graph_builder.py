@@ -282,11 +282,18 @@ class ModuleIndex:
     directory, not a module.
     """
 
-    __slots__ = ("py_index", "py_stems", "js_files", "js_stems")
+    __slots__ = ("py_index", "py_stems", "py_dotted", "py_tail", "js_files", "js_stems")
 
     def __init__(self) -> None:
         self.py_index: dict[str, str] = {}
         self.py_stems: dict[str, str] = {}
+        # The dotted path of every python file ("backend.api.routers.analysis")
+        # and a lookup from the LAST segment of that path to the paths that
+        # end with it. Together they answer "which file does `from
+        # api.routers import analysis` mean?" when the repository never
+        # names `backend/` as a source root.
+        self.py_dotted: dict[str, str] = {}
+        self.py_tail: dict[str, list[str]] = {}
         self.js_files: set[str] = set()
         self.js_stems: dict[str, str] = {}
 
@@ -301,10 +308,43 @@ def build_module_index(facts: Mapping[str, FileFacts]) -> ModuleIndex:
                 index.py_index[".".join(parts[:-1])] = f"file:{rel}"
             index.py_index[".".join(parts)] = f"file:{rel}"
             index.py_stems.setdefault(parts[-1], f"file:{rel}")
+            # The dotted path of the module this file provides. A package
+            # is named by its directory, a module by its own name.
+            dotted = (
+                ".".join(parts[:-1]) if parts[-1] == "__init__" else ".".join(parts)
+            )
+            if dotted:
+                index.py_dotted[dotted] = f"file:{rel}"
+                index.py_tail.setdefault(dotted.rsplit(".", 1)[-1], []).append(dotted)
         elif suffix in _JS_EXTS:
             index.js_files.add(rel)
             index.js_stems.setdefault(Path(rel).stem, f"file:{rel}")
     return index
+
+
+def _suffix_lookup(index: ModuleIndex, dotted: str) -> str | None:
+    """
+    Resolve a dotted module path against the repository's files, allowing
+    the path to start at a source root the repository never names.
+
+    A repository is not always imported from its own root. `backend/` is a
+    source root in this project, so `backend/main.py` says
+    `from graph_builder import build_graph_from_repo` — and "graph_builder"
+    is not the file's dotted path ("backend.graph_builder"). Without this
+    lookup the import never resolves, the edge is never drawn, and every
+    blast radius downstream of it reads "no dependents".
+
+    The match is a SUFFIX match: "api.routers.analysis" matches
+    "backend.api.routers.analysis". It is tried only after the exact
+    dotted-path lookup fails, so a full path always wins.
+    """
+    if not dotted:
+        return None
+    tail = dotted.rsplit(".", 1)[-1]
+    for candidate in index.py_tail.get(tail, ()):
+        if candidate == dotted or candidate.endswith("." + dotted):
+            return index.py_dotted[candidate]
+    return None
 
 
 def _resolve_py(
@@ -328,9 +368,20 @@ def _resolve_py(
     variants = [".".join(parts)]
     if imported_name:
         variants.append(".".join(parts + [imported_name]))
-    for variant in variants:
+    # Most specific first. `from api.routers import analysis` names a
+    # MODULE, not the package that contains it — so `api.routers.analysis`
+    # is tried before `api.routers`, and the edge points at the file the
+    # developer actually imported from.
+    for variant in reversed(variants):
         if variant in index.py_index:
             return index.py_index[variant]
+    # The module may be named from a source root the repository does not
+    # declare. `from graph_builder import x` in `backend/main.py` means
+    # `backend/graph_builder.py`.
+    for variant in reversed(variants):
+        hit = _suffix_lookup(index, variant)
+        if hit:
+            return hit
     # bare-stem fallback (flat layouts / src-less repos)
     if imported_name and imported_name in index.py_stems:
         return index.py_stems[imported_name]
@@ -803,6 +854,35 @@ def collect_facts(
             facts[rel] = parse_file(path, rel)
 
     return facts
+
+
+def newest_source_mtime(root: str | Path) -> float:
+    """
+    The newest modification time among the repository's source files.
+
+    This is how a reader knows whether a persisted index is still true.
+    An index built at 10:00 and a source file edited at 10:05 cannot both
+    be right, and the index is the one that is wrong.
+
+    The skip list is the same one the builder uses, so a generated
+    directory never makes an index look stale.
+    """
+    root_path = Path(root)
+    newest = 0.0
+    for path in root_path.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            rel = str(path.relative_to(root_path)).replace("\\", "/")
+        except ValueError:
+            continue
+        if any(part in _SKIP_DIRS for part in rel.split("/")):
+            continue
+        try:
+            newest = max(newest, path.stat().st_mtime)
+        except OSError:
+            continue
+    return newest
 
 
 def build_graph_from_repo(root: str, cache: ParseCache | None = None) -> dict:

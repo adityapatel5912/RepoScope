@@ -40,6 +40,7 @@ import hashlib
 import json
 import logging
 import os
+import uuid
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -292,7 +293,13 @@ class ParseCache:
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+            # The temporary name is unique per call — pid alone is not
+            # enough, because two threads in one process can save at the
+            # same time, and two processes (the CLI server and the MCP
+            # server) share this cache for the same repository. A fixed
+            # name is a race; one of the writers always lost the file.
+            unique = uuid.uuid4().hex[:8]
+            tmp = self.path.with_suffix(f"{self.path.suffix}.{unique}.tmp")
             tmp.write_text(json.dumps(payload), encoding="utf-8")
             os.replace(tmp, self.path)
         except OSError as exc:

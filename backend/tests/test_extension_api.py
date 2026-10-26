@@ -35,12 +35,13 @@ def _call(router_path: str, **params):
     module = analysis
     function = {
         "/callers": module.callers,
+        "/callers-batch": module.callers_batch,
         "/dependents": module.dependents,
     }[router_path]
     return asyncio.run(function(**params))
 
 
-def test_the_callers_endpoint_counts_the_real_callers():
+def test_the_callers_endpoint_counts_the_real_callers(served_graph):
     """`app.py` calls `shout` from `helpers.py`."""
     result = _call("/callers", file="helpers.py", symbol="shout")
 
@@ -56,14 +57,38 @@ def test_the_callers_endpoint_counts_the_real_callers():
         assert caller["line"] >= 0
 
 
-def test_the_callers_endpoint_reports_a_symbol_with_no_callers():
+def test_the_callers_endpoint_reports_a_symbol_with_no_callers(served_graph):
     result = _call("/callers", file="helpers.py", symbol="nothing_calls_this")
     assert result["available"] is True
     assert result["found"] is False
     assert result["count"] == 0
 
 
-def test_the_dependents_endpoint_reports_the_blast_radius():
+def test_the_batch_endpoint_agrees_with_the_single_one(served_graph):
+    """
+    The CodeLens asks for every symbol in a file at once. The answers
+    must be the SAME answers — one implementation, one answer.
+    """
+    batch = _call("/callers-batch", file="helpers.py", symbols="shout,nothing_calls_this")
+
+    assert batch["available"] is True
+    assert batch["results"]["shout"]["found"] is True
+    assert batch["results"]["nothing_calls_this"]["found"] is False
+
+    single = _call("/callers", file="helpers.py", symbol="shout")
+    assert batch["results"]["shout"]["count"] == single["count"]
+    assert {c["file"] for c in batch["results"]["shout"]["callers"]} == {
+        c["file"] for c in single["callers"]
+    }
+
+
+def test_the_batch_endpoint_answers_for_a_file_with_no_symbols(served_graph):
+    batch = _call("/callers-batch", file="helpers.py", symbols="")
+    assert batch["available"] is True
+    assert batch["results"] == {}
+
+
+def test_the_dependents_endpoint_reports_the_blast_radius(served_graph):
     """`helpers.py` is imported by `app.py`, so it has a dependent."""
     result = _call("/dependents", file="helpers.py")
 
@@ -74,20 +99,20 @@ def test_the_dependents_endpoint_reports_the_blast_radius():
     assert 0 <= result["risk_score"] <= 10
 
 
-def test_the_dependents_endpoint_reports_a_file_with_no_dependents():
+def test_the_dependents_endpoint_reports_a_file_with_no_dependents(served_graph):
     result = _call("/dependents", file="greeter.go")
     assert result["available"] is True
     assert result["found"] is True
     assert result["dependents"] == 0
 
 
-def test_the_dependents_endpoint_reports_an_unknown_file():
+def test_the_dependents_endpoint_reports_an_unknown_file(served_graph):
     result = _call("/dependents", file="nope.py")
     assert result["available"] is True
     assert result["found"] is False
 
 
-def test_the_extension_count_matches_the_mcp_tool():
+def test_the_extension_count_matches_the_mcp_tool(served_graph):
     """
     The CodeLens count and the MCP tool's answer MUST agree.
 

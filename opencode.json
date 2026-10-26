@@ -1,0 +1,33 @@
+{
+  "mcp": {
+    "servers": {
+      "chrome-devtools": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "chrome-devtools-mcp@latest"
+        ]
+      },
+      "playwright": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@playwright/mcp@latest"
+        ]
+      },
+      "tavily": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "tavily-mcp@latest"
+        ],
+        "environment": {
+          "TAVILY_API_KEY": "{env:TAVILY_API_KEY}"
+        }
+      }
+    }
+  }
+}

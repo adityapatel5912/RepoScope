@@ -190,7 +190,7 @@ export default function AIKeyPanel() {
   };
 
   return (
-    <section className="card p-4 flex flex-col gap-3">
+    <section className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
       {/* Header */}
       <div className="flex items-center gap-1.5">
         <Cpu size={12} className="text-text-muted" />
@@ -311,23 +311,25 @@ export default function AIKeyPanel() {
           </div>
 
           {/* Status row beneath buttons */}
-          <div className="pt-1 border-t border-border-hairline flex items-center justify-between">
+          <div className="pt-1 border-t border-border-hairline flex items-center justify-between min-w-0 overflow-hidden">
             {status === "error" ? (
-              <div className="flex items-center gap-1.5 text-xs text-accent-rose" role="alert">
+              <div className="flex items-center gap-1.5 text-xs text-accent-rose min-w-0" role="alert">
                 <span className="w-2 h-2 rounded-full bg-accent-rose shrink-0" />
                 <AlertCircle size={11} className="shrink-0" />
-                <span className="font-medium">{errorMessage || "Invalid key"}</span>
+                <span className="font-medium truncate" title={errorMessage || "Invalid key"}>{errorMessage || "Invalid key"}</span>
               </div>
             ) : savedKeyLast4 ? (
-              <div className="flex items-center gap-1.5 text-xs text-text-primary">
+              <div className="flex items-center gap-1.5 text-xs text-text-primary min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                 <CheckCircle2 size={11} className="text-emerald-500 shrink-0" />
-                <span className="font-medium">Using your key • ending in {savedKeyLast4}</span>
+                <span className="font-medium truncate" title={`Using your key • ending in ${savedKeyLast4}`}>
+                  Using your key • ending in {savedKeyLast4}
+                </span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-xs text-text-muted">
+              <div className="flex items-center gap-1.5 text-xs text-text-muted min-w-0">
                 <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
-                <span>Using server key</span>
+                <span className="truncate">Using server key</span>
               </div>
             )}
           </div>

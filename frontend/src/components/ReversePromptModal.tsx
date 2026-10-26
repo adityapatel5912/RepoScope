@@ -62,14 +62,14 @@ export default function ReversePromptModal({ open, prompt, onClose, onScaffold }
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-3 shrink-0">
-          <div>
+        <div className="flex items-center justify-between mb-3 shrink-0 flex-wrap gap-2">
+          <div className="min-w-0">
             <h2 className="h3">Build Prompt</h2>
             <p className="text-xs text-text-muted mt-0.5">
               Agent-ready prompt reverse-engineered from this repository
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button onClick={copy} className="btn-primary !py-1.5 !px-3 !text-xs">
               {copied ? <Check size={12} /> : <Copy size={12} />}
               {copied ? "Copied" : "Copy"}
@@ -87,7 +87,7 @@ export default function ReversePromptModal({ open, prompt, onClose, onScaffold }
             <button
               onClick={onClose}
               aria-label="Close"
-              className="btn-ghost w-8 h-8 !p-0 items-center justify-center"
+              className="btn-ghost w-8 h-8 !p-0 items-center justify-center shrink-0"
             >
               <X size={15} />
             </button>

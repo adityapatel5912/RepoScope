@@ -202,7 +202,7 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
             <GitPullRequest size={11} />
             PR Bot
           </h4>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center min-w-0">
             <input
               value={prNumber}
               onChange={(e) => { setPrNumber(e.target.value.replace(/\D/g, "")); setPrError(null); }}
@@ -210,7 +210,7 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
               placeholder="PR #"
               inputMode="numeric"
               aria-label="Pull request number"
-              className="w-20 min-w-0 px-3 py-2 rounded-lg text-xs font-mono
+              className="w-16 shrink-0 min-w-0 px-2.5 py-2 rounded-lg text-xs font-mono
                 bg-bg-panel-alt border border-border-subtle
                 text-text-primary placeholder:text-text-muted placeholder:font-sans
                 focus:outline-none focus:border-accent-violet/50 focus:ring-1 focus:ring-accent-violet/20
@@ -219,15 +219,16 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
             <button
               onClick={() => void runPRImpact()}
               disabled={prBusy || !prNumber.trim()}
+              title="Generate PR Comment Preview"
               className="
-                flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
+                flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold
                 bg-accent-violet/10 border border-accent-violet/25 text-accent-violet
                 hover:bg-accent-violet/20 disabled:opacity-40 disabled:cursor-not-allowed
-                transition-all duration-200 whitespace-nowrap
+                transition-all duration-200
               "
             >
-              {prBusy ? <span className="btn-spinner" /> : <ClipboardCopy size={12} />}
-              {prBusy ? "Analyzing PR" : "Generate PR Comment Preview"}
+              {prBusy ? <span className="btn-spinner shrink-0" /> : <ClipboardCopy size={12} className="shrink-0" />}
+              <span className="truncate">{prBusy ? "Analyzing PR…" : "Preview Comment"}</span>
             </button>
           </div>
 
@@ -345,7 +346,7 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
               </summary>
               <ul className="list-none p-0 m-1 max-h-40 overflow-y-auto">
                 {impact.direct_impacts.slice(0, 20).map((d) => (
-                  <li key={d.id} className="py-0.5 text-2xs leading-snug text-text-muted">
+                  <li key={d.id} className="py-0.5 text-2xs leading-snug text-text-muted truncate min-w-0" title={`${d.file || d.id} · ${d.label}`}>
                     <code className="text-accent-cyan font-mono">{d.file || d.id}</code>
                     {" "}· {d.label}
                   </li>
@@ -366,7 +367,7 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
               </summary>
               <ul className="list-none p-0 m-1 max-h-40 overflow-y-auto">
                 {impact.transitive_impacts.slice(0, 20).map((t) => (
-                  <li key={t.id} className="py-0.5 text-2xs leading-snug text-text-muted">
+                  <li key={t.id} className="py-0.5 text-2xs leading-snug text-text-muted truncate min-w-0" title={`${t.file || t.id} · ${t.label}`}>
                     <code className="text-accent-cyan font-mono">{t.file || t.id}</code>
                     {" "}· {t.label}
                   </li>

@@ -43,9 +43,9 @@ export default function GraphControls({
   const { fitView, zoomIn, zoomOut } = useReactFlow();
 
   return (
-    <div className="graph-toolbar absolute bottom-4 left-4 z-10 flex flex-col gap-2 items-start">
+    <div className="graph-toolbar absolute bottom-4 left-4 z-10 flex flex-col gap-2 items-start max-w-[calc(100%-2rem)]">
       {/* Action row */}
-      <div className="flex items-center gap-0.5 p-1 rounded-lg bg-bg-panel border border-border-hairline">
+      <div className="flex items-center gap-0.5 p-1 rounded-lg bg-bg-panel border border-border-hairline max-w-full overflow-x-auto shadow-sm">
         <button onClick={onRelayout} title="Re-run layout" aria-label="Re-run layout" className={btn()}>
           <LayoutGrid size={14} />
         </button>
@@ -81,7 +81,7 @@ export default function GraphControls({
         >
           <LocateFixed size={14} />
         </button>
-        <div className="w-px h-5 bg-border-hairline mx-0.5" />
+        <div className="w-px h-5 bg-border-hairline mx-0.5 shrink-0" />
         <button
           onClick={onExportPng}
           disabled={exporting}
@@ -100,32 +100,33 @@ export default function GraphControls({
         >
           <FileCode2 size={14} />
         </button>
-        <div className="w-px h-5 bg-border-hairline mx-0.5" />
+        <div className="w-px h-5 bg-border-hairline mx-0.5 shrink-0" />
         <button
           onClick={onReversePrompt}
           disabled={promptBusy}
           title="Generate Build Prompt — reverse-engineer an agent prompt from this repo"
           aria-label="Generate Build Prompt"
-          className="h-8 px-2.5 flex items-center gap-1.5 rounded-md text-[11px] font-semibold
+          className="h-8 px-2 sm:px-2.5 flex items-center gap-1.5 rounded-md text-[11px] font-semibold shrink-0
             bg-accent-cyan text-white border border-border-subtle shadow-sm
             hover:bg-accent-hover hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none
             disabled:opacity-40 transition-all duration-100"
         >
           {promptBusy ? <span className="btn-spinner" /> : <Wand2 size={13} />}
-          Build Prompt
+          <span className="hidden min-[480px]:inline">Build Prompt</span>
+          <span className="min-[480px]:hidden">Prompt</span>
         </button>
         <button
           onClick={onScaffold}
           disabled={scaffoldBusy}
           title="Generate a starter scaffold from this repo — ZIP or open in StackBlitz"
           aria-label="Generate scaffold"
-          className="h-8 px-2.5 flex items-center gap-1.5 rounded-md text-[11px] font-semibold
+          className="h-8 px-2 sm:px-2.5 flex items-center gap-1.5 rounded-md text-[11px] font-semibold shrink-0
             bg-accent-amber text-white border border-border-subtle shadow-sm
             hover:brightness-110 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none
             disabled:opacity-40 transition-all duration-100"
         >
           {scaffoldBusy ? <span className="btn-spinner" /> : <Zap size={13} />}
-          Scaffold
+          <span>Scaffold</span>
         </button>
       </div>
 

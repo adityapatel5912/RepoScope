@@ -133,9 +133,9 @@ function LevelCard({
 
           <div className="flex flex-col gap-1.5">
             {level.files.map((f) => (
-              <div key={f.path} className="rounded-lg bg-bg-panel-alt border border-border-hairline px-2.5 py-1.5">
-                <div className="font-mono text-[11px] text-accent-cyan break-all">{f.path}</div>
-                <p className="m-0 mt-0.5 text-2xs text-text-muted leading-relaxed">{f.why}</p>
+              <div key={f.path} className="rounded-lg bg-bg-panel-alt border border-border-hairline px-2.5 py-1.5 min-w-0">
+                <div className="font-mono text-[11px] text-accent-cyan break-all" title={f.path}>{f.path}</div>
+                <p className="m-0 mt-0.5 text-2xs text-text-muted leading-relaxed break-words">{f.why}</p>
               </div>
             ))}
           </div>
@@ -214,7 +214,7 @@ export default function OnboardingPath({ repo }: Props) {
   if (!repo) return null;
 
   return (
-    <div className="card p-4 flex flex-col gap-3">
+    <div className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
       <div className="flex items-center gap-1.5">
         <GraduationCap size={12} className="text-accent-cyan" />
         <h3 className="label-caps">Student Path</h3>

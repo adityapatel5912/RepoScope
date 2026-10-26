@@ -49,7 +49,7 @@ export default function TopBar({
   return (
     <header
       className="
-        relative z-50 flex items-center justify-between gap-1.5 sm:gap-3 px-2 sm:px-4
+        relative z-50 flex items-center justify-between gap-1 sm:gap-2.5 px-2 sm:px-4
         h-12 sm:h-14 shrink-0
         bg-bg-panel border-b-[1.5px] border-border-subtle overflow-x-hidden
       "
@@ -72,7 +72,7 @@ export default function TopBar({
           className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 object-cover border-[1.5px] border-border-subtle rounded-md"
         />
         <div className="flex flex-col leading-none">
-          <span className="hidden min-[480px]:block text-[13px] sm:text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">
+          <span className="hidden min-[540px]:block text-[13px] sm:text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">
             RepoScope
           </span>
           <span className="hidden md:block text-[10px] font-semibold tracking-[0.15em] text-text-muted uppercase mt-0.5">
@@ -84,9 +84,9 @@ export default function TopBar({
       {/* ── Center: Load Repo input ⇄ repo chip ── */}
       <div className="flex-1 flex justify-center min-w-0 max-w-xs sm:max-w-sm px-1">
         {showInput ? (
-          <div className="relative w-full max-w-[340px]">
-            <div className="flex items-center gap-1.5">
-              <div className="relative flex-1 min-w-0">
+          <div className="relative w-full max-w-[340px] min-w-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+              <div className="relative flex-1 min-w-[120px]">
                 <Link2
                   size={13}
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
@@ -99,7 +99,7 @@ export default function TopBar({
                   placeholder="github.com/owner/repo"
                   disabled={loader.loading}
                   aria-label="GitHub repository URL"
-                  className="input !py-1.5 pl-8 pr-8 font-mono !text-xs"
+                  className="input !py-1.5 pl-8 pr-7 font-mono !text-xs w-full"
                 />
                 {loader.url && !loader.loading && (
                   <button
@@ -115,7 +115,7 @@ export default function TopBar({
                 id="load-repo-btn"
                 onClick={() => void loader.submit()}
                 disabled={loader.loading || !loader.url.trim()}
-                className="btn-primary !py-1.5 !px-3 !text-xs shrink-0"
+                className="btn-primary !py-1.5 !px-2.5 sm:!px-3 !text-xs shrink-0"
               >
                 {loader.loading ? <span className="btn-spinner" /> : null}
                 {loader.loading ? "Loading" : "Load"}
@@ -139,23 +139,23 @@ export default function TopBar({
         ) : (
           <button
             onClick={() => setChipEditing(true)}
-            title="Click to load a different repository"
+            title={`Loaded: ${repo} (click to change)`}
             className="
-              flex items-center gap-2 px-3 py-1.5 rounded-full max-w-full min-w-0
+              flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full max-w-full min-w-0
               bg-bg-panel-alt border-[1.5px] border-border-subtle
               text-xs font-mono text-text-primary
               hover:bg-bg-panel-hover transition-colors cursor-text
             "
           >
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 pulse-dot shrink-0" />
-            <span className="truncate">{repo}</span>
+            <span className="truncate max-w-[130px] sm:max-w-[200px] md:max-w-xs">{repo}</span>
           </button>
         )}
       </div>
 
       {/* ── Right: mode pills + icon buttons ── */}
-      <div className="flex items-center gap-2 shrink-0">
-        <nav role="tablist" className="flex items-center gap-1 sm:gap-1.5">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <nav role="tablist" className="flex items-center gap-0.5 sm:gap-1">
           {MODES.map(({ id, label }) => (
             <button
               key={id}
@@ -163,13 +163,18 @@ export default function TopBar({
               aria-selected={mode === id}
               onClick={() => onModeChange(id)}
               className={clsx(
-                "px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
+                "px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
                 mode === id
                   ? "bg-accent-cyan text-white shadow-sm"
                   : "bg-bg-panel text-text-primary hover:bg-bg-panel-alt"
               )}
             >
-              {label}
+              {id === "understanding" ? (
+                <>
+                  <span className="hidden min-[480px]:inline">Understand</span>
+                  <span className="min-[480px]:hidden">Map</span>
+                </>
+              ) : label}
             </button>
           ))}
         </nav>
@@ -187,7 +192,7 @@ export default function TopBar({
           )}
         >
           <GraduationCap size={13} />
-          <span className="hidden sm:inline">Student</span>
+          <span className="hidden md:inline">Student</span>
         </button>
 
         {/* Shortcuts — settings popover covers these on small screens */}

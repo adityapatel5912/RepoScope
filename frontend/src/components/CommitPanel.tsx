@@ -36,10 +36,10 @@ export default function CommitPanel({ disabled }: Props) {
   };
 
   return (
-    <section className="card p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-1.5">
+    <section className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         <GitCommit size={12} className="text-text-muted" />
-        <h3 className="label-caps">Commit</h3>
+        <h3 className="label-caps truncate">Commit</h3>
       </div>
 
       {disabled ? (

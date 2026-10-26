@@ -141,11 +141,18 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
   else if (data.highlight || selected) ring = `0 0 0 3px #F0503C`;
 
   const { dir, filename, fullPath } = splitFilePath(data.fullPath || data.subtitle || data.label, data.label);
+  const rootFontSize = isRoot
+    ? data.label.length > 22
+      ? 13
+      : data.label.length > 15
+      ? 15
+      : cfg.fontSize
+    : cfg.fontSize;
 
   return (
     <div
       className={`
-        relative flex items-center gap-2 transition-transform duration-100
+        relative flex items-center gap-2 transition-transform duration-100 overflow-hidden
         hover:scale-[1.02] ${isChild ? "px-2" : "px-3"}
       `}
       style={{
@@ -159,7 +166,7 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
         boxShadow: ring,
         opacity: data.impactState === "dim" ? 0.25 : 1,
       }}
-      title={fullPath}
+      title={fullPath || data.label}
     >
       {/* Halo for repo node (A10) */}
       {isRoot && <div className="repo-halo -translate-x-1/2 -translate-y-1/2" style={{ left: "50%", top: "50%", zIndex: -1 }} />}
@@ -173,13 +180,14 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
         isConnectable={false}
       />
 
-      <Icon size={isRoot ? 22 : isChild ? 14 : rank <= 2 ? 18 : 15} style={{ color: textColor }} className="shrink-0" />
-      <div className="min-w-0 flex-1">
+      <Icon size={isRoot ? 20 : isChild ? 14 : rank <= 2 ? 18 : 15} style={{ color: textColor }} className="shrink-0" />
+      <div className="min-w-0 flex-1 overflow-hidden">
         <div
-          className="leading-tight truncate"
+          className="leading-tight truncate min-w-0"
+          title={isRoot ? data.label : fullPath || filename}
           style={{
             color: textColor,
-            fontSize: isChild ? 11 : cfg.fontSize,
+            fontSize: isChild ? 11 : isRoot ? rootFontSize : cfg.fontSize,
             fontWeight: isChild ? 700 : cfg.fontWeight,
           }}
         >
@@ -187,7 +195,8 @@ function LayerNodeInner({ data, selected, rank: propRank }: { data: LayerNodeDat
         </div>
         {!isRoot && !isChild && dir && rank <= 4 && (
           <div
-            className="font-mono text-[9px] leading-tight truncate opacity-80 mt-0.5"
+            className="font-mono text-[9px] leading-tight truncate min-w-0 opacity-80 mt-0.5"
+            title={dir}
             style={{ color: subColor }}
           >
             {dir}

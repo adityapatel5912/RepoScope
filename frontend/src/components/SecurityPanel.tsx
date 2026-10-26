@@ -66,7 +66,7 @@ export default function SecurityPanel({ trackingData, repo }: Props) {
   const summary = scan?.summary;
 
   return (
-    <div className="card p-4 flex flex-col gap-3">
+    <div className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
       {/* ── Tab bar: Tracking | Security ── */}
       <div className="flex items-center gap-1 p-0.5 rounded-lg bg-bg-panel-alt border border-border-hairline">
         {([
@@ -186,12 +186,15 @@ export default function SecurityPanel({ trackingData, repo }: Props) {
                         <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${SEV_BADGE[f.severity] ?? ""}`}>
                           {f.severity}
                         </span>
-                        <span className="font-mono text-[10px] text-text-muted ml-auto truncate">
+                        <span
+                          className="font-mono text-[10px] text-text-muted ml-auto truncate max-w-[140px]"
+                          title={`${f.file}${f.line > 1 ? `:${f.line}` : ""}`}
+                        >
                           {f.file}{f.line > 1 ? `:${f.line}` : ""}
                         </span>
                       </div>
-                      <p className="m-0 text-xs text-text-primary leading-snug">{f.detail}</p>
-                      <p className="m-0 text-2xs text-text-muted leading-relaxed">{f.suggestion}</p>
+                      <p className="m-0 text-xs text-text-primary leading-snug break-words">{f.detail}</p>
+                      <p className="m-0 text-2xs text-text-muted leading-relaxed break-words">{f.suggestion}</p>
                     </div>
                   ))}
                   {scan.total_flags > scan.flags.length && (

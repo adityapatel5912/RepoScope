@@ -66,7 +66,7 @@ export default function TrackingPanel({ data }: Props) {
             {commits.map((c) => {
               const typeClass = TYPE_COLOR[c._type] ?? TYPE_COLOR.other;
               return (
-                <li key={c.sha} className="flex items-start gap-2">
+                <li key={c.sha} className="flex items-start gap-2 min-w-0">
                   <code className="
                     shrink-0 font-mono text-[10px] text-text-muted
                     bg-bg-panel-alt border border-border-subtle
@@ -80,7 +80,10 @@ export default function TrackingPanel({ data }: Props) {
                   `}>
                     {c._type}
                   </span>
-                  <span className="text-xs text-text-muted leading-tight truncate">
+                  <span
+                    className="text-xs text-text-muted leading-tight truncate min-w-0 flex-1"
+                    title={c.commit?.message?.split("\n")[0]}
+                  >
                     {c.commit?.message?.split("\n")[0]}
                   </span>
                 </li>
@@ -99,11 +102,14 @@ export default function TrackingPanel({ data }: Props) {
             {data.pulls!.slice(0, 5).map((p) => {
               const stateClass = PR_STATE[p.state] ?? PR_STATE.closed;
               return (
-                <li key={p.id} className="flex items-center gap-2">
+                <li key={p.id} className="flex items-center gap-2 min-w-0">
                   <span className="text-xs font-mono text-text-muted shrink-0">
                     #{p.number}
                   </span>
-                  <span className="text-xs text-text-primary truncate flex-1">
+                  <span
+                    className="text-xs text-text-primary truncate min-w-0 flex-1"
+                    title={p.title}
+                  >
                     {p.title}
                   </span>
                   <span className={`

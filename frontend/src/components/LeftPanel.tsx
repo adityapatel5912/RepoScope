@@ -49,10 +49,10 @@ function Card({
   title, icon, children,
 }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="card p-4 flex flex-col gap-3">
-      <div className="flex items-center gap-1.5">
+    <section className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0">
         {icon}
-        <h3 className="label-caps">{title}</h3>
+        <h3 className="label-caps truncate">{title}</h3>
       </div>
       {children}
     </section>
@@ -127,7 +127,7 @@ export default function LeftPanel({
   ];
 
   return (
-    <div className="w-full h-full overflow-y-auto p-4 flex flex-col gap-4 [&>*]:shrink-0">
+    <div className="w-full h-full overflow-y-auto overflow-x-hidden p-4 flex flex-col gap-4 [&>*]:shrink-0">
       {onClose && (
         <div className="lg:hidden flex items-center justify-between pb-2 border-b border-border-hairline">
           <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Explorer Sidebar</span>
@@ -145,7 +145,10 @@ export default function LeftPanel({
       <Card title="Repository">
         {repoInfo ? (
           <>
-            <span className="mono text-text-primary text-xs break-all leading-snug">
+            <span
+              className="mono text-text-primary text-xs truncate block font-medium"
+              title={`${repoInfo.owner}/${repoInfo.repo}`}
+            >
               {repoInfo.owner}/{repoInfo.repo}
             </span>
             <div className="grid grid-cols-2 gap-2">

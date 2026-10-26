@@ -125,7 +125,7 @@ instead of the repository. That is RepoScope.”
 
 - Do not say the browser preview has full cross-file resolution.
 - Do not say the extension is in the VS Code Marketplace; it is on Open VSX.
-- Do not say the Open VSX listing is searchable until the namespace email is
-  verified.
+- Do not claim the Open VSX namespace is verified. The 2.0.1 listing is
+  searchable, but the namespace is still `verified:false`.
 - Do not say every language is parsed; the supported set is Python,
   TypeScript/TSX, JavaScript, Go, and Rust.

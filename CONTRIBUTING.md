@@ -114,11 +114,23 @@ body when the change is not obvious.
 - Run the backend tests, the frontend type-check, and the extension tests.
 - Do not include real tokens, `.env` contents, or private repository text in
   logs or screenshots.
-- If a manual step is still required (native dialog, marketplace visibility,
-  live PR comment), leave it unchecked in
+- If one of the four remaining manual checks is still required
+  (Cursor/VSCodium, Open VSX namespace, Render deployment, Marketplace), leave
+  it unchecked in
   [`docs/VERIFICATION_CHECKLIST.md`](docs/VERIFICATION_CHECKLIST.md).
 - Do not push release tags or publish packages without the maintainer's
   approval.
+
+## License and contributions
+
+RepoScope is **source-available**, not OSI Open Source. You may use and modify
+it for your own projects, including internal business projects, but you may
+not republish, distribute, or commercially exploit it without prior written
+permission. The full terms are in [`LICENSE`](LICENSE).
+
+By submitting a pull request or patch, you grant the copyright holder the
+right to use, modify, distribute, and commercially exploit your contribution
+as part of RepoScope. Only submit work you have the right to contribute.
 
 ## Reporting a bug
 

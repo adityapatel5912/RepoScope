@@ -60,10 +60,10 @@ function Quiz({ quiz, onPassed }: { quiz: OnboardLevel["quiz"]; onPassed: () => 
         const choice = picked[qi];
         const answered = choice != null;
         return (
-          <div key={qi} className="rounded-lg border border-border-hairline bg-bg-panel-alt p-2.5">
-            <p className="m-0 mb-1.5 text-xs font-semibold text-text-primary flex items-start gap-1.5">
+          <div key={qi} className="rounded-lg border border-border-hairline bg-bg-panel-alt p-2.5 min-w-0">
+            <p className="m-0 mb-1.5 text-xs font-semibold text-text-primary flex items-start gap-1.5 min-w-0">
               <HelpCircle size={12} className="text-accent-cyan shrink-0 mt-0.5" />
-              {q.question}
+              <span className="min-w-0 break-words">{q.question}</span>
             </p>
             <div className="flex flex-col gap-1">
               {q.options.map((opt, oi) => {
@@ -78,7 +78,7 @@ function Quiz({ quiz, onPassed }: { quiz: OnboardLevel["quiz"]; onPassed: () => 
                     key={oi}
                     disabled={answered}
                     onClick={() => setPicked((p) => ({ ...p, [qi]: oi }))}
-                    className={`text-left text-2xs px-2 py-1.5 rounded-md border transition-all duration-150 ${cls}`}
+                    className={`text-left text-2xs px-2 py-1.5 rounded-md border transition-all duration-150 break-words ${cls}`}
                   >
                     <span className="font-mono mr-1.5">{String.fromCharCode(65 + oi)}.</span>
                     {opt}
@@ -87,7 +87,7 @@ function Quiz({ quiz, onPassed }: { quiz: OnboardLevel["quiz"]; onPassed: () => 
               })}
             </div>
             {answered && q.explanation && (
-              <p className="m-0 mt-1.5 text-2xs text-text-muted leading-relaxed">
+              <p className="m-0 mt-1.5 text-2xs text-text-muted leading-relaxed break-words">
                 {choice === q.answer_index ? "✓ " : "✗ "}{q.explanation}
               </p>
             )}

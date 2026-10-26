@@ -1,8 +1,11 @@
 # Handoff
 
 **Current release:** package **2.0.0**, extension **2.0.1**.
-**State:** code complete for the v2.0 scope; documentation updated; manual
-verification is still open.
+**State:** code complete for the v2.0 scope; documentation updated; the
+automated evidence is recorded. The four manual checks remain open.
+**License:** RepoScope Source-Available License 1.0 — use and modify in your
+own projects, but no republishing or commercial exploitation without written
+permission. It is **not** OSI Open Source.
 
 ## What exists
 
@@ -48,25 +51,31 @@ python -m mcp_server.server --root ..
 
 Verified in this session:
 
-- backend: **333 tests passed**;
+- backend: **335 tests passed**;
 - frontend TypeScript: clean;
-- frontend production build: success;
-- local mode: health 200, graph loaded, watcher on;
+- frontend production build: success (`assets/index-CMSb0cnC.js`);
+- health contract: `/api/health` returns **2.0.0**, matching `pyproject.toml`;
+- local mode: health 200, **348 files, 1,863 nodes, 3,419 edges**, watcher on;
+- browser preview: native picker selected **75 files, 315 nodes, 310 edges**;
+  cancel and refusal paths behaved correctly; no upload was observed;
+- VS Code extension **2.0.1** in VS Code 1.143.0: Activity map, status bar,
+  CodeLens, Explorer menu, URI handler, offline/recovery;
+- Open VSX: **2.0.1**, **288 downloads**, searchable, direct page HTTP 200;
+- CSP / WebAssembly: parser and five grammars load under production CSP;
 - MCP stdio sweep: **8 tools, 5 resources, 3 read rounds, clean ping**;
 - OpenCode MCP status: `✓ reposcope connected`.
 
-Not manually verified yet:
+The remaining manual checks are:
 
-- native folder picker / browser preview;
-- live PR Bot comment;
-- VS Code extension in a real editor window;
-- Open VSX search visibility;
-- VS Code Marketplace publishing;
-- LLM-backed flows with a live key.
+- Cursor/VSCodium extension testing;
+- Open VSX namespace verification and the verified badge;
+- Render redeployment showing version 2.0.0;
+- VS Code Marketplace publishing (Azure DevOps PAT).
 
 The authoritative list is
 [`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md). Do not mark an item
-complete without evidence.
+complete without evidence. Agent-run evidence is in
+[`QA_REPORT.md`](QA_REPORT.md#agent-run-evidence--2026-10-25).
 
 ## Architecture in one paragraph
 
@@ -83,13 +92,22 @@ OpenRouter → Groq → NVIDIA chain.
 - Local mode must not make outbound requests.
 - The browser folder preview must stay labelled as a preview; it has no
   cross-file symbol resolution.
-- The Open VSX listing is hidden from search until the publisher namespace
-  email is verified.
+- The Open VSX listing is searchable; the namespace is still `verified:false`,
+  so the verified badge and stable ranking are not guaranteed.
 - The VS Code Marketplace needs an Azure DevOps PAT.
+- The health endpoint must report **2.0.0**; Render still runs the old
+  `1.0.0` build until a deploy is approved.
+- The license is source-available, not OSI Open Source. Do not describe it as
+  MIT or "open source" in release copy.
+- The already-published extension **2.0.1** and the existing
+  `reposcope-2.0.1.vsix` were released under MIT. Those grants cannot be
+  revoked. The source tree and future builds use the source-available license;
+  bump the extension version before publishing the new terms.
 - Some MCP clients have a resource-read bridge issue; the server's direct
   stdio reads and tool calls work.
 - Do not commit `.env`, `.reposcope/`, `node_modules/`, or build output.
-- Do not push without explicit instruction.
+- The working tree is committed locally only. Do not push, deploy, or publish
+  without explicit instruction.
 
 ## Where to look next
 

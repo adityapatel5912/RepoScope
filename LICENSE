@@ -1,21 +1,121 @@
-MIT License
+RepoScope Source-Available License, Version 1.0
 
-Copyright (c) 2026 Aditya Patel
+Copyright (c) 2026 Aditya Patel. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This License governs the RepoScope software, source code, documentation, and
+associated files (the "Software"). It is a source-available license, not an
+Open Source license. The Software is made available so people can study it,
+use it in their own projects, and improve it. It is not made available for
+others to republish, resell, or commercially exploit.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Definitions
+
+"Derivative Work" means any modification, adaptation, translation, or other
+work based on the Software, including any work that incorporates a substantial
+portion of the Software.
+
+"Publish" means to distribute, disclose, sublicense, sell, rent, lease, make
+available, or otherwise provide the Software or a Derivative Work to a third
+party, including through a public repository, package registry, marketplace,
+website, hosted service, or product.
+
+"Commercial Exploitation" means selling, licensing, renting, leasing, charging
+for access to, or otherwise monetizing the Software or a Derivative Work, or
+incorporating the Software or a Derivative Work into a product or service for
+which You charge a fee. Internal use of the Software by a business on its own
+projects is not Commercial Exploitation.
+
+"You" means the individual or legal entity exercising rights under this
+License.
+
+2. Grant of rights
+
+Subject to this License, the copyright holder grants You a worldwide,
+royalty-free, non-exclusive, non-transferable license to:
+
+  (a) use and run the Software for personal, educational, research,
+      evaluation, and internal business purposes;
+
+  (b) reproduce the Software as necessary for those purposes;
+
+  (c) modify the Software and create Derivative Works for those purposes; and
+
+  (d) use the Software and Derivative Works internally in Your own projects,
+      including proprietary projects, provided that You do not Publish them or
+      use them for Commercial Exploitation.
+
+Your employees and contractors may exercise these rights on Your behalf,
+provided they are bound by this License and do not Publish the Software or any
+Derivative Work.
+
+3. Restrictions
+
+You may not, and may not permit anyone else to:
+
+  (a) Publish the Software or any Derivative Work;
+
+  (b) use the Software or any Derivative Work for Commercial Exploitation;
+
+  (c) use the Software or any Derivative Work to develop, provide, or promote a
+      competing product or service;
+
+  (d) remove, obscure, or alter any copyright, license, or attribution notice;
+      or
+
+  (e) use the name, logo, or trademarks of RepoScope or its copyright holder
+      except to accurately identify the Software and its origin.
+
+No right is granted to distribute the Software as part of another product,
+repository, marketplace listing, or hosted service.
+
+4. Contributions
+
+If You submit a contribution to the Software, You grant the copyright holder a
+perpetual, worldwide, royalty-free, irrevocable, sublicensable, and
+transferable license to use, reproduce, modify, distribute, and commercially
+exploit that contribution, and You represent that You have the right to grant
+that license. You retain ownership of Your contribution, subject to this
+grant.
+
+5. Ownership and reservation of rights
+
+The copyright holder retains all rights not expressly granted in this License.
+No patent, trademark, or other intellectual-property right is granted by
+implication or estoppel. This License does not give You any right to use the
+Software except as expressly stated here.
+
+6. No warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. THE COPYRIGHT
+HOLDER DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE OR UNINTERRUPTED.
+
+7. Limitation of liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER SHALL NOT BE
+LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
+DAMAGES, OR FOR ANY LOSS OF PROFITS, DATA, OR GOODWILL, ARISING OUT OF OR
+RELATED TO THE SOFTWARE OR THIS LICENSE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES. THE COPYRIGHT HOLDER'S TOTAL LIABILITY UNDER THIS LICENSE SHALL
+NOT EXCEED THE AMOUNT YOU PAID FOR THE SOFTWARE, WHICH IS ZERO.
+
+8. Termination
+
+This License terminates automatically if You breach any of its terms. On
+termination, You must stop using the Software and delete all copies and
+Derivative Works in Your possession or control. The copyright holder may grant
+an exception or a separate commercial license in writing. Sections 3 through 9
+survive termination.
+
+9. General
+
+If any provision of this License is held unenforceable, that provision will be
+limited to the minimum extent necessary, and the remaining provisions will
+remain in effect. This License is the entire agreement between You and the
+copyright holder concerning the Software. A failure to enforce a provision is
+not a waiver. You may not assign this License without the copyright holder's
+prior written consent.
+
+For permission to publish, distribute, or commercially exploit the Software,
+contact the copyright holder. RepoScope is source-available, not Open Source.

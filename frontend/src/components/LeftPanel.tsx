@@ -43,6 +43,14 @@ interface Props {
   onClose?: () => void;
   /** The browser parsed a folder. App shows it on the canvas as a preview. */
   onBrowserGraph?: (graph: BrowserGraph) => void;
+  /**
+   * Set while the canvas is showing a folder parsed in the browser.
+   *
+   * Insights, repo-map, tracking/security and Student Mode are backed by
+   * the server's loaded repository, not by the preview graph. Showing
+   * them beside a preview would describe a different codebase.
+   */
+  previewName?: string | null;
 }
 
 // Sidebar card shell — white panel, black border, label-caps header
@@ -68,7 +76,7 @@ function Card({
 export default function LeftPanel({
   onLoaded, repoInfo, trackingData, contextInfo, rawNodes = [], loader, studentMode = false,
   onHighlightNode, onHighlightImpact, tourRequest, impactRequest, onTourState,
-  onShowShortcuts, onToggleDebug, onClose, onBrowserGraph,
+  onShowShortcuts, onToggleDebug, onClose, onBrowserGraph, previewName = null,
 }: Props) {
   const [byokToken, setByokToken]   = useState("");
   const [byokSaved, setByokSaved]   = useState(false);
@@ -153,9 +161,9 @@ export default function LeftPanel({
           <>
             <span
               className="mono text-text-primary text-xs truncate block font-medium"
-              title={`${repoInfo.owner}/${repoInfo.repo}`}
+              title={repoInfo.owner ? `${repoInfo.owner}/${repoInfo.repo}` : repoInfo.repo}
             >
-              {repoInfo.owner}/{repoInfo.repo}
+              {repoInfo.owner ? `${repoInfo.owner}/${repoInfo.repo}` : repoInfo.repo}
             </span>
             <div className="grid grid-cols-2 gap-2">
               {stats.map(({ label, value }) => (
@@ -184,7 +192,7 @@ export default function LeftPanel({
       </Card>
 
       {/* ── Insights: cycles, unreachable symbols, central hubs ── */}
-      {repoInfo && (
+      {repoInfo && !previewName && (
         <InsightsPanel
           enabled={Boolean(repoInfo)}
           repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
@@ -193,7 +201,7 @@ export default function LeftPanel({
       )}
 
       {/* ── Agent context: what RepoScope's map costs vs the whole repo ── */}
-      {repoInfo && (
+      {repoInfo && !previewName && (
         <RepoMapPanel
           enabled={Boolean(repoInfo)}
           repoKey={`${repoInfo.owner}/${repoInfo.repo}`}
@@ -204,7 +212,7 @@ export default function LeftPanel({
       <LocalFolderPanel onGraph={onBrowserGraph} />
 
       {/* ── Student Mode: guided learning path (pyramid-ranked) ── */}
-      {studentMode && (
+      {studentMode && !previewName && (
         <OnboardingPath repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null} />
       )}
 
@@ -212,10 +220,12 @@ export default function LeftPanel({
       <FileTree rawNodes={rawNodes} />
 
       {/* ── Tracking results + Security scan (tabbed) ── */}
-      <SecurityPanel
-        trackingData={trackingData as never}
-        repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
-      />
+      {!previewName && (
+        <SecurityPanel
+          trackingData={trackingData as never}
+          repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
+        />
+      )}
 
       {/* ── Card · DEMO REPOS (one-click examples) ── */}
       <Card title="Try a demo">
@@ -280,17 +290,21 @@ export default function LeftPanel({
       <AIKeyPanel />
 
       {/* ── Card 4 · COMMIT ── */}
-      <CommitPanel disabled={!byokSaved} />
+      {!previewName && <CommitPanel disabled={!byokSaved} />}
 
       {/* ── Code Tours ── */}
-      <TourPanel onHighlightNode={onHighlightNode} onTourState={onTourState} request={tourRequest} />
+      {!previewName && (
+        <TourPanel onHighlightNode={onHighlightNode} onTourState={onTourState} request={tourRequest} />
+      )}
 
       {/* ── What-If Impact Analysis + PR Bot ── */}
-      <ImpactPanel
-        repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
-        onHighlightImpact={onHighlightImpact}
-        request={impactRequest}
-      />
+      {!previewName && (
+        <ImpactPanel
+          repo={repoInfo ? `${repoInfo.owner}/${repoInfo.repo}` : null}
+          onHighlightImpact={onHighlightImpact}
+          request={impactRequest}
+        />
+      )}
 
       {/* ── Card 5 · SETTINGS SHORTCUTS ── */}
       <Card title="Quick actions">

@@ -128,7 +128,14 @@ interface FileSystemFileHandle {
   getFile(): Promise<File>;
 }
 
-/** Ask the user for a directory. Returns null when they decline. */
+/**
+ * Ask the user for a directory. Returns null when they decline.
+ *
+ * Cancelling is not an error, but a browser that refuses to open the
+ * picker is. Swallowing every rejection made a blocked picker look
+ * exactly like a cancel: the button returned to "Choose a folder" and
+ * the user was never told why nothing happened.
+ */
 export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null> {
   if (!supportsFileSystemAccess()) return null;
   try {
@@ -138,9 +145,28 @@ export async function pickDirectory(): Promise<FileSystemDirectoryHandle | null>
       }
     ).showDirectoryPicker({ mode: "read" });
     return handle;
-  } catch {
-    // The user dismissed the picker. That is not an error.
-    return null;
+  } catch (exc) {
+    const name =
+      exc && typeof exc === "object" && "name" in exc
+        ? String((exc as { name?: unknown }).name ?? "")
+        : "";
+    if (name === "AbortError") {
+      // The user dismissed the picker. That is not an error.
+      return null;
+    }
+    const detail =
+      exc instanceof Error ? exc.message : String(exc ?? "unknown error");
+    if (name === "SecurityError") {
+      throw new Error(
+        "The browser blocked the folder picker. Use Chrome or Edge on localhost or HTTPS, and click the button directly.",
+      );
+    }
+    if (name === "NotAllowedError") {
+      throw new Error(
+        "Folder access was not granted. Choose the folder again and allow access when the browser asks.",
+      );
+    }
+    throw new Error(`The folder picker could not be opened: ${detail}`);
   }
 }
 
@@ -374,14 +400,23 @@ export async function buildGraphInBrowser(
 ): Promise<BrowserGraph> {
   const ts = await getTreeSitter();
   if (!ts) {
-    return {
-      nodes: [], edges: [], summary: "the in-browser parser could not be loaded",
-      name: root.name, files: 0, languages: [], skipped: 0,
-    };
+    throw new Error(
+      "The in-browser parser could not be loaded. WebAssembly may be blocked by this browser or the page's security policy; see the browser console for details.",
+    );
   }
 
   const { files, skipped } = await collectFiles(root);
+  if (files.length === 0) {
+    throw new Error("No files were found in that folder.");
+  }
+
   const sourceFiles = files.filter((f) => GRAMMARS[f.path.split(".").pop() ? `.${f.path.split(".").pop()}` : ""]);
+  if (sourceFiles.length === 0) {
+    throw new Error(
+      "No supported source files were found. RepoScope can preview Python, JavaScript, TypeScript, Go, and Rust files.",
+    );
+  }
+
   const knownFiles = new Set(sourceFiles.map((f) => f.path));
 
   const nodes: BrowserNode[] = [];
@@ -450,6 +485,12 @@ export async function buildGraphInBrowser(
     seen.add(key);
     return true;
   });
+
+  if (parsedLanguages.size === 0) {
+    throw new Error(
+      "A supported source file was found, but none of the Tree-sitter grammars could be loaded.",
+    );
+  }
 
   return {
     nodes,

@@ -29,6 +29,10 @@ cp .env.example .env
 `reposcope-mcp` entry point. The PyPI name currently resolves to an unrelated
 older package; install from this checkout.
 
+RepoScope is source-available, not OSI Open Source. You may use and modify it
+under the terms in [`LICENSE`](../LICENSE); do not republish, distribute, or
+commercially exploit it without written permission.
+
 ## Local mode
 
 ```bash
@@ -94,7 +98,7 @@ cd backend
 python -m pytest -q
 ```
 
-Expected current baseline: **333 passed**.
+Expected current baseline: **335 passed**.
 
 ### Frontend
 
@@ -158,7 +162,7 @@ backend/
 frontend/
   src/App.tsx             workspace shell
   src/components/         GraphView, Sidebar, ChatPanel, ...
-  src/lib/localBrowser.ts browser preview (showDirectoryPicker)
+  src/api/localBrowser.ts browser preview (showDirectoryPicker)
   src/api/client.ts       typed API client
 
 cli/                      reposcope CLI
@@ -178,6 +182,12 @@ scripts/                  QA and maintenance scripts
 - Edge handles flow from parent bottom (`out`) to child top (`in`).
 - The browser preview is a separate, lighter parser path. It has no
   cross-file symbol resolution and must stay labelled as a preview.
+- The production CSP must keep `'wasm-unsafe-eval'` in `script-src` so the
+  browser parser can compile Tree-sitter WebAssembly. Do not replace it with
+  the broader `'unsafe-eval'`; `backend/tests/test_health.py` guards both
+  directions.
+- `/api/health` must report the same version as `pyproject.toml`.
+  `test_health_version_matches_package_metadata` enforces it.
 
 ## Documentation
 

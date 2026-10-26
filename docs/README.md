@@ -11,7 +11,7 @@ historical build artifacts.
 | [README](../README.md) | Product overview, quick start, screenshots, verification status |
 | [Architecture](ARCHITECTURE.md) | Modules, data flow, API surface, graph layout, MCP transports |
 | [Features](FEATURES.md) | Every shipped feature, how to use it, and its limits |
-| [Verification checklist](VERIFICATION_CHECKLIST.md) | Manual checks that are still pending; deliberately unchecked |
+| [Verification checklist](VERIFICATION_CHECKLIST.md) | The four manual checks still pending; deliberately unchecked |
 | [QA report](QA_REPORT.md) | Automated coverage and the honest gaps |
 | [Screenshots](SCREENSHOTS.md) | Current screenshots, brand assets, dimensions, and capture notes |
 
@@ -27,6 +27,7 @@ historical build artifacts.
 | [Extension README](../extensions/vscode/README.md) | Install and use the VS Code / Cursor / VSCodium extension |
 | [Contributing](../CONTRIBUTING.md) | Development workflow and commit conventions |
 | [Code of Conduct](../CODE_OF_CONDUCT.md) | Community standards and reporting |
+| [License](../LICENSE) | RepoScope Source-Available License 1.0 |
 
 ## Reference
 
@@ -56,4 +57,4 @@ historical build artifacts.
    by the canvas, CLI, MCP server, and extension. Documentation should not
    imply separate indexes.
 
-Last reviewed: 2026-10-23.
+Last reviewed: 2026-10-25.

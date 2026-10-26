@@ -2,7 +2,7 @@
 
 > **One code graph. Four ways in: the canvas, the CLI, an MCP server, and your editor.**
 
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![License: source-available](https://img.shields.io/badge/License-source--available-orange)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
@@ -309,14 +309,18 @@ The extension adds:
   open file;
 - a status-bar blast-radius indicator;
 - a **View Callers** CodeLens above exported symbols;
-- **Visualize in RepoScope Canvas** in the Explorer context menu;
+- **RepoScope: Focus this node in the canvas** in the Explorer context menu;
 - the `reposcope://open` URI handler.
 
-The extension never parses code. It reads the RepoScope backend over HTTP; set
-`reposcope.backendUrl` if the backend is not on `http://127.0.0.1:4100`.
+The extension never parses code. It reads the RepoScope backend over HTTP. The
+default is `http://127.0.0.1:8000` (the full-stack API); for local mode
+(`reposcope run .`), set `reposcope.backendUrl` to
+`http://127.0.0.1:4100`.
 
-The extension is version **2.0.1**. It is published to Open VSX; the listing
-stays hidden from search until the publisher namespace email is verified. See
+The extension is version **2.0.1**. It is published to Open VSX. The listing
+is reachable by direct URL and the search API, but the publisher namespace is
+still unverified, so the verified badge and stable search placement are not
+guaranteed. The VS Code Marketplace still needs an Azure DevOps PAT. See
 [`extensions/vscode/README.md`](extensions/vscode/README.md).
 
 ---
@@ -437,43 +441,54 @@ Legacy single-key variables (`OPENROUTER_API_KEY`, `GROQ_API_KEY`,
 
 Verified in this session:
 
-- `cd backend && python -m pytest -q` → **333 passed**;
+- `cd backend && python -m pytest -q` → **335 passed**;
 - `cd frontend && npx tsc --noEmit` → clean;
-- `cd frontend && npm run build` → **built successfully**;
-- local mode → health 200, watcher on; the live file/node/edge counts are
-  printed by the CLI and shown in the sidebar (they change as files are added);
+- `cd frontend && npm run build` → **built successfully**
+  (`assets/index-CMSb0cnC.js`);
+- `/api/health` → 200, version **2.0.0**, matching `pyproject.toml`;
+- local mode → **348 files, 1,863 nodes, 3,419 edges**; watcher on;
+- native folder picker → **75 files, 315 nodes, 310 edges**; Python,
+  JavaScript, TypeScript; no folder upload observed;
+- VS Code extension **2.0.1** in VS Code 1.143.0 → Activity map, status bar,
+  CodeLens, Explorer menu, `reposcope://open`, offline/recovery;
 - real MCP stdio sweep → **8 tools, 5 resources, 3 read rounds, clean ping**;
 - OpenCode MCP status → `✓ reposcope connected`.
 
-Manual verification still required:
+The remaining manual checks are:
 
-- the native folder picker (the OS dialog cannot be driven by Playwright);
-- the VS Code extension in a real editor window;
-- Open VSX listing visibility after publisher email verification;
-- a live PR Bot comment against a real pull request.
+- Cursor/VSCodium extension testing;
+- Open VSX namespace verification and the verified badge;
+- redeploying Render so `/api/health` reports **2.0.0** there too;
+- VS Code Marketplace publishing (Azure DevOps PAT).
 
 The living checklist is
 [`docs/VERIFICATION_CHECKLIST.md`](docs/VERIFICATION_CHECKLIST.md). It is
 deliberately separate from the docs so it can stay unchecked until a human
-confirms each item.
+confirms each item. Agent-run evidence is recorded separately in
+[`docs/QA_REPORT.md`](docs/QA_REPORT.md#agent-run-evidence--2026-10-25).
 
 ---
 
 ## Known limitations
 
-- **The native folder picker is manual.** The browser path uses
-  `window.showDirectoryPicker`; Playwright can verify the button and the
-  panel, but it cannot select a folder in the OS dialog.
+- **The native folder picker is outside Playwright.** The browser path uses
+  `window.showDirectoryPicker`; the final pass drove the OS dialog with Win32
+  automation.
 - **The browser preview is lighter than the server.** It has imports and
-  symbols, but no cross-file symbol resolution. The UI says so.
+  symbols, but no cross-file symbol resolution. The UI says so, and it hides
+  server-backed chat, tracking, Student Mode, and analysis panels while the
+  preview is active.
 - **Some MCP clients have resource-read bridge issues.** The RepoScope server
   answers `reposcope://graph/summary` in 0.0s over stdio; one OpenCode bridge
   stalled for several minutes and then reported an unknown message ID. Tool
-  calls continued to work. This is tracked in the checklist.
-- **Open VSX search visibility is pending publisher email verification.**
-  The VSIX is published and installable.
+  calls continued to work. This is a client-side bridge limitation.
+- **The Open VSX namespace is unverified.** Version 2.0.1 is published,
+  installable, and returned by search, but the namespace is `verified:false`,
+  so the verified badge and stable search placement are not guaranteed.
 - **The VS Code Marketplace needs an Azure DevOps PAT.** It is not published
   there yet.
+- **Render still reports version `1.0.0`.** The health fix is local and must
+  not be deployed without approval.
 - **Test fixtures are indexed as production code.** A "tests are not
   architecture" mode is still open.
 - **The WebGL tier, the `kuzu` flag, monorepo cross-package edges, the
@@ -497,7 +512,7 @@ confirms each item.
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Failures we have actually seen |
 | [QA report](docs/QA_REPORT.md) | What is verified and what is not |
 | [v2.0 roadmap](docs/ROADMAP_V2.md) | The plan, the delivered sprints, the honest gaps |
-| [Verification checklist](docs/VERIFICATION_CHECKLIST.md) | The manual checks still pending |
+| [Verification checklist](docs/VERIFICATION_CHECKLIST.md) | The four manual checks still pending |
 | [Screenshots](docs/SCREENSHOTS.md) | Screenshot index and capture notes |
 | [Knowledge graph schema](docs/KNOWLEDGE_GRAPH_SCHEMA.md) | Node and edge ids |
 | [OpenCode MCP config](docs/opencode-mcp.json) | Portable local-server config verified in OpenCode |
@@ -537,7 +552,18 @@ card, and one-index diagram use the same cream/ink/coral palette.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+RepoScope is **source-available**, not OSI Open Source. You may read, run,
+modify, and use it in your own projects, including internal business projects.
+You may not republish, distribute, sublicense, sell, or otherwise commercially
+exploit RepoScope or a modified version without prior written permission from
+the copyright holder. See [LICENSE](LICENSE) for the complete terms; the same
+terms apply to the extension's [LICENSE](extensions/vscode/LICENSE).
+
+Earlier releases were published under MIT, and those grants cannot be revoked.
+That includes the currently published Open VSX extension **2.0.1** and the
+existing `reposcope-2.0.1.vsix`, which predate this license change. The source
+tree and future builds use the source-available license; bump the extension
+version before publishing the new terms.
 
 ## Acknowledgments
 

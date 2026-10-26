@@ -111,10 +111,18 @@ Use Chrome or Edge. Firefox does not implement the API.
 
 ### The picker opens but selecting a folder fails
 
-- Grant the browser folder permission.
+- Grant the browser folder permission. A refusal now shows **Folder access was
+  not granted. Choose the folder again and allow access when the browser
+  asks.** rather than doing nothing.
+- If the parser cannot load, the UI names WebAssembly or the security policy
+  as the likely cause. Confirm the page's CSP includes `'wasm-unsafe-eval'`;
+  do not add `'unsafe-eval'`.
 - Do not select a drive root, a folder with millions of files, or a folder
   containing `node_modules` if you want a fast preview.
-- Cancel the dialog and try again; a denied permission is not a backend error.
+- Cancel the dialog and try again; a cancel keeps the previous preview and is
+  not a backend error.
+- An empty folder or one without Python, JavaScript, TypeScript, Go, or Rust
+  files reports that no supported source files were found.
 
 ### The preview has fewer edges than the server graph
 
@@ -209,6 +217,12 @@ show zero dependents for a missing index. Start the backend or fix
 `reposcope.canvasUrl` defaults to `http://127.0.0.1:4100`. If you use the
 full stack, set it to `http://127.0.0.1:5173`.
 
+### The Explorer menu item has a different name
+
+The current label is **RepoScope: Focus this node in the canvas**. Older docs
+called it "Visualize in RepoScope Canvas"; the command ID is still
+`reposcope.focusNode`.
+
 ### The VSIX version is old
 
 Install the current file:
@@ -223,10 +237,12 @@ Cursor and VSCodium use the same file. Reload the window after installing.
 
 ## Open VSX and Marketplace
 
-### The extension is published but not in search
+### The extension is published but the verified badge is missing
 
-The publisher namespace email must be verified. The direct listing can resolve
-before search indexing. Verify the email, then re-check the listing.
+The listing is now returned by Open VSX search. The publisher namespace is
+still `verified:false`, so Open VSX does not show the verified badge and does
+not guarantee stable search placement. Verify the namespace email, then
+re-check the listing. Do not describe an unverified namespace as verified.
 
 ### `ovsx publish` returns 401/403
 
@@ -294,6 +310,14 @@ not as a guarantee.
 Check the Render logs for a missing environment variable or an import error.
 The health endpoint reports provider key counts; a bad key shape can surface
 at startup.
+
+### `/api/health` reports version `1.0.0`
+
+The code fix is in `backend/main.py`; the response should report **2.0.0**.
+A long-running local process or the current Render deploy may still be serving
+the old build. Restart the local server, or redeploy Render with approval. The
+regression test compares the health response to `pyproject.toml`, so a version
+bump that misses one of them fails the backend suite.
 
 ---
 

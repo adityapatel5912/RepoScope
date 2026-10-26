@@ -29,6 +29,11 @@ interface Props {
    * into a chat needs to see that at a glance.
    */
   isLocal?: boolean;
+  /**
+   * The name of a folder the browser parsed. A preview has no backend
+   * index, so the server-backed modes and Student Mode are unavailable.
+   */
+  previewName?: string | null;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -40,6 +45,7 @@ const MODES: { id: Mode; label: string }[] = [
 export default function TopBar({
   repo, mode, onModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
   onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal, onOpenEditorSettings,
+  previewName = null,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipEditing, setChipEditing]   = useState(false);
@@ -192,45 +198,52 @@ export default function TopBar({
 
       {/* ── Right: mode pills + icon buttons ── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-        <nav role="tablist" className="flex items-center gap-0.5 sm:gap-1">
-          {MODES.map(({ id, label }) => (
+        {/* A browser preview has no server-side index, so Track/Incident and
+            Student Mode would either do nothing or answer about the server's
+            loaded repository. Hide them rather than let the labels lie. */}
+        {!previewName && (
+          <>
+            <nav role="tablist" className="flex items-center gap-0.5 sm:gap-1">
+              {MODES.map(({ id, label }) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={mode === id}
+                  onClick={() => onModeChange(id)}
+                  className={clsx(
+                    "px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
+                    mode === id
+                      ? "bg-accent-cyan text-white shadow-sm"
+                      : "bg-bg-panel text-text-primary hover:bg-bg-panel-alt"
+                  )}
+                >
+                  {id === "understanding" ? (
+                    <>
+                      <span className="hidden min-[480px]:inline">Understand</span>
+                      <span className="min-[480px]:hidden">Map</span>
+                    </>
+                  ) : label}
+                </button>
+              ))}
+            </nav>
+
+            {/* Student Mode toggle — learning path + quizzes (Feature: Student Onboarding) */}
             <button
-              key={id}
-              role="tab"
-              aria-selected={mode === id}
-              onClick={() => onModeChange(id)}
+              onClick={onStudentModeToggle}
+              title={studentMode ? "Student Mode is ON — click to exit" : "Student Mode: guided learning path + quizzes"}
+              aria-pressed={studentMode}
               className={clsx(
-                "px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle transition-all duration-150",
-                mode === id
-                  ? "bg-accent-cyan text-white shadow-sm"
-                  : "bg-bg-panel text-text-primary hover:bg-bg-panel-alt"
+                "flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] transition-all duration-150",
+                studentMode
+                  ? "bg-accent-emerald text-white border-accent-emerald shadow-sm"
+                  : "bg-bg-panel text-text-primary border-border-subtle hover:bg-bg-panel-alt"
               )}
             >
-              {id === "understanding" ? (
-                <>
-                  <span className="hidden min-[480px]:inline">Understand</span>
-                  <span className="min-[480px]:hidden">Map</span>
-                </>
-              ) : label}
+              <GraduationCap size={13} />
+              <span className="hidden md:inline">Student</span>
             </button>
-          ))}
-        </nav>
-
-        {/* Student Mode toggle — learning path + quizzes (Feature: Student Onboarding) */}
-        <button
-          onClick={onStudentModeToggle}
-          title={studentMode ? "Student Mode is ON — click to exit" : "Student Mode: guided learning path + quizzes"}
-          aria-pressed={studentMode}
-          className={clsx(
-            "flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap border-[1.5px] transition-all duration-150",
-            studentMode
-              ? "bg-accent-emerald text-white border-accent-emerald shadow-sm"
-              : "bg-bg-panel text-text-primary border-border-subtle hover:bg-bg-panel-alt"
-          )}
-        >
-          <GraduationCap size={13} />
-          <span className="hidden md:inline">Student</span>
-        </button>
+          </>
+        )}
 
         {/* Shortcuts — settings popover covers these on small screens */}
         <button

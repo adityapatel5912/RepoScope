@@ -156,7 +156,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        # The optional in-browser parser compiles Tree-sitter WebAssembly.
+        # `wasm-unsafe-eval` permits WebAssembly compilation without
+        # re-enabling JavaScript `eval` / `new Function`.
+        "script-src 'self' 'wasm-unsafe-eval'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data: blob:; "
@@ -397,7 +400,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "reposcope-api",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "uptime_seconds": uptime,
         "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m",
         "memory_mb": memory_mb,

@@ -2,7 +2,7 @@
 
 What is verified, how, and — explicitly — what is **not** covered.
 
-## Current verification — 2026-10-23
+## Current verification — 2026-10-25
 
 This is the status of the shipped v2.0 tree. The Sprint 3 journey table below
 is kept as a historical record; where it disagrees with this section, this
@@ -10,24 +10,47 @@ section wins.
 
 | Check | Command | Result |
 |---|---|---|
-| Backend tests | `python -m pytest -q` | **333 passed** |
+| Backend tests | `python -m pytest -q` | **335 passed** |
 | Frontend type-check | `npx tsc --noEmit` | **clean** |
-| Frontend production build | `npm run build` | **built successfully** |
-| Local mode | `GET http://127.0.0.1:4100/api/health` | **200**, watcher on |
-| Graph snapshot | sidebar in local mode | **363 files, 1,864 nodes, 3,418 edges** (last run; screenshot captures may differ) |
+| Frontend production build | `npm run build` | **built successfully** (`assets/index-CMSb0cnC.js`) |
+| Health contract | `GET /api/health` | **200**; response version **2.0.0**, matching `pyproject.toml` |
+| Local mode | `GET http://127.0.0.1:4100/api/health` | **200**, watcher on. The UI evidence predates the health-version-only fix; graph behavior is unchanged. |
+| Graph snapshot | sidebar in local mode | **348 files, 1,863 nodes, 3,419 edges** |
+| Browser preview | native folder picker + in-browser parser | **75 files, 315 nodes, 310 edges**; Python, JavaScript, TypeScript |
+| VS Code extension | VS Code 1.143.0, `adityapatel5912.reposcope@2.0.1` | Activity map, status bar, CodeLens, context menu, URI handler, offline/recovery |
+| Open VSX | API + search + listing page | **2.0.1**, **288 downloads**, searchable, direct page HTTP 200, namespace `verified:false` |
+| CSP / WebAssembly | production CSP | parser WASM and all five grammars loaded |
 | MCP stdio sweep | `tools/list`, `resources/list`, read rounds | **8 tools, 5 resources**, clean ping |
 | MCP over HTTP | `POST /mcp` Streamable HTTP | initialize + tool call succeeded |
 | OpenCode client | `opencode mcp list` | **`✓ reposcope connected`** |
 
-Manual checks are **not** covered by those commands and remain unchecked in
-[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md):
+The remaining manual checks are:
 
-- selecting a folder in the native OS dialog;
-- installing and exercising the extension in a real VS Code/Cursor window;
-- Open VSX search visibility after publisher email verification;
-- a live PR Bot comment against a real pull request;
-- one OpenCode `read_mcp_resource` bridge, which stalled and returned an
-  unknown message ID while direct stdio reads and tool calls worked.
+- Cursor/VSCodium extension testing;
+- Open VSX namespace verification and the verified badge;
+- Render redeployment showing version 2.0.0;
+- VS Code Marketplace publishing (Azure DevOps PAT).
+
+### Agent-run evidence — 2026-10-25
+
+The final pass used Windows automation and browser instrumentation. This is
+evidence, not a substitute for the four remaining manual checks.
+
+| Area | Evidence |
+|---|---|
+| Native folder picker | Win32 child enumeration plus `BM_CLICK` on the dialog's **Open** button selected the same folder twice. Result: **75 files, 315 nodes, 310 edges**, languages `python, javascript, typescript`; the canvas showed **BROWSER PREVIEW · VERDICT**. |
+| Picker cancel | Closing the dialog preserved the previous preview and did not raise an error toast. |
+| Picker refusal | A Playwright monkeypatch made `showDirectoryPicker` throw `NotAllowedError`; the UI showed: “Folder access was not granted. Choose the folder again and allow access when the browser asks.” |
+| Preview privacy | The network trace after selection contained only `GET` requests; no folder contents were uploaded. |
+| Browser preview scope | Chat, Track/Incident, Student Mode, Insights, Repo Map, Security, Commit, Tour, and Impact panels are hidden while a preview is active. The graph takes the full height. |
+| Server local mode | **348 files, 1,863 nodes, 3,419 edges**; watcher add/remove updated the canvas without a reload. |
+| Reload / clear | Reload restored the server repository and cleared the browser preview; **Clear repository** showed the empty state; reload restored the backend repository. |
+| Graph modes / export | Grouped, flat, cluster, churn, and layout direction worked; PNG and SVG exports produced non-empty files on separate page loads. |
+| VS Code extension | Activity map: **348 files, 1,863 nodes, 3,419 edges**. Status bar: `RepoScope: 12 dependents | Risk: Critical` on `backend/graph_store.py`, `9 dependents` on `backend/main.py`. CodeLens: `View Callers (6)` for `graph_summary`, `No callers` for `health`. Explorer menu: **RepoScope: Focus this node in the canvas**. `reposcope://open` opened `backend/main.py` at line 392. |
+| Extension failure/recovery | Wrong port `9999` showed `RepoScope: offline`; restoring `:8000` and reloading recovered the status bar and CodeLens. Reload reconnected the view. |
+| CSP / parser | With the production CSP, the in-browser parser loaded WebAssembly and Python, JavaScript, TypeScript, Go, and Rust grammars. Regression test asserts `wasm-unsafe-eval` is present and `'unsafe-eval'` is absent. |
+| Health version | `backend/main.py` now reports **2.0.0**; a temporary server on `:4101` returned `{"version":"2.0.0",...}`. A new test reads `pyproject.toml` and fails if the health version drifts. |
+| Quiz layout | The longest Student Mode quiz text satisfies `clientWidth == scrollWidth` after the overflow fix. |
 
 The QA harness lives in [`scripts/qa.py`](../scripts/qa.py) and
 [`frontend/tests/e2e/`](../frontend/tests/e2e/). Run it with:
@@ -179,6 +202,18 @@ non-deterministic and non-reproducible — the opposite of QA.
 
 ## Defects found by this harness
 
+### Final v2 pass
+
+| Severity | Defect | Status |
+|---|---|---|
+| **P1** | **The production CSP blocked the in-browser parser.** Chrome refuses `WebAssembly.instantiate` under `script-src 'self'`, so choosing a folder could leave the preview empty. | ✅ Fixed — CSP now includes `wasm-unsafe-eval`; it does not re-enable JavaScript `eval`. Guarded by `backend/tests/test_health.py` and a five-grammar browser check. |
+| **P1** | **`/api/health` reported version `1.0.0` while the package was `2.0.0`.** A deploy could look healthy while advertising the wrong release. | ✅ Fixed — health now returns `2.0.0`; a regression test reads `pyproject.toml` and compares it to the live response. Render needs a redeploy. |
+| **P2** | **A refused folder picker looked exactly like a cancel.** Every rejection was swallowed, so a blocked picker left the button idle with no explanation. | ✅ Fixed — `AbortError` remains a quiet cancel; `SecurityError`, `NotAllowedError`, and unknown failures surface actionable messages. |
+| **P2** | **A browser preview could show server-backed panels for a different repository.** Chat, Track, Student Mode, and analysis cards read the server's index while the canvas showed a folder parsed in the browser. | ✅ Fixed — the preview hides those surfaces, uses the folder name without an owner prefix, and gives the graph the full height. |
+| **P3** | **Long Student Mode quiz text overflowed its card.** | ✅ Fixed — wrapping and `min-w-0` constraints; verified with `clientWidth == scrollWidth`. |
+
+### Earlier v2 passes
+
 | Severity | Defect | Status |
 |---|---|---|
 | **P1** | **The analysis endpoints and the UI could describe DIFFERENT codebases.** Two sources for "the current graph" — the live session and the orchestrator's cache — and a request could read one from each. The repo-map panel showed a map for one repository beside a "full repository" figure for another. | ✅ Fixed — one function, `orchestrator.current_graph()`, returns the graph and the root it describes. Guarded by `backend/tests/test_graph_source.py` |
@@ -212,10 +247,14 @@ Stating the gaps matters more than claiming completeness.
   matrix.
 - **No accessibility audit.** The manual audit found a password field
   outside a form; that defect class is not yet asserted automatically.
-- **The VS Code extension cannot be driven by Playwright.** It has a
-  documented manual checklist and committed screenshots instead.
+- **Cursor and VSCodium have not been exercised.** VS Code 1.143.0 was driven
+  with Windows UI automation; Cursor/VSCodium remain in the checklist.
 - **No performance budget is asserted** in CI — the 50k-file traversal
-  target (J25) is still a plan.
+  target is still a plan.
+- **The deployed Render service still reports `1.0.0`.** The fix is local and
+  must not be deployed without explicit approval.
+- **The Open VSX namespace is still unverified.** The listing is searchable,
+  but the verified badge and stable ranking are not guaranteed.
 
 ## Reproducing a failure
 

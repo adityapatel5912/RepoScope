@@ -4,7 +4,7 @@
   "description": "The code graph, in your editor. Blast radius, callers, and a live architecture map - from the same index the RepoScope canvas draws.",
   "version": "2.0.1",
   "publisher": "adityapatel5912",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/adityapatel5912/RepoScope.git"

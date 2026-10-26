@@ -133,27 +133,32 @@ npm run compile
 npm test
 npx @vscode/vsce package --no-dependencies
 
-# PowerShell
+# PowerShell (2.0.2 is an example; use the version you just bumped to)
 $env:OVSX_TOKEN = "<token from the gitignored .env>"
-npx ovsx publish reposcope-2.0.1.vsix -p "$env:OVSX_TOKEN"
+npx ovsx publish reposcope-2.0.2.vsix -p "$env:OVSX_TOKEN"
 ```
 
-1. Confirm the version in `package.json` is bumped.
-2. Confirm the namespace email is verified, otherwise the listing stays out of
-   search.
-3. Check the direct listing:
+1. Confirm the version in `package.json` is bumped. **2.0.1** remains MIT;
+   do not republish it as source-available.
+2. Confirm `LICENSE` is included and the listing describes the extension as
+   source-available, not OSI Open Source.
+3. The listing is searchable without namespace verification, but the
+   `verified` badge stays off until the email is verified.
+4. Check the direct listing:
    <https://open-vsx.org/extension/adityapatel5912/reposcope>
-4. Never commit or log the token.
+5. Never commit or log the token.
 
 ---
 
 ## RB-08 — Publish to the VS Code Marketplace
 
-Requires an Azure DevOps PAT with **Marketplace (Manage)** scope.
+Requires an Azure DevOps PAT with **Marketplace (Manage)** scope. Extension
+**2.0.1** is already MIT; bump the version before publishing the
+source-available terms. The command uses **2.0.2** as an example.
 
 ```bash
 cd extensions/vscode
-npx @vscode/vsce publish -p "$VSCE_PAT"
+npx @vscode/vsce publish 2.0.2 -p "$VSCE_PAT"
 ```
 
 If no PAT exists, record the block and leave the Marketplace checklist
@@ -167,7 +172,7 @@ unchecked.
 
 1. Push the intended commit to the deploy branch.
 2. Confirm the Render build succeeds.
-3. Confirm `/api/health` returns 200.
+3. Confirm `/api/health` returns 200 and reports version **2.0.0**.
 4. Check `ALLOWED_ORIGINS` if the frontend origin changed.
 
 ### Frontend (Vercel)
@@ -181,7 +186,8 @@ unchecked.
 
 ## RB-10 — Roll back
 
-- **Render:** redeploy the previous release, then re-check `/api/health`.
+- **Render:** redeploy the previous release, then re-check `/api/health` and
+  its reported version.
 - **Vercel:** promote the previous deployment.
 - **Extension:** publish a higher patch version; do not delete a version
   unless it contains a secret.

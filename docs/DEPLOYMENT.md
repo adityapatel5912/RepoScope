@@ -38,7 +38,11 @@ Set these environment variables in the Render dashboard (they are marked
 - `Models_OPENROUTER`, `Models_GROQ`, `Models_NVIDIA` (optional overrides)
 
 Do **not** commit a `.env` file or a key. The health check must return 200 at
-`https://<render-host>/api/health` before the frontend is pointed at it.
+`https://<render-host>/api/health`, and the response must report version
+**2.0.0**, before the frontend is pointed at it.
+
+> Render currently still runs an older build that reports `1.0.0`. The fixed
+> code is local; redeploy only with explicit approval.
 
 ### Verify the deploy
 
@@ -110,7 +114,12 @@ serve the built frontend from the CLI instead (`reposcope run .`).
 
 ## 3. Extension — Open VSX
 
-The extension is version **2.0.1**, publisher `adityapatel5912`.
+The published extension is **2.0.1**, publisher `adityapatel5912`. That
+release and the tracked `reposcope-2.0.1.vsix` predate the license change and
+remain under MIT. Do not republish 2.0.1 as source-available.
+
+To publish a new build under the current license, bump `version` in
+`package.json` first. The commands below use **2.0.2** as the example:
 
 ```bash
 cd extensions/vscode
@@ -119,41 +128,47 @@ npm run compile
 npx @vscode/vsce package --no-dependencies
 
 export OVSX_TOKEN=...        # PowerShell: $env:OVSX_TOKEN = "..."
-npx ovsx publish reposcope-2.0.1.vsix -p "$OVSX_TOKEN"
+npx ovsx publish reposcope-2.0.2.vsix -p "$OVSX_TOKEN"
 ```
 
 The token lives in the gitignored `.env`; never commit it. Do not paste it into
-a log or an issue.
+a log or an issue. The package license is
+[`extensions/vscode/LICENSE`](../extensions/vscode/LICENSE), the RepoScope
+Source-Available License 1.0. It is not an OSI Open Source license; do not use
+an "open source" badge or claim on the listing.
 
 ### Listing visibility
 
-The VSIX is published, but the listing stays hidden from Open VSX search until
-the publisher namespace email is verified. Direct URL:
+The VSIX is published and the listing is returned by Open VSX search. The
+publisher namespace is still `verified:false`, so the verified badge and
+stable search placement are not guaranteed. Direct URL:
 
 <https://open-vsx.org/extension/adityapatel5912/reposcope>
 
-Checklist:
+Agent evidence (2026-10-25): version **2.0.1**, **288 downloads**, search API
+returns the listing, direct page HTTP 200.
 
-- [ ] Namespace email verified.
-- [ ] `ovsx publish` succeeds.
-- [ ] Direct URL resolves.
-- [ ] The listing appears in search.
-- [ ] Version 2.0.1 is shown.
-- [ ] Install from VSCodium works.
+Remaining manual check:
 
-These are manual checks; see
-[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
+- [ ] The namespace email is verified and the listing shows the **verified**
+      badge.
+
+Publish, direct URL, search, and version are covered by the agent evidence
+above. Installation in Cursor/VSCodium is part of the remaining extension
+check. See [`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
 
 ---
 
 ## 4. Extension — VS Code Marketplace
 
 Blocked on an Azure DevOps Personal Access Token with **Marketplace
-(Manage)** scope.
+(Manage)** scope. Extension **2.0.1** is already MIT; bump the version before
+publishing a build under the source-available terms. The command below uses
+**2.0.2** as the example.
 
 ```bash
 cd extensions/vscode
-npx @vscode/vsce publish -p "$VSCE_PAT"
+npx @vscode/vsce publish 2.0.2 -p "$VSCE_PAT"
 ```
 
 Do not claim Marketplace availability until the listing is live and installable.
@@ -218,16 +233,19 @@ have.
 
 ## 8. Release checklist
 
-- [ ] Backend tests pass (`333 passed` baseline).
+- [ ] Backend tests pass (`335 passed` baseline).
 - [ ] `npx tsc --noEmit` is clean.
 - [ ] `npm run build` succeeds.
 - [ ] Extension tests pass (20).
 - [ ] Version is bumped in `pyproject.toml` and/or
       `extensions/vscode/package.json`.
+- [ ] `/api/health` reports the same version as `pyproject.toml`.
 - [ ] Screenshots paths resolve.
 - [ ] `.env` is untracked.
 - [ ] Health check is 200 on the deployed backend.
 - [ ] The frontend rewrite points at the right backend host.
-- [ ] The Open VSX namespace email is verified before claiming search
-      visibility.
+- [ ] The Open VSX namespace email is verified before claiming the verified
+      badge.
+- [ ] The extension package includes `LICENSE` and the listing describes
+      RepoScope as source-available, not OSI Open Source.
 - [ ] The commit is local; push only with explicit approval.

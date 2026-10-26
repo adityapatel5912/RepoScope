@@ -2,8 +2,8 @@
 
 This is the current feature set (package **2.0.0**, extension **2.0.1**).
 Every feature below is either implemented and verified, implemented with a
-stated limit, or explicitly marked as planned. The manual checks live in
-[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
+stated limit, or explicitly marked as planned. The four remaining manual
+checks live in [`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
 
 ---
 
@@ -133,19 +133,28 @@ The extension reads the backend over HTTP; it never parses code.
 - **Status bar:** blast radius and risk for the current file.
 - **View Callers CodeLens:** caller count above exported symbols; asks before
   enabling.
-- **Explorer context menu:** **Visualize in RepoScope Canvas**.
+- **Explorer context menu:** **RepoScope: Focus this node in the canvas**.
 - **URI handler:** `reposcope://open?path=...&line=...`.
 - **Offline state:** says **RepoScope: offline** instead of showing zero.
 
-Settings: `reposcope.backendUrl`, `reposcope.canvasUrl`,
-`reposcope.statusBar`, `reposcope.codeLens`.
+Settings: `reposcope.backendUrl` (default `http://127.0.0.1:8000`),
+`reposcope.canvasUrl` (default `http://127.0.0.1:4100`),
+`reposcope.statusBar`, `reposcope.codeLens`. For local mode, point
+`reposcope.backendUrl` at `http://127.0.0.1:4100`.
 
 **Distribution:** VSIX is built locally; version 2.0.1 is published to Open
-VSX. The listing is hidden from search until the publisher namespace email is
-verified. The VS Code Marketplace still needs an Azure DevOps PAT.
+VSX. The listing is searchable, but the publisher namespace is still
+`verified:false`, so the verified badge and stable ranking are not guaranteed.
+The VS Code Marketplace still needs an Azure DevOps PAT.
 
-**Limit:** the extension cannot be driven by Playwright; it has a manual
-checklist and committed screenshots.
+**Verified in VS Code 1.143.0:** Activity map **348 files, 1,863 nodes, 3,419
+edges**; status bar `RepoScope: 12 dependents | Risk: Critical` on
+`backend/graph_store.py`; CodeLens `View Callers (6)` for `graph_summary`;
+Explorer menu label above; `reposcope://open` opened `backend/main.py` at line
+392; wrong port showed **offline** and recovery worked after reload.
+
+**Limit:** the extension cannot be driven by Playwright; the final pass used
+Windows UI automation. Cursor/VSCodium remain untested.
 
 ---
 
@@ -159,9 +168,16 @@ The left panel's **Open a local folder** action uses
 - The UI labels the result a **browser preview**.
 - It has no cross-file symbol resolution, so it is lighter than the server
   graph.
+- Chat, Track/Incident, Student Mode, Insights, Repo Map, Security, Commit,
+  Tour, and Impact are hidden while a preview is active; those surfaces read
+  the server's loaded repository and would describe a different codebase.
+- Cancelling the picker keeps the previous preview. A denied picker explains
+  that folder access was not granted, and an empty/unsupported folder explains
+  why no graph could be built.
 
-**Limit:** the OS dialog is manual. Chrome or Edge on `localhost`/HTTPS is
-required; Firefox does not implement the API.
+**Limit:** Chrome or Edge on `localhost`/HTTPS is required; Firefox does not
+implement the API. The OS dialog itself is outside Playwright, although the
+final pass drove it with Win32 automation.
 
 ---
 
@@ -269,7 +285,9 @@ before use.
 
 ## 16. Health and configuration
 
-- `GET /api/health`: uptime, memory, provider key counts.
+- `GET /api/health`: uptime, memory, provider key counts, and version.
+- The version is **2.0.0**, matching `pyproject.toml`; a regression test fails
+  if the two drift.
 - Provider/model/base URL configuration through `.env`.
 - Legacy single-key variables accepted.
 - No key material is returned by the API.
@@ -289,5 +307,20 @@ These are intentionally not presented as shipped:
 - An unbounded 50k-file measurement.
 - Excluding test fixtures from “architecture” by default.
 - VS Code Marketplace publishing (blocked on an Azure DevOps PAT).
+- Open VSX namespace verification (the listing is searchable without it).
+- Render redeployment of the health-version fix.
 
-The roadmap tracks these. The verification checklist tracks the manual work.
+The roadmap tracks the feature gaps. The verification checklist tracks the
+manual work.
+
+---
+
+## 18. License
+
+RepoScope is **source-available**, not OSI Open Source. The
+[RepoScope Source-Available License 1.0](../LICENSE) lets you run, modify, and
+use it in your own projects, including internal business projects. It does not
+let you republish, distribute, sublicense, sell, or otherwise commercially
+exploit RepoScope or a modified version without prior written permission. The
+extension carries the same terms in
+[`extensions/vscode/LICENSE`](../extensions/vscode/LICENSE).

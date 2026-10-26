@@ -5,6 +5,42 @@ All notable changes to RepoScope are recorded here. Versions follow
 versioned together; the VS Code extension has its own version because it ships
 on a separate marketplace.
 
+## [Unreleased]
+
+### Fixed
+
+- **`/api/health` now reports `2.0.0`, matching `pyproject.toml`.** A new
+  regression test fails if the health response and package version drift.
+- **The production CSP allows the browser parser's WebAssembly** via
+  `'wasm-unsafe-eval'` without re-enabling JavaScript `'unsafe-eval'`.
+  Verified with the parser and all five grammars.
+- **A refused folder picker no longer looks like a cancel.** `AbortError`
+  stays quiet; denied or blocked access shows an actionable message.
+- **A browser preview hides server-backed surfaces** (chat, Track/Incident,
+  Student Mode, Insights, Repo Map, Security, Commit, Tour, Impact) so it
+  cannot describe a different repository. The folder name no longer gets a
+  server owner prefix.
+- **Long Student Mode quiz text wraps instead of overflowing** its card.
+- The extension docs now use the actual Explorer menu label:
+  **RepoScope: Focus this node in the canvas**.
+
+### Changed
+
+- **License changed from MIT to the RepoScope Source-Available License 1.0.**
+  The code is still available to read, run, modify, and use in your own
+  projects, including internal business projects, but republishing,
+  distributing, or commercially exploiting it requires written permission.
+  RepoScope is no longer described as OSI Open Source. Releases already
+  published under MIT — including Open VSX extension 2.0.1 and the existing
+  `reposcope-2.0.1.vsix` — keep their MIT grants; those grants cannot be
+  revoked. Bump the extension version before publishing the new terms.
+- Final v2 verification recorded: **335 backend tests**, **20 extension tests**,
+  native picker **75 files / 315 nodes / 310 edges**, local mode **348 files /
+  1,863 nodes / 3,419 edges**, and VS Code **2.0.1** exercised in VS Code
+  1.143.0. The four remaining manual checks stay separate and unchecked.
+- Open VSX **2.0.1** is searchable with **288 downloads**; the namespace
+  remains `verified:false`.
+
 ## [2.0.1] — 2026-10-22
 
 The extension release that makes the Activity Bar view installable and quiet.

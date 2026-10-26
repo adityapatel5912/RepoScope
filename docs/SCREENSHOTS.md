@@ -73,8 +73,9 @@ generation; the current assistant still streams cited answers with a
 - The side panels are produced by scrolling the left rail to the relevant
   heading. They show the controls, not generated results, unless a real result
   is present.
-- The native folder picker is **not** automated; the image shows the panel, not
-  the OS dialog.
+- The native folder picker is outside Playwright. The image shows the panel,
+  not the OS dialog; the final verification pass drove the dialog with Win32
+  automation without capturing it.
 - Do not capture `.env`, tokens, personal paths, or unrelated browser tabs.
 - The MCP screenshots are real client captures. `opencode-mcp.png` is the
   servers panel; `opencode-mcp-status.png` is the status list.

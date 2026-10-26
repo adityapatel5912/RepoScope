@@ -407,6 +407,14 @@ export default function App() {
     };
   }, [isLocal]);
 
+  /**
+   * A browser preview is a map, not a second backend. The chat panel
+   * talks to the server's loaded repository, so leaving it open while the
+   * header says "Verdict" would answer questions about RepoScope instead.
+   * The same reason hides Track/Incident and Student Mode in the TopBar.
+   */
+  const previewActive = browserPreview !== null;
+
   return (
     <div className="relative flex flex-col h-screen overflow-hidden bg-bg-base">
       <Toasts />
@@ -427,6 +435,7 @@ export default function App() {
         loader={loader}
         onClearRepo={clearRepo}
         isLocal={isLocal}
+        previewName={browserPreview?.name ?? null}
         onOpenEditorSettings={() => setShowEditorSettings(true)}
         onToggleSidebar={() => {
           setSidebarCollapsed((v) => {
@@ -480,6 +489,7 @@ export default function App() {
               onShowShortcuts={() => setShowShortcuts(true)}
               onToggleDebug={() => setDebugMode((v) => !v)}
               onBrowserGraph={handleBrowserGraph}
+              previewName={browserPreview?.name ?? null}
               onClose={() => { setSidebarCollapsed(true); persistLayout({ sidebarCollapsed: true }); }}
             />
           </aside>
@@ -487,8 +497,13 @@ export default function App() {
 
         {/* Main area — graph on top, chat below (24px rhythm via paddings) */}
         <main ref={mainRef} className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          {/* Graph canvas panel */}
-          <section className={`w-full min-h-0 ${chatCollapsed ? "flex-1" : "flex-[0_0_auto]"}`} style={chatCollapsed ? undefined : { height: `${100 - chatHeightPct}%` }}>
+          {/* Graph canvas panel. A browser preview has no server-backed
+              chat, so the graph gets the full height instead of leaving a
+              conversation pane that would answer about another repository. */}
+          <section
+            className={`w-full min-h-0 ${chatCollapsed || previewActive ? "flex-1" : "flex-[0_0_auto]"}`}
+            style={chatCollapsed || previewActive ? undefined : { height: `${100 - chatHeightPct}%` }}
+          >
             <GraphCanvas
               rawNodes={rawNodes}
               rawEdges={rawEdges}
@@ -508,7 +523,7 @@ export default function App() {
           </section>
 
           {/* Divider — drag to resize */}
-          {!chatCollapsed && (
+          {!chatCollapsed && !previewActive && (
             <div
               role="separator"
               aria-orientation="horizontal"
@@ -519,7 +534,7 @@ export default function App() {
           )}
 
           {/* Chat panel */}
-          {!chatCollapsed && (
+          {!chatCollapsed && !previewActive && (
             <section
               className="w-full min-h-0 flex-[0_0_auto] flex flex-col bg-bg-panel border-t-[1.5px] border-border-subtle"
               style={{ height: `${chatHeightPct}%` }}

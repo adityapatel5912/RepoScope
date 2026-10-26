@@ -50,9 +50,13 @@ export default function LocalFolderPanel({ onGraph }: Props) {
     try {
       const handle = await pickDirectory();
       if (!handle) {
-        setBusy(false);
+        // Cancelling keeps the previous preview on screen. Clearing it
+        // here made "Cancel" look like the folder had been forgotten.
         return;
       }
+      // A real selection replaces the previous result; a failure below
+      // must not leave the old counts looking like the new answer.
+      setResult(null);
       const graph = await buildGraphInBrowser(handle);
       setResult(graph);
       onGraph?.(graph);
@@ -62,7 +66,7 @@ export default function LocalFolderPanel({ onGraph }: Props) {
     } catch (exc) {
       const message = exc instanceof Error ? exc.message : String(exc);
       setError(message);
-      toast.error("The in-browser parse failed.");
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -128,7 +132,8 @@ export default function LocalFolderPanel({ onGraph }: Props) {
             <span>
               This graph is lighter than the server's: imports and symbols,
               but no cross-file symbol resolution, so the call graph is
-              thinner. For the full picture use{" "}
+              thinner. Chat, Track, and Student Mode are off while a preview is
+              open. For the full picture use{" "}
               <code className="font-mono">reposcope run .</code>
             </span>
           </p>

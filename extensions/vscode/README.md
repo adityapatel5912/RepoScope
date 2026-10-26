@@ -28,8 +28,9 @@ cursor --install-extension reposcope-2.0.1.vsix
 
 ### From Open VSX (recommended)
 
-Cursor and VSCodium read Open VSX. The VS Code Marketplace requires a
-publisher account, so Open VSX is published first.
+Cursor and VSCodium read Open VSX. The listing is at
+<https://open-vsx.org/extension/adityapatel5912/reposcope>. The VS Code
+Marketplace requires a publisher account, so Open VSX is published first.
 
 ### Build it yourself
 
@@ -72,9 +73,10 @@ context.
 
 Click a node to open it in the RepoScope canvas.
 
-### 4. "Visualize in RepoScope Canvas" in the explorer menu
+### 4. "RepoScope: Focus this node in the canvas" in the Explorer menu
 
-Right-click any file in the Explorer.
+Right-click any file in the Explorer and choose
+**RepoScope: Focus this node in the canvas**.
 
 ### 5. `reposcope://open` — the web app can open a file here
 
@@ -93,6 +95,10 @@ agent → map.**
 | `reposcope.canvasUrl` | `http://127.0.0.1:4100` | The web app. |
 | `reposcope.statusBar` | `true` | Show the blast-radius indicator. |
 | `reposcope.codeLens` | `true` | Show the caller count. |
+
+The default backend is **:8000**, matching the full-stack API. `reposcope run .`
+serves local mode on **:4100**, so point the extension at that port when you use
+local mode.
 
 Start a backend for your repository:
 
@@ -139,10 +145,18 @@ dependents.
   builder, status bar, and CodeLens formatting. They do not load the extension
   host.
 - The VSIX is built at `reposcope-2.0.1.vsix`.
-- The extension is published to Open VSX. The listing stays hidden from search
-  until the publisher namespace `adityapatel5912` email is verified.
-- The extension has **not** been driven end-to-end in a real VS Code or Cursor
-  window by the automated harness. That check remains manual in
+- The extension is published to Open VSX. Version **2.0.1** has **288
+  downloads**, the listing is returned by search, and the direct page returns
+  HTTP 200. The namespace `adityapatel5912` is still `verified:false`, so the
+  verified badge and stable ranking are not guaranteed.
+- The final pass exercised the installed extension in **VS Code 1.143.0**:
+  the Activity Bar map showed **348 files, 1,863 nodes, 3,419 edges**; the
+  status bar showed `RepoScope: 12 dependents | Risk: Critical` on
+  `backend/graph_store.py`; CodeLens showed `View Callers (6)` for
+  `graph_summary`; the Explorer menu and `reposcope://open` worked; a wrong
+  port showed **RepoScope: offline** and recovered after reload.
+- That pass was agent-driven with Windows UI automation. Cursor/VSCodium have
+  not been exercised; they are the remaining extension checks in
   [`docs/VERIFICATION_CHECKLIST.md`](../../docs/VERIFICATION_CHECKLIST.md).
 - The VS Code Marketplace requires an Azure DevOps publisher PAT. It is not
   published there yet.
@@ -159,4 +173,13 @@ dependents.
 
 ## License
 
-MIT
+RepoScope is **source-available**, not OSI Open Source. You may use and modify
+it in your own projects, including internal business projects. You may not
+republish, distribute, or commercially exploit it without prior written
+permission. See [LICENSE](LICENSE) for the complete terms.
+
+The currently published Open VSX **2.0.1** and the existing
+`reposcope-2.0.1.vsix` were built before this license change and remain under
+the MIT terms they shipped with. That grant cannot be revoked. New builds from
+this source tree use the source-available license; bump the extension version
+before publishing them.

@@ -312,9 +312,10 @@ Tree-sitter WebAssembly parser in the browser. This preview:
 - never sends the folder to the backend;
 - is labelled as a browser preview in the UI.
 
-The native folder picker requires a human and a secure context
-(`localhost` or HTTPS). See
-[`VERIFICATION_CHECKLIST.md`](VERIFICATION_CHECKLIST.md).
+The native folder picker is outside Playwright and requires a secure context
+(`localhost` or HTTPS). The final pass drove the OS dialog with Win32
+automation; see
+[`QA_REPORT.md`](QA_REPORT.md#agent-run-evidence--2026-10-25).
 
 ---
 
@@ -326,7 +327,7 @@ The extension is an HTTP client, not a parser.
   open file.
 - **Status bar:** blast radius and risk for the current file.
 - **CodeLens:** caller count above exported symbols; it asks before enabling.
-- **Explorer context menu:** **Visualize in RepoScope Canvas**.
+- **Explorer context menu:** **RepoScope: Focus this node in the canvas**.
 - **URI handler:** `reposcope://open?path=...&line=...`.
 - **Settings:** `reposcope.backendUrl` (default `http://127.0.0.1:8000`),
   `reposcope.canvasUrl` (default `http://127.0.0.1:4100`),

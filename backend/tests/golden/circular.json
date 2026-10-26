@@ -69,6 +69,41 @@
       "file:isolated.py",
       "func:isolated.py:isolated",
       "contains"
+    ],
+    [
+      "func:a.ts:aValue",
+      "func:b.ts:bValue",
+      "calls"
+    ],
+    [
+      "func:alpha.py:alpha_value",
+      "func:beta.py:beta_value",
+      "calls"
+    ],
+    [
+      "func:b.ts:bValue",
+      "func:c.ts:cValue",
+      "calls"
+    ],
+    [
+      "func:beta.py:beta_value",
+      "func:gamma.py:gamma_value",
+      "calls"
+    ],
+    [
+      "func:c.ts:cValue",
+      "func:a.ts:aValue",
+      "calls"
+    ],
+    [
+      "func:gamma.py:gamma_value",
+      "func:alpha.py:alpha_value",
+      "calls"
+    ],
+    [
+      "func:isolated.py:isolated",
+      "func:alpha.py:alpha_value",
+      "calls"
     ]
   ],
   "nodes": [
@@ -133,5 +168,5 @@
       "function"
     ]
   ],
-  "summary": "15 nodes, 14 edges"
+  "summary": "15 nodes, 21 edges"
 }

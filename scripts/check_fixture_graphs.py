@@ -1,4 +1,4 @@
-"""Sprint 0 verification helper — graph shape across every fixture."""
+"""Sprint 1 verification helper — graph shape across every fixture."""
 import sys
 from collections import Counter
 from pathlib import Path
@@ -11,17 +11,16 @@ FIXTURES = Path(__file__).resolve().parent.parent / "backend" / "tests" / "fixtu
 
 for name in ("multilang", "circular", "nested", "real_small"):
     graph = build_graph_from_repo(str(FIXTURES / name))
+    node_types = Counter(n["type"] for n in graph["nodes"])
+    edge_types = Counter(e["type"] for e in graph["edges"])
     ids = [n["id"] for n in graph["nodes"]]
     dupes = {k: v for k, v in Counter(ids).items() if v > 1}
-    js_symbols = [
-        n for n in graph["nodes"]
-        if n["type"] in ("function", "class")
-        and str(n.get("file", "")).endswith((".ts", ".tsx", ".js"))
-    ]
-    with_line = sum(1 for n in js_symbols if "line" in n)
-    print(
-        f"{name:12} nodes={len(ids):3}  edges={len(graph['edges']):3}  "
-        f"dupes={len(dupes)}  js_symbols_with_line={with_line}/{len(js_symbols)}"
-    )
+    known = set(ids)
+    dangling = [e for e in graph["edges"] if e["source"] not in known or e["target"] not in known]
+
+    print(f"{name:12} nodes={len(ids):3} {dict(node_types)}")
+    print(f"{'':12} edges={len(graph['edges']):3} {dict(edge_types)}  dupes={len(dupes)} dangling={len(dangling)}")
     for k, v in list(dupes.items())[:5]:
         print(f"    DUPLICATE {k} x{v}")
+    for e in dangling[:5]:
+        print(f"    DANGLING {e}")

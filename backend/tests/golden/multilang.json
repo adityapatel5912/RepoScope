@@ -51,6 +51,21 @@
       "contains"
     ],
     [
+      "file:greeter.go",
+      "class:greeter.go:Greeter",
+      "contains"
+    ],
+    [
+      "file:greeter.go",
+      "func:greeter.go:Greet@16",
+      "contains"
+    ],
+    [
+      "file:greeter.go",
+      "func:greeter.go:Greet@7",
+      "contains"
+    ],
+    [
       "file:helpers.py",
       "func:helpers.py:shout",
       "contains"
@@ -67,6 +82,11 @@
     ],
     [
       "file:user.ts",
+      "class:user.ts:User",
+      "contains"
+    ],
+    [
+      "file:user.ts",
       "file:format.ts",
       "imports"
     ],
@@ -79,9 +99,42 @@
       "file:user.ts",
       "func:user.ts:loadUser",
       "contains"
+    ],
+    [
+      "func:Card.tsx:renderLabel",
+      "func:format.ts:formatName",
+      "calls"
+    ],
+    [
+      "func:app.py:shout_loud",
+      "func:app.py:greet",
+      "calls"
+    ],
+    [
+      "func:app.py:shout_loud",
+      "func:helpers.py:shout",
+      "calls"
+    ],
+    [
+      "func:slug.js:slugify",
+      "func:format.ts:formatName",
+      "calls"
+    ],
+    [
+      "func:user.ts:displayName",
+      "func:format.ts:formatName",
+      "calls"
     ]
   ],
   "nodes": [
+    [
+      "class:greeter.go:Greeter",
+      "class"
+    ],
+    [
+      "class:user.ts:User",
+      "class"
+    ],
     [
       "file:Button.tsx",
       "file"
@@ -147,6 +200,14 @@
       "function"
     ],
     [
+      "func:greeter.go:Greet@16",
+      "function"
+    ],
+    [
+      "func:greeter.go:Greet@7",
+      "function"
+    ],
+    [
       "func:helpers.py:shout",
       "function"
     ],
@@ -163,5 +224,5 @@
       "function"
     ]
   ],
-  "summary": "20 nodes, 16 edges"
+  "summary": "24 nodes, 25 edges"
 }

@@ -112,11 +112,35 @@ def test_build_digraph_drops_edges_to_unknown_nodes():
 # ── Cycle detection (M7.3) ──────────────────────────────────────────────────
 
 def test_find_cycles_detects_both_fixture_cycles(circular_graph):
+    """
+    The circular fixture yields FOUR cycles, not two.
+
+    Since Milestone 1.1 the graph carries `calls` edges, so the detector
+    finds the file-level loops AND the symbol-level loops underneath them.
+    """
     cycles = find_cycles(circular_graph)
     members = {frozenset(c) for c in cycles}
+
     assert frozenset({"file:alpha.py", "file:beta.py", "file:gamma.py"}) in members
     assert frozenset({"file:a.ts", "file:b.ts", "file:c.ts"}) in members
-    assert len(cycles) == 2
+    assert len(cycles) == 4, f"expected 4 cycles, got {cycles}"
+
+
+def test_symbol_level_cycles_are_found(circular_graph):
+    """The call graph exposes the loop one level below the files."""
+    cycles = find_cycles(circular_graph)
+    members = {frozenset(c) for c in cycles}
+
+    assert frozenset({
+        "func:alpha.py:alpha_value",
+        "func:beta.py:beta_value",
+        "func:gamma.py:gamma_value",
+    }) in members
+    assert frozenset({
+        "func:a.ts:aValue",
+        "func:b.ts:bValue",
+        "func:c.ts:cValue",
+    }) in members
 
 
 def test_isolated_module_is_not_a_cycle(circular_graph):
@@ -154,8 +178,14 @@ def test_find_cycles_detects_a_two_node_cycle():
 
 
 def test_cycle_details_reports_layers(circular_graph):
+    """
+    Every cycle reports the layers it spans.
+
+    There are four cycles now — two file-level and two symbol-level — and
+    each one is classified.
+    """
     details = cycle_details(circular_graph)
-    assert len(details) == 2
+    assert len(details) == 4, f"expected 4 cycles, got {len(details)}"
     for detail in details:
         assert detail["length"] == 3
         assert detail["layers"], "every cycle must report the layers it spans"

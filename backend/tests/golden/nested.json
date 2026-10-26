@@ -13,6 +13,11 @@
     [
       "file:main.py",
       "func:main.py:main",
+      "calls"
+    ],
+    [
+      "file:main.py",
+      "func:main.py:main",
       "contains"
     ],
     [
@@ -34,6 +39,16 @@
       "file:src/core/models.py",
       "func:src/core/models.py:__init__",
       "contains"
+    ],
+    [
+      "func:main.py:main",
+      "class:src/core/models.py:Entity",
+      "calls"
+    ],
+    [
+      "func:main.py:main",
+      "func:src/core/domain/service.py:describe",
+      "calls"
     ]
   ],
   "nodes": [
@@ -82,5 +97,5 @@
       "function"
     ]
   ],
-  "summary": "11 nodes, 7 edges"
+  "summary": "11 nodes, 10 edges"
 }

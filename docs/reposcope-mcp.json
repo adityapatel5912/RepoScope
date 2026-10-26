@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "reposcope": {
+      "command": "reposcope-mcp",
+      "args": ["--root", "/absolute/path/to/your/repository"],
+      "env": {
+        "REPOSCOPE_ROOT": "/absolute/path/to/your/repository"
+      }
+    }
+  }
+}

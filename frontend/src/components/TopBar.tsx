@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck, ExternalLink } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
@@ -18,6 +18,8 @@ interface Props {
   loader: RepoLoader;
   onClearRepo: () => void;
   onToggleSidebar?: () => void;
+  /** Open the editor settings modal (Milestone 2.1). */
+  onOpenEditorSettings?: () => void;
   /**
    * True when the loaded repository is a local directory.
    *
@@ -37,7 +39,7 @@ const MODES: { id: Mode; label: string }[] = [
 
 export default function TopBar({
   repo, mode, onModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
-  onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal,
+  onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal, onOpenEditorSettings,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chipEditing, setChipEditing]   = useState(false);
@@ -263,6 +265,15 @@ export default function TopBar({
                 <Keyboard size={13} className="text-text-muted" />
                 Keyboard shortcuts
                 <span className="ml-auto font-mono text-[10px] text-text-muted">?</span>
+              </button>
+              <button
+                onClick={() => { onOpenEditorSettings?.(); setSettingsOpen(false); }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 text-xs text-text-secondary
+                  hover:bg-bg-panel-alt rounded-md transition-colors text-left"
+              >
+                <ExternalLink size={13} className="text-text-muted" />
+                Editor settings
+                <span className="ml-auto font-mono text-[10px] text-text-muted">IDE</span>
               </button>
               <button
                 onClick={() => { onDebugToggle(); setSettingsOpen(false); }}

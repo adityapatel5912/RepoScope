@@ -50,6 +50,16 @@ export const WHITELIST: Array<{ pattern: RegExp; reason: string }> = [
     pattern: /\[vite\] (connect|connected)/i,
     reason: "Vite dev-server HMR websocket messages.",
   },
+  {
+    // The IDE deep-link journey deliberately navigates to a `vscode://`
+    // URI to prove the link is correct. The test browser has no protocol
+    // handler registered, so Chromium reports the navigation as failed.
+    // The URI itself is asserted through the `reposcope:open-editor`
+    // event instead, so the navigation is a side effect, not the
+    // evidence.
+    pattern: /\b(vscode|vscode-insiders|cursor|jetbrains|subl):\/\//i,
+    reason: "The IDE deep-link journey navigates to an editor:// URI on purpose; no handler is registered in the test browser.",
+  },
 ];
 
 /**
@@ -75,9 +85,16 @@ export function attachErrorCollector(page: Page): CollectedError[] {
 
   page.on("requestfailed", (request: Request) => {
     const failure = request.failure();
+    const text = `${request.method()} ${request.url()} — ${failure?.errorText ?? "failed"}`;
+    // The whitelist applies here too. A failed request is a console
+    // error as far as the user is concerned, and the review of "is this
+    // failure expected?" has to happen in ONE place — otherwise a
+    // journey can pass with a whitelisted console error and an
+    // un-whitelisted failed request for the same thing.
+    if (isWhitelisted(text) || isWhitelistedUrl(request.url())) return;
     errors.push({
       kind: "request",
-      text: `${request.method()} ${request.url()} — ${failure?.errorText ?? "failed"}`,
+      text,
       url: request.url(),
     });
   });

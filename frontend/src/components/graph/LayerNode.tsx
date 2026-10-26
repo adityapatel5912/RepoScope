@@ -14,6 +14,13 @@ export interface LayerNodeData {
   line?: number;
   size?: number;             // file size in bytes (files only) — shown in the drawer
   symbols?: string[];        // key function/class names (files only) — shown in the drawer
+  /**
+   * The symbols a file defines, with their line numbers.
+   *
+   * These are what let "open in editor" open the EXACT line rather than
+   * the top of the file (Milestone 2.1).
+   */
+  symbolRefs?: { name: string; line: number }[];
   child?: boolean;           // expanded function/class child — small card
   // Impact analysis state (FILE 3 emphasis language)
   impactState?: "target" | "direct" | "transitive" | "dim";

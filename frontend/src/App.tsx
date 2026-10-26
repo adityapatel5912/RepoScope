@@ -6,6 +6,7 @@ import ChatPanel from "./components/ChatPanel";
 import StatusBar from "./components/StatusBar";
 import Toasts from "./components/Toasts";
 import ShortcutsModal from "./components/ShortcutsModal";
+import EditorSettings from "./components/EditorSettings";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useRepoLoader } from "./hooks/useRepoLoader";
 import type { TourGraphState } from "./components/GraphView";
@@ -13,6 +14,8 @@ import { FolderTree, MessageSquare, ChevronDown } from "lucide-react";
 import { getGraph, getStatus } from "./api/client";
 import type { ContextPayload } from "./api/client";
 import { streamLocalEvents } from "./api/local";
+import { openInEditor } from "./utils/openInEditor";
+import { loadIdePrefs, type IdePrefs } from "./utils/ideLinks";
 
 type Mode = "understanding" | "tracking" | "incident";
 
@@ -102,6 +105,17 @@ export default function App() {
   const [isLocal, setIsLocal] = useState(false);
   /** A short label for the last live-graph update, shown in the status bar. */
   const [liveUpdate, setLiveUpdate] = useState<string | null>(null);
+  /**
+   * The absolute path of the repository on this machine.
+   *
+   * In local mode the backend knows it — it is reading the files off
+   * the disk. That is what lets "Open in editor" work with no
+   * configuration at all.
+   */
+  const [localRoot, setLocalRoot] = useState<string | null>(null);
+  /** The editor settings modal. */
+  const [showEditorSettings, setShowEditorSettings] = useState(false);
+  const [idePrefs, setIdePrefs] = useState<IdePrefs>(() => loadIdePrefs());
 
   // Tour + impact graph highlighting
   const [highlightNode, setHighlightNode]       = useState<string | null>(null);
@@ -189,6 +203,11 @@ export default function App() {
         // what tells the UI to show the privacy badge and to subscribe to
         // the live-graph stream.
         setIsLocal(Boolean(status?.is_local));
+        // In local mode the backend knows the absolute path of the
+        // repository, which is what makes "Open in editor" work without
+        // the user configuring a workspace root.
+        const root = (status?.local_path as string | undefined) ?? "";
+        setLocalRoot(status?.is_local ? root || null : null);
         if (graph?.nodes?.length) {
           setRawNodes(graph.nodes);
           setRawEdges(graph.edges ?? []);
@@ -266,6 +285,22 @@ export default function App() {
     setRawEdges(ctx.edges ?? []);
     setContextInfo(ctx);
   }, []);
+
+  // ── Open in the editor (Milestone 2.1) ───────────────────────────────────
+  //
+  // "Always ask" is honoured here rather than inside the helper, so the
+  // confirmation is a normal browser dialog the user already knows.
+  const handleOpenInEditor = useCallback(
+    async (path: string, line: number) => {
+      if (idePrefs.alwaysAsk) {
+        const target = line ? `${path}:${line}` : path;
+        const ok = window.confirm(`Open ${target} in your editor?`);
+        if (!ok) return;
+      }
+      await openInEditor({ path, line }, localRoot);
+    },
+    [idePrefs.alwaysAsk, localRoot],
+  );
 
   // ── Live graph (local mode) ───────────────────────────────────────────────
   //
@@ -347,6 +382,7 @@ export default function App() {
         loader={loader}
         onClearRepo={clearRepo}
         isLocal={isLocal}
+        onOpenEditorSettings={() => setShowEditorSettings(true)}
         onToggleSidebar={() => {
           setSidebarCollapsed((v) => {
             const next = !v;
@@ -414,6 +450,8 @@ export default function App() {
               onAnalyzeImpact={(label) => setImpactRequest({ target: label, ts: Date.now() })}
               onStartTour={(label) => setTourRequest({ topic: label, ts: Date.now() })}
               repoTitle={repo ?? "Repository"}
+              onOpenInEditor={handleOpenInEditor}
+              localRoot={localRoot}
               highlightNode={highlightNode}
               impactTarget={impactTarget}
               impactDirect={impactDirect}
@@ -504,6 +542,14 @@ export default function App() {
 
       {/* Keyboard shortcuts cheat sheet */}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {/* Editor settings — which editor, which workspace root, always ask */}
+      {showEditorSettings && (
+        <EditorSettings
+          onClose={() => setShowEditorSettings(false)}
+          onChange={setIdePrefs}
+        />
+      )}
     </div>
   );
 }

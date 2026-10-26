@@ -17,7 +17,12 @@ import logging
 from pathlib import Path
 
 from arch_rules import check_boundary, classify, load_ruleset
-from graph_analysis import cycle_details, entry_points, top_hubs
+from graph_analysis import (
+    cycle_details,
+    entry_points,
+    top_hubs,
+    unreachable_nodes,
+)
 from graph_utils import build_adjacency, bfs_traverse
 from impact_analyzer import compute_blast_radius
 
@@ -213,3 +218,88 @@ def hotspots(graph: dict, root: str | None = None, limit: int = 10) -> dict:
     files = payload.get("files") or []
     payload["files"] = files[: max(1, min(limit, 100))]
     return payload
+
+
+def find_dependency_cycles(graph: dict) -> dict:
+    """
+    The dependency cycles — at file level and at symbol level.
+
+    A cycle that crosses layers (storage -> client) is an architecture
+    violation. A cycle inside one layer is a code smell. The distinction
+    is what makes the report actionable rather than noise.
+    """
+    if not graph.get("nodes"):
+        return {"available": False, "reason": "the index is empty", "cycles": []}
+
+    details = cycle_details(graph)
+    file_cycles = [c for c in details if c["members"] and c["members"][0].startswith("file:")]
+    symbol_cycles = [c for c in details if not (c["members"] and c["members"][0].startswith("file:"))]
+
+    return {
+        "available": True,
+        "cycles": details,
+        "file_cycles": len(file_cycles),
+        "symbol_cycles": len(symbol_cycles),
+        "total": len(details),
+        "cross_layer_count": sum(1 for c in details if c["crosses_layers"]),
+    }
+
+
+def unreachable_symbols(graph: dict) -> dict:
+    """
+    The symbols no entry point can reach.
+
+    A STATIC ESTIMATE, not proof of dead code: dynamic dispatch,
+    reflection and plugin registration are invisible to static
+    analysis. The answer says so, so an agent does not present it as a
+    certainty.
+    """
+    if not graph.get("nodes"):
+        return {"available": False, "reason": "the index is empty", "unreachable": []}
+
+    nodes_by_id = {n["id"]: n for n in graph.get("nodes", []) or []}
+    orphans = unreachable_nodes(graph)
+    roots = entry_points(graph)
+
+    return {
+        "available": True,
+        "estimate": True,
+        "caveat": (
+            "A static estimate - dynamic dispatch, reflection and plugin "
+            "registration are invisible to it. Not proof of dead code."
+        ),
+        "entry_points": roots[:50],
+        "entry_point_count": len(roots),
+        "unreachable": [
+            {
+                "id": node_id,
+                "label": nodes_by_id.get(node_id, {}).get("label", node_id),
+                "file": nodes_by_id.get(node_id, {}).get("file", ""),
+                "type": nodes_by_id.get(node_id, {}).get("type", ""),
+            }
+            for node_id in orphans[:200]
+        ],
+        "total": len(orphans),
+    }
+
+
+def graph_summary_resource(graph: dict, root: str | None = None) -> dict:
+    """The payload behind `reposcope://graph/summary`."""
+    nodes = graph.get("nodes", []) or []
+    edges = graph.get("edges", []) or []
+    symbol_count = sum(1 for n in nodes if n.get("type") in ("function", "class"))
+    edge_types: dict[str, int] = {}
+    for edge in edges:
+        edge_type = str(edge.get("type", "unknown"))
+        edge_types[edge_type] = edge_types.get(edge_type, 0) + 1
+
+    return {
+        "root": root,
+        "summary": graph.get("summary", ""),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "file_count": sum(1 for n in nodes if n.get("type") == "file"),
+        "symbol_count": symbol_count,
+        "edge_types": edge_types,
+        "top_hubs": top_hubs(graph, limit=10),
+    }

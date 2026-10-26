@@ -25,6 +25,7 @@ quote — not a model's opinion.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -173,6 +174,79 @@ def build_server(root: str | None = None):
         from repo_map import build_repo_map_with_metrics
 
         return build_repo_map_with_metrics(graph, root_text, token_budget)
+
+    @mcp.tool()
+    def find_dependency_cycles() -> dict:
+        """
+        The dependency cycles, at file level and at symbol level.
+
+        A cycle that crosses architectural layers is a violation; a cycle
+        inside one layer is a code smell. The report says which is which.
+        """
+        return T.find_dependency_cycles(graph)
+
+    @mcp.tool()
+    def get_hotspots(limit: int = 10) -> dict:
+        """
+        The files that change often AND are widely depended upon.
+
+        That combination is where regressions actually happen: churn
+        alone is noise, centrality alone is a fact, the product of the
+        two is a risk.
+        """
+        return T.hotspots(graph, root_text, limit)
+
+    @mcp.tool()
+    def find_unreachable_symbols() -> dict:
+        """
+        The symbols that no entry point can reach.
+
+        This is a STATIC ESTIMATE. Dynamic dispatch, reflection and
+        plugin registration are invisible to it, so it is not proof of
+        dead code — and the answer says so.
+        """
+        return T.unreachable_symbols(graph)
+
+    # ── Resources ─────────────────────────────────────────────────────────
+    #
+    # Resources are the READ side: an agent can pull a summary without
+    # spending a tool call. The URIs are stable, so a client can bookmark
+    # them.
+
+    @mcp.resource("reposcope://graph/summary")
+    def graph_summary() -> str:
+        """
+        The graph's shape: node and edge counts, the layer split, and the
+        most central files by PageRank.
+        """
+        return json.dumps(
+            T.graph_summary_resource(graph, root_text), indent=2, sort_keys=True,
+        )
+
+    @mcp.resource("reposcope://hotspots")
+    def hotspots_resource() -> str:
+        """The churn x centrality hotspots — the files most likely to regress."""
+        return json.dumps(T.hotspots(graph, root_text, 10), indent=2, sort_keys=True)
+
+    @mcp.resource("reposcope://repo-map")
+    def repo_map_resource() -> str:
+        """The budgeted repo map, with the context-saving figure."""
+        from repo_map import build_repo_map_with_metrics
+
+        return json.dumps(
+            build_repo_map_with_metrics(graph, root_text, 8000),
+            indent=2, sort_keys=True,
+        )
+
+    @mcp.resource("reposcope://dead-code")
+    def dead_code_resource() -> str:
+        """The unreachable symbols — labelled as an estimate, never as a certainty."""
+        return json.dumps(T.unreachable_symbols(graph), indent=2, sort_keys=True)
+
+    @mcp.resource("reposcope://cycles")
+    def cycles_resource() -> str:
+        """The dependency cycles, with the layers they span."""
+        return json.dumps(T.find_dependency_cycles(graph), indent=2, sort_keys=True)
 
     return mcp
 

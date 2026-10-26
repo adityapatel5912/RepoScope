@@ -183,6 +183,9 @@ def start_backend() -> subprocess.Popen | None:
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        # stop() kills the process group. Without a new session, that group
+        # is the CI runner's, so cleanup SIGTERMs the job itself.
+        start_new_session=os.name != "nt",
     )
 
 
@@ -200,6 +203,9 @@ def start_frontend() -> subprocess.Popen | None:
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        # See start_backend: the group kill in stop() must only reach the
+        # servers this harness started.
+        start_new_session=os.name != "nt",
     )
 
 

@@ -60,14 +60,54 @@ class CallSite:
 
 
 @dataclass
+class ReceiverType:
+    """
+    A variable whose type is declared or can be inferred locally.
+
+    Milestone 9.2, tier 4. A call like `repo.save()` is only resolvable
+    when the parser can say what `repo` is. `scope` is the enclosing
+    function/method (empty for module level), and `line` lets the
+    resolver pick the declaration that is actually in effect at the call
+    site rather than a later reassignment.
+    """
+
+    name: str
+    type: str
+    line: int = 0
+    scope: str = ""
+    scope_line: int = 0
+
+
+@dataclass
 class ParseResult:
     """Everything a parser extracted from one file."""
 
     symbols: list[Symbol] = field(default_factory=list)
     imports: list[Import] = field(default_factory=list)
     calls: list[CallSite] = field(default_factory=list)
+    receivers: list[ReceiverType] = field(default_factory=list)
     #: Non-fatal problems (an unsupported construct, a truncated file).
     warnings: list[str] = field(default_factory=list)
+
+
+def type_name(raw: str) -> str:
+    """
+    Reduce a written type to the name a class is declared under.
+
+    `module.Repo`, `Repo[T]`, `Repo | None`, `Optional[Repo]` and
+    `Repo[]` all name `Repo`. Returning the last identifier is
+    deliberately conservative: if the result does not match a class in
+    the repository, the call is left unlinked.
+    """
+    text = (raw or "").strip().lstrip(":").strip()
+    text = text.split("=", 1)[0].strip()
+    text = text.strip("\"'`").strip()
+    text = text.split("[", 1)[0].strip()
+    text = text.replace("?", "").replace("*", "").replace("&", "").strip()
+    for separator in ("|", ","):
+        if separator in text:
+            text = text.split(separator, 1)[0].strip()
+    return text.rsplit(".", 1)[-1].strip()
 
 
 @runtime_checkable

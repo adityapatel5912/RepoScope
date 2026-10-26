@@ -47,7 +47,7 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 
 #: Every fixture that has a golden snapshot.
-FIXTURE_NAMES = ("multilang", "circular", "nested", "real_small")
+FIXTURE_NAMES = ("multilang", "circular", "nested", "real_small", "qualified")
 
 #: Contract constants from Correction C10.
 VALID_EDGE_TYPES = {"contains", "imports", "calls"}

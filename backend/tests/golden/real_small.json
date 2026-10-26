@@ -266,6 +266,11 @@
       "calls"
     ],
     [
+      "func:src/tomli/_parser.py:append_nest_to_list",
+      "func:src/tomli/_parser.py:get_or_create_nest",
+      "calls"
+    ],
+    [
       "func:src/tomli/_parser.py:create_dict_rule",
       "class:src/tomli/_parser.py:TOMLDecodeError",
       "calls"
@@ -328,6 +333,11 @@
     [
       "func:src/tomli/_parser.py:create_list_rule",
       "func:src/tomli/_parser.py:unset_all",
+      "calls"
+    ],
+    [
+      "func:src/tomli/_parser.py:finalize_pending",
+      "func:src/tomli/_parser.py:set",
       "calls"
     ],
     [
@@ -477,7 +487,22 @@
     ],
     [
       "func:src/tomli/_parser.py:parse_inline_table",
+      "func:src/tomli/_parser.py:get_or_create_nest",
+      "calls"
+    ],
+    [
+      "func:src/tomli/_parser.py:parse_inline_table",
+      "func:src/tomli/_parser.py:is_",
+      "calls"
+    ],
+    [
+      "func:src/tomli/_parser.py:parse_inline_table",
       "func:src/tomli/_parser.py:parse_key_value_pair",
+      "calls"
+    ],
+    [
+      "func:src/tomli/_parser.py:parse_inline_table",
+      "func:src/tomli/_parser.py:set",
       "calls"
     ],
     [
@@ -844,5 +869,5 @@
       "function"
     ]
   ],
-  "summary": "54 nodes, 125 edges"
+  "summary": "54 nodes, 130 edges"
 }

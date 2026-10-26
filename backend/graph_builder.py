@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 from parse_cache import SKIP_DIRS, FileFacts, ParseCache, hash_bytes
+from parsers.base import type_name as _base_type_name
 from parsers.registry import get_parser
 
 log = logging.getLogger("reposcope.graph_builder")
@@ -115,6 +116,13 @@ def parse_bytes(data: bytes, rel: str, suffix: str) -> FileFacts:
             symbols=[_symbol_to_dict(s) for s in result.symbols],
             imports=[_import_to_dict(i) for i in result.imports],
             calls=[_call_to_dict(c) for c in result.calls],
+            receivers=[
+                {
+                    "name": r.name, "type": r.type, "line": r.line,
+                    "scope": r.scope, "scope_line": r.scope_line,
+                }
+                for r in result.receivers
+            ],
             warnings=list(result.warnings),
         )
 
@@ -440,6 +448,121 @@ def _resolve_symbol(
     return None
 
 
+def _resolve_qualified(
+    call: Mapping,
+    src_rel: str,
+    receiver_decls: dict[str, list[dict]],
+    symbol_parents: dict[tuple[str, str, int], str | None],
+    classes_by_file: dict[str, set[str]],
+    methods_by_class: dict[tuple[str, str], dict[str, str]],
+    class_rels: dict[str, set[str]],
+    file_imports: dict[str, dict[str, set[str]]],
+    attributes_by_class: dict[tuple[str, str], dict[str, set[str]]],
+) -> str | None:
+    """
+    Resolve `repo.save()` when the receiver's type is known locally.
+
+    Tier-4 resolution, M9.2. The source of truth is a parser-emitted
+    `receivers` fact: a parameter annotation, a typed variable, or a
+    `new Type()` assignment. `self`/`this` resolve through the enclosing
+    class. A chained receiver (`self.repo.save()`) is followed one
+    attribute at a time when the class declares that attribute's type.
+    If any link is unknown or ambiguous, the call is left unlinked — the
+    same conservative contract as unqualified resolution.
+    """
+    callee = call.get("callee") or ""
+    receiver = call.get("receiver") or ""
+    if not callee or not receiver:
+        return None
+
+    scope = call.get("enclosing") or ""
+    scope_line = int(call.get("enclosing_line") or 0)
+    parts = receiver.split(".")
+    base = parts[0]
+    base_type = ""
+
+    if base in ("self", "this") and scope:
+        base_type = symbol_parents.get((src_rel, scope, scope_line)) or ""
+
+    if not base_type:
+        best_line = -1
+        call_line = int(call.get("line") or 0)
+        for decl in receiver_decls.get(src_rel, []):
+            if decl.get("name") != base:
+                continue
+            if (decl.get("scope") or "") != scope:
+                continue
+            if (
+                scope_line and decl.get("scope_line")
+                and int(decl.get("scope_line") or 0) != scope_line
+            ):
+                continue
+            decl_line = int(decl.get("line") or 0)
+            # Pick the declaration in effect AT the call, not a later
+            # reassignment of the same name.
+            if call_line and decl_line > call_line:
+                continue
+            if decl_line >= best_line:
+                best_line = decl_line
+                base_type = decl.get("type") or ""
+
+    if not base_type:
+        return None
+    current_type = _base_type_name(base_type)
+    current_rels = _class_rels_for_type(
+        current_type, src_rel, classes_by_file, class_rels, file_imports
+    )
+
+    # Follow `a.b.c` through declared class attributes.
+    for member in parts[1:]:
+        attribute_types: set[str] = set()
+        for rel in current_rels:
+            attribute_types.update(
+                attributes_by_class.get((rel, current_type), {}).get(member, set())
+            )
+        if len(attribute_types) != 1:
+            return None
+        current_type = _base_type_name(next(iter(attribute_types)))
+        current_rels = _class_rels_for_type(
+            current_type, src_rel, classes_by_file, class_rels, file_imports
+        )
+        if not current_rels:
+            return None
+
+    targets: list[str] = []
+    for rel in current_rels:
+        node_id = methods_by_class.get((rel, current_type), {}).get(callee)
+        if node_id:
+            targets.append(node_id)
+    if len(targets) == 1:
+        return targets[0]
+    return None
+
+
+def _class_rels_for_type(
+    type_name_value: str,
+    src_rel: str,
+    classes_by_file: dict[str, set[str]],
+    class_rels: dict[str, set[str]],
+    file_imports: dict[str, dict[str, set[str]]],
+) -> list[str]:
+    """The files that could declare `type_name_value`, nearest first."""
+    rels: list[str] = []
+    if type_name_value in classes_by_file.get(src_rel, set()):
+        rels.append(src_rel)
+    for imported_rel in file_imports.get(src_rel, {}):
+        if type_name_value in classes_by_file.get(imported_rel, set()):
+            rels.append(imported_rel)
+    if not rels:
+        # The class is not imported with a binding this resolver can see
+        # (a bare module import, for example). Only a globally unique
+        # class name is safe.
+        globally = class_rels.get(type_name_value, set())
+        if len(globally) == 1:
+            rels = list(globally)
+    return rels
+
+
 def _disambiguate(kind: str, rel: str, name: str, lineno: int | None, shared: bool) -> str:
     """
     Build a symbol node id, disambiguating names that collide within a file.
@@ -505,7 +628,14 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
     symbols_in_file: dict[str, dict[str, list[tuple[int, str]]]] = {}
     file_imports: dict[str, dict[str, set[str]]] = {}
     global_symbols: dict[str, list[tuple[str, str]]] = {}
-    pending_calls: list[tuple[str, str, str, int]] = []
+    pending_calls: list[tuple[str, str, dict]] = []
+    # Tier-4 resolution tables (M9.2).
+    receiver_decls: dict[str, list[dict]] = {}
+    symbol_parents: dict[tuple[str, str, int], str | None] = {}
+    classes_by_file: dict[str, set[str]] = {}
+    methods_by_class: dict[tuple[str, str], dict[str, str]] = {}
+    class_rels: dict[str, set[str]] = {}
+    attributes_by_class: dict[tuple[str, str], dict[str, set[str]]] = {}
 
     for rel in sorted(facts):
         file_facts = facts[rel]
@@ -540,7 +670,22 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
             edges.append({"source": fid, "target": node_id, "type": "contains"})
             per_file.setdefault(name, []).append((int(symbol.get("line") or 0), node_id))
             global_symbols.setdefault(name, []).append((rel, node_id))
+            symbol_parents[(rel, name, int(symbol.get("line") or 0))] = symbol.get("parent")
+            if kind == "class":
+                classes_by_file.setdefault(rel, set()).add(name)
+                class_rels.setdefault(name, set()).add(rel)
+            elif symbol.get("parent"):
+                methods_by_class.setdefault((rel, str(symbol["parent"])), {}).setdefault(name, node_id)
         symbols_in_file[rel] = per_file
+        receiver_decls[rel] = list(file_facts.receivers)
+        for declaration in file_facts.receivers:
+            declared_name = declaration.get("name") or ""
+            declared_scope = declaration.get("scope") or ""
+            if declared_scope and "." in declared_name:
+                attribute = declared_name.split(".", 1)[1]
+                attributes_by_class.setdefault(
+                    (rel, declared_scope), {}
+                ).setdefault(attribute, set()).add(declaration.get("type") or "")
 
         imported: dict[str, set[str]] = {}
         for imp in file_facts.imports:
@@ -552,14 +697,9 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
         file_imports[rel] = imported
 
         for call in file_facts.calls:
-            if call.get("receiver"):
-                # A method call on an object is a dynamic dispatch we
-                # cannot resolve statically. Only an unqualified call is
-                # worth resolving.
-                continue
             if not call.get("enclosing"):
                 # A call at module level is attributed to the file itself.
-                pending_calls.append((rel, fid, call.get("callee", ""), 0))
+                pending_calls.append((rel, fid, call))
                 continue
             # Match the enclosing symbol by name AND line. A file may
             # define several symbols with the same name — four `__init__`
@@ -575,12 +715,20 @@ def assemble_graph(facts: Mapping[str, FileFacts]) -> dict:
             )
             if match is None:
                 match = enclosing[0][1]
-            pending_calls.append((rel, match, call.get("callee", ""), call.get("enclosing_line", 0)))
+            pending_calls.append((rel, match, call))
 
-    for src_rel, src_id, callee, _line in pending_calls:
-        target_id = _resolve_symbol(
-            callee, src_rel, src_id, symbols_in_file, file_imports, global_symbols,
-        )
+    for src_rel, src_id, call in pending_calls:
+        if call.get("receiver"):
+            target_id = _resolve_qualified(
+                call, src_rel, receiver_decls, symbol_parents,
+                classes_by_file, methods_by_class, class_rels, file_imports,
+                attributes_by_class,
+            )
+        else:
+            target_id = _resolve_symbol(
+                call.get("callee", ""), src_rel, src_id,
+                symbols_in_file, file_imports, global_symbols,
+            )
         if target_id and target_id != src_id:
             edges.append({"source": src_id, "target": target_id, "type": "calls"})
 
@@ -706,6 +854,13 @@ class GraphIndexer:
         self._symbols_in_file: dict[str, dict[str, list[tuple[int, str]]]] = {}
         self._file_imports: dict[str, dict[str, set[str]]] = {}
         self._global_symbols: dict[str, list[tuple[str, str]]] = {}
+        # Tier-4 resolution tables (M9.2).
+        self._receiver_decls: dict[str, list[dict]] = {}
+        self._symbol_parents: dict[tuple[str, str, int], str | None] = {}
+        self._classes_by_file: dict[str, set[str]] = {}
+        self._methods_by_class: dict[tuple[str, str], dict[str, str]] = {}
+        self._class_rels: dict[str, set[str]] = {}
+        self._attributes_by_class: dict[tuple[str, str], dict[str, set[str]]] = {}
         self._call_sites: dict[str, list[dict]] = {}
         self._import_edge_keys: dict[str, list[tuple[str, str, str]]] = {}
         self._call_edge_keys: dict[str, list[tuple[str, str, str]]] = {}
@@ -745,6 +900,12 @@ class GraphIndexer:
         self._symbols_in_file = {}
         self._file_imports = {}
         self._global_symbols = {}
+        self._receiver_decls = {}
+        self._symbol_parents = {}
+        self._classes_by_file = {}
+        self._methods_by_class = {}
+        self._class_rels = {}
+        self._attributes_by_class = {}
         self._call_sites = {}
         self._import_edge_keys = {}
         self._call_edge_keys = {}
@@ -785,8 +946,25 @@ class GraphIndexer:
             per_file.setdefault(name, []).append((int(symbol.get("line") or 0), node_id))
             self._global_symbols.setdefault(name, []).append((rel, node_id))
             self._files_by_symbol_name.setdefault(name, set()).add(rel)
+            self._symbol_parents[(rel, name, int(symbol.get("line") or 0))] = symbol.get("parent")
+            if kind == "class":
+                self._classes_by_file.setdefault(rel, set()).add(name)
+                self._class_rels.setdefault(name, set()).add(rel)
+            elif symbol.get("parent"):
+                self._methods_by_class.setdefault(
+                    (rel, str(symbol["parent"])), {}
+                ).setdefault(name, node_id)
 
         self._symbols_in_file[rel] = per_file
+        self._receiver_decls[rel] = list(file_facts.receivers)
+        for declaration in file_facts.receivers:
+            declared_name = declaration.get("name") or ""
+            declared_scope = declaration.get("scope") or ""
+            if declared_scope and "." in declared_name:
+                attribute = declared_name.split(".", 1)[1]
+                self._attributes_by_class.setdefault(
+                    (rel, declared_scope), {}
+                ).setdefault(attribute, set()).add(declaration.get("type") or "")
         self._node_ids_by_file[rel] = node_ids
         self._symbol_names_by_file[rel] = set(per_file)
         self._call_sites[rel] = list(file_facts.calls)
@@ -853,6 +1031,18 @@ class GraphIndexer:
         self._file_imports.pop(rel, None)
         self._call_sites.pop(rel, None)
         self._symbol_names_by_file.pop(rel, None)
+        self._receiver_decls.pop(rel, None)
+        self._classes_by_file.pop(rel, None)
+        for key in [k for k in self._symbol_parents if k[0] == rel]:
+            self._symbol_parents.pop(key, None)
+        for key in [k for k in self._methods_by_class if k[0] == rel]:
+            self._methods_by_class.pop(key, None)
+        for key in [k for k in self._attributes_by_class if k[0] == rel]:
+            self._attributes_by_class.pop(key, None)
+        for name, rels in list(self._class_rels.items()):
+            rels.discard(rel)
+            if not rels:
+                self._class_rels.pop(name, None)
 
         for name, rels in list(self._callers_by_name.items()):
             rels.discard(rel)
@@ -890,8 +1080,6 @@ class GraphIndexer:
         per_file = self._symbols_in_file.get(rel, {})
         fid = f"file:{rel}"
         for call in self._call_sites.get(rel, []):
-            if call.get("receiver"):
-                continue
             if not call.get("enclosing"):
                 src_id = fid
             else:
@@ -905,10 +1093,18 @@ class GraphIndexer:
                 )
                 src_id = match if match is not None else enclosing[0][1]
 
-            target_id = _resolve_symbol(
-                call.get("callee", ""), rel, src_id,
-                self._symbols_in_file, self._file_imports, self._global_symbols,
-            )
+            if call.get("receiver"):
+                target_id = _resolve_qualified(
+                    call, rel, self._receiver_decls, self._symbol_parents,
+                    self._classes_by_file, self._methods_by_class,
+                    self._class_rels, self._file_imports,
+                    self._attributes_by_class,
+                )
+            else:
+                target_id = _resolve_symbol(
+                    call.get("callee", ""), rel, src_id,
+                    self._symbols_in_file, self._file_imports, self._global_symbols,
+                )
             if target_id and target_id != src_id:
                 key = (src_id, target_id, "calls")
                 self._add_edge(*key)
@@ -1027,6 +1223,14 @@ class GraphIndexer:
         affected_callers: set[str] = set()
         for name in affected_names:
             affected_callers |= self._callers_by_name.get(name, set())
+        # A qualified call's target is named by the RECEIVER's type, not
+        # just by the method name. If a class gains/loses a method, the
+        # files that import that class must re-resolve even when the
+        # method name itself did not change.
+        touched = set(new_facts) | removed
+        for src_rel, imported_map in self._file_imports.items():
+            if touched.intersection(imported_map):
+                affected_callers.add(src_rel)
         for rel in sorted(affected_callers | set(new_facts)):
             if rel in self.facts:
                 self._resolve_calls_for(rel)

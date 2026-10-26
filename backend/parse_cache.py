@@ -53,7 +53,7 @@ CACHE_FILENAME = "parse-cache.json"
 
 #: Bumped when the on-disk shape changes. An older cache is discarded
 #: rather than misread.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 #: Default number of entries kept in memory. Each entry is the parse result
 #: of one file — symbols, imports and call sites. At roughly 2 KB per file
@@ -121,6 +121,7 @@ class FileFacts:
     symbols: list[dict] = field(default_factory=list)
     imports: list[dict] = field(default_factory=list)
     calls: list[dict] = field(default_factory=list)
+    receivers: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -132,6 +133,7 @@ class FileFacts:
             "symbols": self.symbols,
             "imports": self.imports,
             "calls": self.calls,
+            "receivers": self.receivers,
             "warnings": self.warnings,
         }
 
@@ -145,6 +147,7 @@ class FileFacts:
             symbols=list(raw.get("symbols") or []),
             imports=list(raw.get("imports") or []),
             calls=list(raw.get("calls") or []),
+            receivers=list(raw.get("receivers") or []),
             warnings=list(raw.get("warnings") or []),
         )
 

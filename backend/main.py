@@ -40,6 +40,7 @@ from runtime_config import ask_llm
 from security_scanner import (
     check_dependency_cves, detect_breaking_commit, scan_pr_patch, scan_repo_files,
 )
+from taint import scan_repository as scan_taint
 from tour_generator import build_tour
 from tts_service import synthesize
 
@@ -274,6 +275,7 @@ class TTSReq(BaseModel):
 class ScanReq(BaseModel):
     repo_url: str | None = None
     pr_number: int | None = None
+    include_taint: bool = True
 
 
 # ── SSE helpers ────────────────────────────────────────────────────────────
@@ -1057,6 +1059,17 @@ async def security_scan(
     # 1. Clone scan: committed secrets, .env leaks, vulnerable pins
     flags.extend(await asyncio.to_thread(scan_repo_files, local_path))
 
+    # 1b. Local taint analysis (M9.3). Bounded by file count and size;
+    # failures are logged and never fail the scan.
+    taint_count = 0
+    if req.include_taint:
+        try:
+            taint_flags = await asyncio.to_thread(scan_taint, local_path)
+            flags.extend(taint_flags)
+            taint_count = len(taint_flags)
+        except Exception as e:  # noqa: BLE001 - optional analysis
+            log.warning("[%s] security/scan taint failed: %s", req_id, e)
+
     # 2. PR patch scan (optional): breaking sig changes, bumps, added secrets
     pr_scanned: int | None = None
     if req.pr_number and owner and repo:
@@ -1098,6 +1111,7 @@ async def security_scan(
         "SECRET": sum(1 for f in unique if f["type"] == "SECRET"),
         "BREAKING": sum(1 for f in unique if f["type"] == "BREAKING"),
         "CVE": sum(1 for f in unique if f["type"] == "CVE"),
+        "TAINT": sum(1 for f in unique if f["type"] == "TAINT"),
         "critical": sum(1 for f in unique if f["severity"] == "critical"),
         "high": sum(1 for f in unique if f["severity"] == "high"),
     }
@@ -1106,10 +1120,46 @@ async def security_scan(
     return {
         "ok": True,
         "repo": f"{owner}/{repo}" if owner and repo else state.get("repo"),
-        "scanned": {"repo_files": True, "pr": pr_scanned, "commits": commits_scanned},
+        "scanned": {"repo_files": True, "pr": pr_scanned, "commits": commits_scanned,
+                    "taint_flows": taint_count},
         "flags": unique[:100],
         "total_flags": len(unique),
         "summary": summary,
+    }
+
+
+@app.post("/api/security/taint")
+async def security_taint(
+    x_session_id: str = Header(None),
+):
+    """
+    Taint analysis for the loaded repository (M9.3).
+
+    Kept separate from the scanner so the UI can re-run just the flows
+    without re-fetching a PR, and so a slow repository cannot make the
+    general security scan time out.
+    """
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    try:
+        flows = await asyncio.to_thread(scan_taint, local_path)
+    except Exception as e:  # noqa: BLE001
+        log.exception("security/taint failed")
+        raise HTTPException(500, f"Taint analysis failed: {e}") from e
+
+    summary = {
+        "flows": len(flows),
+        "critical": sum(1 for f in flows if f["severity"] == "critical"),
+        "high": sum(1 for f in flows if f["severity"] == "high"),
+        "medium": sum(1 for f in flows if f["severity"] == "medium"),
+    }
+    return {
+        "ok": True,
+        "repo": state.get("repo"),
+        "summary": summary,
+        "flows": flows,
     }
 
 

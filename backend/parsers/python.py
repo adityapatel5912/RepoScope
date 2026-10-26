@@ -22,10 +22,12 @@ from parsers.base import (
     CallSite,
     Import,
     ParseResult,
+    ReceiverType,
     Symbol,
     compute_complexity,
     first_child_of_type,
     text_of,
+    type_name,
 )
 
 try:
@@ -93,6 +95,7 @@ class PythonParser:
         self._extract_symbols(root, source, result)
         self._extract_imports(root, source, result)
         self._extract_calls(root, source, result)
+        self._extract_receivers(root, source, result)
         return result
 
     # ── Symbols ────────────────────────────────────────────────────────────
@@ -239,28 +242,179 @@ class PythonParser:
             )
 
         # `obj.method()` — the attribute node's children are the receiver
-        # first and the method name last.
+        # first and the method name last. A nested receiver
+        # (`self.repo.save()`) must be kept whole: treating it as
+        # `self.save()` would invent an edge to the enclosing class.
         for attribute_node in captures.get("call.attr", []):
             call_node = attribute_node.parent
             if call_node is None:
                 continue
-            parts = [
-                child.text.decode("utf-8", "replace")
-                for child in attribute_node.children
-                if child.type == "identifier"
-            ]
-            if not parts:
+            callee = None
+            for child in reversed(attribute_node.children):
+                if child.type == "identifier":
+                    callee = child.text.decode("utf-8", "replace")
+                    break
+            if callee is None:
                 continue
+            receiver = None
+            if attribute_node.children:
+                obj = attribute_node.children[0]
+                if obj.type in ("identifier", "attribute"):
+                    receiver = obj.text.decode("utf-8", "replace")
             enclosing, enclosing_line = self._enclosing_symbol(call_node)
             result.calls.append(
                 CallSite(
-                    callee=parts[-1],
+                    callee=callee,
                     line=call_node.start_point[0] + 1,
-                    receiver=parts[0] if len(parts) > 1 else None,
+                    receiver=receiver,
                     enclosing=enclosing,
                     enclosing_line=enclosing_line,
                 )
             )
+
+    # ── Receiver types (tier-4 resolution) ─────────────────────────────────
+
+    def _extract_receivers(self, root, source: bytes, result: ParseResult) -> None:
+        """
+        Record variables whose type is declared or locally inferable.
+
+        Only explicit annotations and constructor assignments are used.
+        Guessing a type from a name would create wrong call edges, which
+        is worse than the missing edge the old resolver produced.
+        """
+        stack = [root]
+        while stack:
+            node = stack.pop()
+
+            if node.type == "function_definition":
+                name_node = first_child_of_type(node, ("identifier",))
+                if name_node is not None:
+                    scope = name_node.text.decode("utf-8", "replace")
+                    scope_line = node.start_point[0] + 1
+                    params = first_child_of_type(node, ("parameters",))
+                    if params is not None:
+                        for child in params.children:
+                            self._receiver_from_parameter(
+                                child, scope, scope_line, result
+                            )
+
+            elif node.type == "assignment":
+                scope, scope_line = self._enclosing_function(node)
+                self._receiver_from_assignment(node, scope, scope_line, result)
+
+            stack.extend(node.children)
+
+    def _receiver_from_parameter(
+        self, node, scope: str, scope_line: int, result: ParseResult
+    ) -> None:
+        if node.type not in (
+            "identifier", "typed_parameter", "default_parameter",
+            "typed_default_parameter",
+        ):
+            return
+        name_node = first_child_of_type(node, ("identifier",))
+        if name_node is None:
+            return
+
+        declared = ""
+        for child in node.children:
+            if child.type == "type":
+                declared = child.text.decode("utf-8", "replace")
+                break
+
+        if not declared and node.type == "default_parameter":
+            call = first_child_of_type(node, ("call",))
+            if call is not None:
+                callee = first_child_of_type(call, ("identifier",))
+                if callee is not None:
+                    raw = callee.text.decode("utf-8", "replace")
+                    if raw[:1].isupper():
+                        declared = raw
+
+        declared = type_name(declared)
+        if not declared:
+            return
+        result.receivers.append(
+            ReceiverType(
+                name=name_node.text.decode("utf-8", "replace"),
+                type=declared,
+                line=node.start_point[0] + 1,
+                scope=scope,
+                scope_line=scope_line,
+            )
+        )
+
+    def _receiver_from_assignment(
+        self, node, scope: str, scope_line: int, result: ParseResult
+    ) -> None:
+        left = first_child_of_type(node, ("identifier",))
+        left_attribute = first_child_of_type(node, ("attribute",))
+        if left is None and left_attribute is None:
+            return
+
+        declared = ""
+        for child in node.children:
+            if child.type == "type":
+                declared = child.text.decode("utf-8", "replace")
+                break
+
+        if not declared:
+            right = node.children[-1] if node.children else None
+            if right is not None and right.type == "call":
+                callee = first_child_of_type(right, ("identifier",))
+                if callee is not None:
+                    raw = callee.text.decode("utf-8", "replace")
+                    if raw[:1].isupper():
+                        declared = raw
+
+        declared = type_name(declared)
+        if not declared:
+            return
+
+        if left is not None:
+            result.receivers.append(
+                ReceiverType(
+                    name=left.text.decode("utf-8", "replace"),
+                    type=declared,
+                    line=node.start_point[0] + 1,
+                    scope=scope,
+                    scope_line=scope_line,
+                )
+            )
+            return
+
+        # `self.repo = Repo()` records a class ATTRIBUTE: the receiver
+        # name is kept qualified and scoped to the class so `self.repo.save()`
+        # can be resolved later without conflating it with `self.save()`.
+        attribute = left_attribute.text.decode("utf-8", "replace")
+        if not attribute.startswith("self."):
+            return
+        class_name = self._enclosing_class(node)
+        if class_name is None:
+            return
+        result.receivers.append(
+            ReceiverType(
+                name=attribute,
+                type=declared,
+                line=node.start_point[0] + 1,
+                scope=class_name,
+                scope_line=0,
+            )
+        )
+
+    def _enclosing_function(self, node) -> tuple[str, int]:
+        """The function an assignment sits inside, or ("", 0) at module level."""
+        current = node.parent
+        while current is not None:
+            if current.type == "function_definition":
+                name = first_child_of_type(current, ("identifier",))
+                if name is not None:
+                    return (
+                        name.text.decode("utf-8", "replace"),
+                        current.start_point[0] + 1,
+                    )
+            current = current.parent
+        return "", 0
 
     def _enclosing_symbol(self, node) -> tuple[str | None, int]:
         """The name and line of the function or class a call sits inside."""

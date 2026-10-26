@@ -7,6 +7,11 @@ on a separate marketplace.
 
 ## [Unreleased]
 
+### Added
+
+- **v2.0 pitch deck** in PDF and editable PPTX form, linked from the README
+  and the documentation index.
+
 ### Fixed
 
 - **`/api/health` now reports `2.0.0`, matching `pyproject.toml`.** A new

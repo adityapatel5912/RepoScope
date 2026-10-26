@@ -16,6 +16,7 @@ permission. It is **not** OSI Open Source.
 | `cli/` | `reposcope` and `reposcope-mcp` entry points |
 | `extensions/vscode/` | VS Code / Cursor / VSCodium extension, version 2.0.1 |
 | `docs/` | Current documentation, screenshots, QA report, verification checklist |
+| `RepoScope_v2_Pitch_Deck.pdf` / `.pptx` | Approved 14-slide v2.0 pitch deck, PDF preview and editable source |
 | `scripts/` | QA and maintenance scripts |
 | `benchmarks/` | Repo-map token-saving benchmark and committed results |
 
@@ -118,4 +119,5 @@ OpenRouter → Groq → NVIDIA chain.
 | What is verified? | [QA_REPORT.md](QA_REPORT.md) |
 | What is still manual? | [VERIFICATION_CHECKLIST.md](VERIFICATION_CHECKLIST.md) |
 | How do I run/publish it? | [DEVELOPMENT.md](DEVELOPMENT.md), [DEPLOYMENT.md](DEPLOYMENT.md) |
+| How do I present it? | [v2.0 pitch deck](../RepoScope_v2_Pitch_Deck.pdf), [editable PPTX](../RepoScope_v2_Pitch_Deck.pptx) |
 | What is still planned? | [ROADMAP_V2.md](ROADMAP_V2.md) |

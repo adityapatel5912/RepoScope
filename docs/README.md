@@ -9,6 +9,7 @@ historical build artifacts.
 | Document | What it covers |
 |---|---|
 | [README](../README.md) | Product overview, quick start, screenshots, verification status |
+| [v2.0 pitch deck](../RepoScope_v2_Pitch_Deck.pdf) | 14-slide product story; [editable PPTX](../RepoScope_v2_Pitch_Deck.pptx) |
 | [Architecture](ARCHITECTURE.md) | Modules, data flow, API surface, graph layout, MCP transports |
 | [Features](FEATURES.md) | Every shipped feature, how to use it, and its limits |
 | [Verification checklist](VERIFICATION_CHECKLIST.md) | The four manual checks still pending; deliberately unchecked |

@@ -19,7 +19,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 from key_rotator import (
-    OPENROUTER_ROTATOR, GROQ_ROTATOR, NVIDIA_ROTATOR, is_rate_limit_error,
+    OPENROUTER_ROTATOR, GROQ_ROTATOR, NVIDIA_ROTATOR, is_rate_limit_error, _is_eol_error,
 )
 
 load_dotenv()
@@ -52,21 +52,21 @@ def _get_providers() -> list[tuple]:
             OPENROUTER_ROTATOR,
             lambda key: _make_client(
                 os.getenv("Base_URL_OPENROUTER", "https://openrouter.ai/api/v1"), key),
-            _first_model("Models_OPENROUTER", "google/gemma-3-27b-it:free"),
+            _first_model("Models_OPENROUTER", "google/gemma-4-31b-it:free"),
             "OpenRouter",
         ),
         (
             GROQ_ROTATOR,
             lambda key: _make_client(
                 os.getenv("Base_URL_GROQ", "https://api.groq.com/openai/v1"), key),
-            _first_model("Models_GROQ", "llama-3.3-70b-versatile"),
+            _first_model("Models_GROQ", "qwen/qwen3.8-27b"),
             "Groq",
         ),
         (
             NVIDIA_ROTATOR,
             lambda key: _make_client(
                 os.getenv("Base_URL_NVIDIA", "https://integrate.api.nvidia.com/v1"), key),
-            _first_model("Models_NVIDIA", "meta/llama-3.3-70b-instruct"),
+            _first_model("Models_NVIDIA", "meta/muse-glimmer-30b"),
             "NVIDIA NIM",
         ),
     ]
@@ -103,8 +103,8 @@ def ask_llm(system_prompt: str, user_query: str, graph_context: str = "") -> str
                 return r.choices[0].message.content
             except Exception as exc:
                 last_exc = exc
-                if is_rate_limit_error(exc):
-                    continue  # next key for this provider
+                if is_rate_limit_error(exc) or _is_eol_error(exc):
+                    continue  # next key / rotate past dead model
                 break         # non-rate error → next provider
         # provider exhausted (or unconfigured) → fall through
 

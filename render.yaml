@@ -23,3 +23,9 @@ services:
         value: codebase-memory-mcp
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: Models_OPENROUTER
+        value: google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free
+      - key: Models_GROQ
+        value: qwen/qwen3.8-27b,openai/gpt-oss-120b
+      - key: Models_NVIDIA
+        value: meta/muse-glimmer-30b,nvidia/nemotron-3.5-lightning-30b-a3b,nvidia/nemotron-3-ultra-550b-a55b,openai/gpt-oss-20b

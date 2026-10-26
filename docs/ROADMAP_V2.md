@@ -659,6 +659,79 @@ This is where Milestone 1.1 pays off.
 interface, the shared arch rules, and the golden-file tests that prevent a parser rewrite from
 silently breaking the pyramid.
 
+### Sprint 0 — locked decisions
+
+Two design choices were left open in the original plan. Both are **decided** below and are
+binding for whoever executes Sprint 0.
+
+#### D1 — Router migration: **incremental**, not wholesale
+
+**Decision.** Sprint 0 creates the `backend/api/` package, a `register_routers(app)` entry
+point, and exactly **one** new endpoint (`GET /api/arch/rules`). Existing endpoints are **not**
+migrated in Sprint 0. Each future sprint moves the endpoints it owns into a router as that
+feature lands.
+
+| Sprint | Router | Endpoints migrated in that sprint |
+|---|---|---|
+| 0 | `routers/arch.py` | none (new endpoint only) |
+| 3 | `routers/local.py` | local-mode / repo-status endpoints |
+| 4 | `routers/mcp_info.py` | MCP introspection endpoints |
+| 6 | `routers/pr_chat.py` | `POST /api/pr/chat` |
+
+**Rationale.** Sprint 0's purpose is a safety net, not a refactor. Moving ~1,100 lines of
+working, screenshot-verified endpoint code into routers in the same sprint that introduces the
+golden test produces a large, hard-to-review diff and risks exactly the regressions Sprint 0
+exists to prevent. Incremental migration keeps every sprint's diff reviewable and lets each
+migration be tested against the behaviour it preserves. `main.py` stays mixed for a few sprints
+— that is an acceptable, temporary cost.
+
+**Constraint.** `main.py` must remain under **1,200 lines** for the duration of v2.0. If adding
+a feature would breach that, the feature's endpoints go into a router — never into `main.py`.
+
+#### D2 — Fixtures: **hand-authored minimal** + **one small real repo**
+
+**Decision.** Four committed fixture repos under `backend/tests/fixtures/`:
+
+| Fixture | Purpose | Shape |
+|---|---|---|
+| `multilang/` | Multi-language parsing + cross-language import resolution | `.py`, `.ts`, `.tsx`, `.js`, `.go` — a deliberate import chain across all five |
+| `circular/` | Cycle detection | A known 3-node import cycle plus an isolated acyclic pair |
+| `nested/` | Relative-import + package resolution | Deeply nested packages, `__init__.py` chains, `src/` layouts |
+| `real_small/` | Reality check | One **tiny, permissively-licensed** real repository (MIT/Apache-2.0), vendored, with its licence file retained |
+
+**Rationale.** Hand-authored fixtures are deterministic, small, readable, licence-clean, and let
+a golden snapshot be reviewed line-by-line — a reviewer can verify the expected node ids by
+reading five short files rather than a thousand. A single small real repo guards against the
+failure mode where the parser works on synthetic input but breaks on a real layout (`setup.py`,
+`pyproject.toml`, generated files, mixed conventions). Bulk real repos are excluded: they add
+licence noise and make snapshot diffs unreadable.
+
+**Constraint.** Every fixture is **committed**, not generated at test time. Golden regeneration
+is **explicit only** — `pytest --regen-golden` — never automatic, so a snapshot can never be
+rewritten to match a broken parser.
+
+#### D3 — Sprint 0 file manifest (authoritative)
+
+```
+backend/api/__init__.py            register_routers(app)
+backend/api/routers/__init__.py
+backend/api/routers/arch.py         GET /api/arch/rules
+backend/graph_store.py              GraphStore Protocol + JsonGraphStore
+backend/arch_rules.py               layer taxonomy + edge policy + .reposcope.yml loader
+backend/graph_analysis.py           pagerank_scores(), strongly_connected_components()
+backend/tests/fixtures/multilang/   fixture repo
+backend/tests/fixtures/circular/    fixture repo
+backend/tests/fixtures/nested/      fixture repo
+backend/tests/fixtures/real_small/  fixture repo (+ LICENSE)
+backend/tests/test_graph_golden.py  golden-file test
+backend/tests/conftest.py           + fixture_repo, built_graph, golden_snapshot
+benchmarks/README.md                harness contract (no numbers)
+```
+
+**Gate.** The golden test must be demonstrated **going red** on a perturbed node id and green
+after restore. Sprint 0 is not complete until that red/green is demonstrated — a passing golden
+test that was never observed failing proves nothing.
+
 ### Demo checkpoint per sprint
 
 | Sprint | Demoable outcome |
@@ -871,6 +944,95 @@ Verification:
 - Paste the generated PR comment markdown.
 
 Deliverable: the diff + test output + a sample rendered PR comment.
+```
+
+### Agent Prompt F — Foundation & Safety Net (Sprint 0)
+
+> The original plan had prompts for Sprints 1, 3, 4, 5, 6 but **none for Sprint 0**.
+> Sprint 0 is the safety net the whole plan depends on, so it needs a prompt too.
+
+```
+Role: Backend Engineer (foundation)
+Context: RepoScope at D:\Aditya\Hackathon Projects\RepoScope.
+         Read C:\Users\Admin\.opencode\plan\reposcope-v2-plan.md Section 2 (BINDING) and
+         Section 5 "Sprint 0 - locked decisions" (D1, D2, D3 — also binding).
+         The plan is also committed in-repo at docs/ROADMAP_V2.md.
+
+Task: Build the safety net that makes the Tree-sitter rewrite (Sprint 1) safe.
+      Sprint 0 is NOT user-visible. Do not add features. Do not migrate existing
+      endpoints out of main.py (decision D1 — incremental migration only).
+
+Requirements:
+
+1. backend/api/ — router package (Correction C9, decision D1).
+   - backend/api/__init__.py exposes `register_routers(app)`.
+   - backend/api/routers/arch.py serves GET /api/arch/rules.
+   - main.py: `from api import register_routers` + one call. Nothing else changes.
+   - main.py must stay UNDER 1,200 lines.
+
+2. backend/graph_store.py (Correction C11).
+   - `class GraphStore(Protocol)`: load() -> dict, save(graph: dict) -> None, stats() -> dict
+   - `class JsonGraphStore`: persists to .reposcope/graph.json
+   - Shape MUST match build_graph_from_repo() exactly:
+       file nodes  {id, type, label, language, size}
+       sym  nodes  {id, type, label, file, line}
+       ids         file:{rel}  func:{rel}:{name}  class:{rel}:{name}
+       edges       {source, target, type} with type in {contains, imports}
+   - Round-trip test: save() then load() returns an equal graph.
+
+3. backend/arch_rules.py (Correction C6) — THE SINGLE SOURCE OF TRUTH.
+   - Port the 5-layer taxonomy from frontend/src/components/graph/layerClassifier.ts
+     (LAYER_STYLE + the ordered RULES regexes, lines 16-36). Same layer names
+     (client, backend, storage, external, compute), same first-match-wins ordering.
+   - Add edge-policy predicates, e.g.: client may import backend/storage/external;
+     storage may NOT import client; external may not import client/backend internals.
+   - Add a .reposcope.yml loader: keys `version`, `layers[]`, `rules[]`, `ignore[]`.
+     Malformed config -> clear error message, NO crash, fall back to built-in rules.
+   - The frontend must consume these via GET /api/arch/rules. Remove the duplicated
+     rule table from layerClassifier.ts — exactly one copy must exist (decision D2 scope
+     for C6; do not otherwise restructure the frontend in this sprint).
+
+4. backend/graph_analysis.py — networkx 3.6.1 is installed.
+   - pagerank_scores(graph) -> dict[node_id, float] over the DIRECTED imports+calls edges.
+     Use nx.DiGraph. VERIFIED: nx.pagerank works; nx.community.louvain_communities works.
+   - strongly_connected_components(graph) -> list of cycles. Use nx.DiGraph —
+     nx.strongly_connected_components RAISES NetworkXNotImplemented on an undirected Graph.
+   - Do NOT use nx.community.leiden_communities — it raises NotImplementedError unless
+     the optional `leidenalg` backend is installed. Use louvain_communities.
+
+5. Fixture repos (decision D2) — backend/tests/fixtures/, ALL COMMITTED:
+   - multilang/  : .py, .ts, .tsx, .js, .go with a deliberate cross-language import chain
+   - circular/   : a known 3-node import cycle + an isolated acyclic pair
+   - nested/     : deep packages, __init__.py chains, src/ layout
+   - real_small/ : ONE tiny permissively-licensed real repo, vendored, LICENSE retained
+
+6. backend/tests/test_graph_golden.py — THE POINT OF THIS SPRINT.
+   For each fixture, build the graph and assert:
+       sorted [(node.id, node.type)]   == snapshot
+       sorted [(source, target, type)] == snapshot
+       summary string                  == snapshot
+   Snapshots live at backend/tests/fixtures/<name>/golden.json.
+   Regeneration is EXPLICIT ONLY — `pytest --regen-golden`. Never automatic.
+
+7. backend/tests/conftest.py — add pytest fixtures:
+   fixture_repo, built_graph, golden_snapshot loader.
+   Keep the existing sys.path setup intact — `import main` must still resolve.
+
+8. benchmarks/ — scaffold only: README.md stating the harness contract + an empty runner.
+   Publish NO numbers. No claim may be made that this harness does not produce.
+
+9. GATE (decision D3): before Sprint 0 is complete, DEMONSTRATE the golden test going
+   RED when a node id is perturbed, then GREEN after restore. Paste both outputs.
+   A golden test never observed failing proves nothing.
+
+Verification:
+- cd backend && python -m pytest -q   -> all 38 existing tests pass, plus new ones green
+- cd backend && python -m pytest tests/test_graph_golden.py -q -> passes
+- red/green golden demonstration (above)
+- main.py line count < 1200
+- GET /api/arch/rules values match layerClassifier.ts layer-for-layer and rule-for-rule
+
+Deliverable: the diff + full pytest output + the red/green golden demonstration.
 ```
 
 ---

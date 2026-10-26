@@ -66,9 +66,10 @@ export default function TopBar({
             <Menu size={16} />
           </button>
         )}
-        <div
-          className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 bg-accent-cyan border-[1.5px] border-border-subtle rounded-md"
-          aria-hidden="true"
+        <img
+          src="/icon.png"
+          alt="RepoScope logo"
+          className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 object-cover border-[1.5px] border-border-subtle rounded-md"
         />
         <div className="flex flex-col leading-none">
           <span className="hidden min-[480px]:block text-[13px] sm:text-[15px] font-extrabold text-text-primary tracking-[-0.02em]">

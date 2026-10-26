@@ -27,6 +27,14 @@ const FRONTEND_PORT = process.env.REPOSCOPE_QA_FRONTEND_PORT ?? "5183";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const FRONTEND_URL = `http://127.0.0.1:${FRONTEND_PORT}`;
 
+// scripts/qa.py boots and waits for both servers before it invokes
+// Playwright. Tell Playwright to reuse exactly those servers: in CI the
+// default is `reuseExistingServer: false`, which makes Playwright try to
+// start a second backend on the occupied port and fail. The flag is set
+// only by the harness, so a developer's server is never silently reused.
+const HARNESS_OWNS_SERVERS =
+  process.env.REPOSCOPE_QA_SERVERS_MANAGED === "1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   outputDir: "./test-results",
@@ -65,7 +73,7 @@ export default defineConfig({
       command: "python -m uvicorn main:app --host 127.0.0.1 --port " + BACKEND_PORT + " --log-level warning",
       cwd: "../backend",
       url: `${BACKEND_URL}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: HARNESS_OWNS_SERVERS || !process.env.CI,
       timeout: 90_000,
       env: { REPOSCOPE_QA: "1", PYTHONPATH: "../backend" },
       stdout: "pipe",
@@ -75,7 +83,7 @@ export default defineConfig({
       command: "npm run dev -- --host 127.0.0.1 --port " + FRONTEND_PORT,
       cwd: ".",
       url: FRONTEND_URL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: HARNESS_OWNS_SERVERS || !process.env.CI,
       timeout: 90_000,
       // The Vite dev server proxies /api to :8000 by default. Point it at
       // the QA backend so the journey talks to the hermetic instance.

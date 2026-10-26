@@ -254,6 +254,14 @@ def run_playwright(extra_args: list[str]) -> int:
         *extra_args,
     ]
     log(f"  $ {subprocess.list2cmdline(command)}", Colours.DIM)
+
+    # This process already booted and health-checked the servers. Tell the
+    # Playwright config to reuse them; otherwise CI (where Playwright does
+    # not reuse by default) tries to start a second backend on :8010 and
+    # dies with "already used".
+    env = dict(os.environ)
+    env["REPOSCOPE_QA_SERVERS_MANAGED"] = "1"
+
     if os.name == "nt":
         # `npx.cmd` is launched through the system shell. Passing a list
         # makes Python concatenate the arguments and the shell re-parses
@@ -266,8 +274,8 @@ def run_playwright(extra_args: list[str]) -> int:
             return argument
 
         line = " ".join(shell_safe(argument) for argument in command)
-        return subprocess.call(line, cwd=str(FRONTEND_DIR))
-    return subprocess.call(command, cwd=str(FRONTEND_DIR))
+        return subprocess.call(line, cwd=str(FRONTEND_DIR), env=env)
+    return subprocess.call(command, cwd=str(FRONTEND_DIR), env=env)
 
 
 def build_report(exit_code: int) -> None:

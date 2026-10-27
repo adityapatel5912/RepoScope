@@ -12,14 +12,14 @@ Git commits, tests, and the frozen contracts are the source of truth.
 | Release | V2.5 |
 | Planning branch | `rook/phase-4-context` at `5b881b4` (local, unpushed) |
 | Implementation branch | `wren/phase-4-context` at `cae15fb` |
-| Verification branch | `rook/phase-4-review`, based on `cae15fb` |
+| Verification branch | `rook/phase-4-review` at `74bd2fb`, based on `cae15fb` |
 | Implementation worktree | `D:\Aditya\Hackathon Projects\RepoScope-wren-phase4` |
 | Verification worktree | `D:\Aditya\Hackathon Projects\RepoScope-rook-phase4-verify` |
 | Base | `main` at `7ff5291` (Phase 3 merged) |
 | Contract status | frozen |
 | Implementation status | `verified` |
 | Review status | `complete` |
-| Merge status | `owner-authorized; fast-forward into main` |
+| Merge status | `merged into main at 74bd2fb; pushed to origin/main` |
 
 ## Ownership
 
@@ -34,7 +34,7 @@ Git commits, tests, and the frozen contracts are the source of truth.
 | Frontend `SkillsSection` and browser journey | Wren | `done` |
 | TOON benchmark and measured documentation | Wren | `done` |
 | Full test gate, diff review, merge | Rook | `done` |
-| `main` merge and push | Owner authorized; Rook executes | `in-progress` |
+| `main` merge and push | Owner authorized; Rook executed | `done` |
 | `experimental` | Unchanged at `7ff5291`; not in Phase 4 scope | `not-in-scope` |
 
 ## Frozen surface
@@ -118,6 +118,10 @@ No graph schema, edge meaning, MCP tool name, resource URI, or existing
 endpoint path changed in the review fixes. The Phase 4 surface remains 13 tools
 and 8 resources.
 
+The review commit `74bd2fb` was fast-forwarded into `main` and pushed to
+`origin/main` (`7ff5291..74bd2fb`) on 2026-10-27. `experimental` remains at
+`7ff5291`.
+
 ## Claim protocol
 
 1. Wren claims the Phase 4 implementation files in `WREN.md` before editing.
@@ -139,7 +143,7 @@ and 8 resources.
 
 ## Blockers
 
-None. The owner authorized the `main` merge and push on 2026-10-27. The only
-expected environmental skips are the Windows symlink test and the locally
-excluded J22 journey; both are recorded in the Phase 3 baseline and repeated in
-the Phase 4 handoff.
+None. Phase 4 is merged into `main` at `74bd2fb` and pushed. The only expected
+environmental skips are the Windows symlink test and the locally excluded J22
+journey; both are recorded in the Phase 3 baseline and repeated in the Phase 4
+handoff.

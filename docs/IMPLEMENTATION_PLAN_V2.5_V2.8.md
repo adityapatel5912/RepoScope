@@ -1,6 +1,6 @@
 # RepoScope V2.5–V2.8 — Implementation Plan
 
-**Status:** Approved - Phase 0-4 complete; Phase 4 is verified and owner-authorized for the `main` merge. `experimental` remains at the Phase 3 tree (`7ff5291`).
+**Status:** Approved - Phase 0-4 complete; Phase 4 is merged into `main` at `74bd2fb` and pushed. `experimental` remains at the Phase 3 tree (`7ff5291`).
 **Source draft:** [`RepoScope_V2.5_AI_Expansion_Plan.md`](../RepoScope_V2.5_AI_Expansion_Plan.md) (preserved unchanged).
 **Target repository:** this repository, `adityapatel5912/RepoScope`. The plan does **not** migrate to `RepoScope-V2`.
 **Integration branch:** `experimental` remains the planned integration branch for V2.6+. The owner authorized a direct Phase 4 merge into `main`, so `main` and `experimental` intentionally diverge until the Phase 5 integration target is decided.

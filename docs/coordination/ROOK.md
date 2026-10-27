@@ -15,8 +15,8 @@ for the commit history.
   and `experimental`.** Backend `69b9620`, handoff docs `5d1f3f0`, UI
   `4a8a5de`; the review fixes and final gate are recorded in the Phase 3
   section below and in `DIALOGUE.md`.
-- Phase 4 — token-compact context, MCP surface, and skills. **Verified; owner
-  authorized the `main` merge.** Wren implemented at `bb4b268` + `cae15fb`;
+- Phase 4 — token-compact context, MCP surface, and skills. **Merged into
+  `main` at `74bd2fb` and pushed.** Wren implemented at `bb4b268` + `cae15fb`;
   Rook reviewed on `rook/phase-4-review`, corrected the documentation, added
   the missing cap test, normalized the benchmark root, and re-ran the full
   gate. Details in the Phase 4 section below.
@@ -214,9 +214,10 @@ main merge and branch cleanup. `experimental` was merged into `main` with
 
 ### Phase 4 review (complete; owner authorized the main merge)
 
-Status: verified at Wren's head `cae15fb`. Rook reviewed in the fresh
-`RepoScope-rook-phase4-verify` worktree on `rook/phase-4-review`, fixed the
-findings, and re-ran the full gate.
+Status: merged into `main` at `74bd2fb` and pushed to `origin/main`. Rook
+verified Wren's head `cae15fb` in the fresh `RepoScope-rook-phase4-verify`
+worktree on `rook/phase-4-review`, fixed the findings, and re-ran the full
+gate.
 
 - Review findings: `README.md`, `docs/FEATURES.md`, and `docs/MCP.md` listed
   eight tool names and five resource URIs that do not exist; `docs/API.md` and
@@ -238,8 +239,10 @@ findings, and re-ran the full gate.
 - No graph/schema, edge, existing tool, existing resource, or existing
   endpoint change was introduced by the review fixes. The Phase 4 surface
   remains 13 tools and 8 resources.
-- The owner authorized the `main` merge and push. `experimental` remains at
-  `7ff5291` and is intentionally not part of this merge.
+- The owner authorized the `main` merge and push. `rook/phase-4-review`
+  (`74bd2fb`) was fast-forwarded into `main` and pushed (`7ff5291..74bd2fb`)
+  on 2026-10-27. `experimental` remains at `7ff5291` and is intentionally not
+  part of this merge.
 
 ## Open decisions
 
@@ -249,8 +252,8 @@ findings, and re-ran the full gate.
   remain.
 - Phase 3 registry deltas are resolved; Wren's verification is the input,
   Rook's contract is the authority.
-- Phase 4 is verified and owner-authorized for `main`; `experimental` is
-  unchanged. The integration target for Phase 5+ is still open.
+- Phase 4 is merged into `main` at `74bd2fb`; `experimental` is unchanged.
+  The integration target for Phase 5+ is still open.
 - Phase 5–14 workflow: Wren implements each phase; an independent verifier
   (to be introduced by the owner) runs the gate; Rook plans, writes the prompt,
   and integrates. Wren may start Phase 5; the verifier must be named before the

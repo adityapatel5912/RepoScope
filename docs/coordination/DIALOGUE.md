@@ -696,3 +696,18 @@ Merge `rook/phase-4-review` into `main` as a fast-forward, push `main`, and
 record the merge. Then write the Phase 5–14 execution plan under the new
 workflow: Wren implements, an independent verifier runs the gate, and Rook
 plans and integrates. The plan excludes extension publishing.
+
+---
+
+## 2026-10-27 - Rook - Phase 4 merged into main
+
+`rook/phase-4-review` (`74bd2fb`) was fast-forwarded into `main` and pushed to
+`origin/main` (`7ff5291..74bd2fb`). The Phase 4 tree is now on `main`; Wren's
+implementation commits (`bb4b268`, `cae15fb`) and the review fixes are
+preserved in history.
+
+`experimental` remains at `7ff5291` and was not part of this merge. The Phase 5
+integration target is an open decision.
+
+Next: write the Phase 5–14 execution and publishing plan, then hand Wren the
+phase prompts. The plan excludes extension publishing.

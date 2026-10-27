@@ -5,7 +5,37 @@
 **Batch:** Phase 3 only — nine-agent harness configurator  
 **Integration branch:** `experimental`  
 **Your branch:** `wren/phase-3-harness` in a separate worktree, based on Rook's announced backend commit  
-**Status:** planned, not started. Do not start until the owner signals Phase 3 and Rook announces the backend commit.
+**Status:** **complete.** This file is the historical assignment. The backend
+is `69b9620`, Wren's final UI commit is `4a8a5de`, and Rook reviewed, fixed,
+squashed, and merged Phase 3 into `experimental`. See `DIALOGUE.md` for the
+final gate and the owner-authorized `experimental` push; `main` remains
+untouched until owner testing and explicit approval.
+
+---
+
+## Backend ready (2026-10-27)
+
+- Backend commit: `69b9620 feat(api): add nine-agent harness generator`.
+- Branch: `rook/phase-3-harness`, based on `a667ac4`. Local only; not pushed.
+- Live contract verified on `127.0.0.1:8011`:
+  `GET /api/harness/agents` returns nine ids and `apply_enabled: false`;
+  `GET /api/harness/config` returns the exact files, content, diff, and
+  command; `POST /api/harness/apply` is a dry run by default and returns
+  `403` when `apply: true` is requested with the flag off;
+  `GET /api/harness/skills` returns five descriptors with
+  `content_available: false`.
+- Backend gate: **473 passed, 1 skipped** (Windows file-symlink privilege);
+  68 harness tests; `compileall` and `pip check` pass.
+- The backend keeps the registry; the UI must not hardcode it.
+- OpenCode's verified delta: assert `mcp.reposcope`, not `mcp.servers`.
+
+Create your worktree from the local branch, not from origin:
+
+```bash
+git worktree add "../RepoScope-wren-phase3" -b wren/phase-3-harness rook/phase-3-harness
+```
+
+Do not push until the owner authorizes it. Do not merge your own branch.
 
 ---
 
@@ -21,40 +51,46 @@ The backend is the only writer. It owns the registry, the exact config formats, 
 
 ### Start condition and sequence
 
-Phase 3 is **not started**. Wait for both of these:
+Phase 3 is **ready**. The owner has signaled it, Wren's registry handoff is
+posted in `DIALOGUE.md`, and Rook's backend commit `69b9620` is announced with
+live `GET /api/harness/*` responses.
 
-1. The owner explicitly says to start Phase 3.
-2. Rook announces the backend commit on `rook/phase-3-harness` in `DIALOGUE.md`, with the live `GET /api/harness/*` responses.
-
-Your first task does **not** need the backend: re-verify the nine target paths, formats, and transports against the vendors' official documentation. Post a short registry handoff in `DIALOGUE.md` with the verified table, the docs URLs, `verified_at`, and any delta from Appendix E. Rook uses that to freeze the registry before writing the generator.
-
-After Rook announces the backend commit, create your branch **from that commit**, not from `main` or an older `experimental` head. This is the one cross-branch dependency in the phase: the UI needs the live preview endpoint. You still push only `wren/phase-3-harness`.
+Wren's registry research is complete (2026-10-26). The remaining work is the
+UI and verification. Create your branch **from the local
+`rook/phase-3-harness` head**, not from `main` or an older `experimental`
+head. This is the one cross-branch dependency in the phase: the UI needs the
+live preview endpoint.
 
 Order:
 
 ```
-owner signal
-  → Wren registry handoff
-  → Rook backend commit + announcement
-  → Wren UI commit
-  → Rook review, squash, merge
+owner signal + registry handoff (done)
+  → Rook backend commit + announcement (done: 69b9620)
+  → Wren UI commit on wren/phase-3-harness
+  → owner review + permission to push
+  → Rook squash and merge into experimental
+  → owner permission before main
 ```
 
-### Registry research (first deliverable)
+Wren commits but **does not push**. The owner will authorize the push after
+review.
 
-Re-verify these nine targets on the day Phase 3 starts. Do not trust this table blindly; it was prepared on 2026-10-26.
+### Registry research (done 2026-10-26; frozen)
+
+Wren's registry handoff is posted in `DIALOGUE.md` and is the authority. These
+are the paths and shapes the backend now returns.
 
 | Agent | Project file(s) | Notes |
 |---|---|---|
-| Claude Code | `.mcp.json`, `CLAUDE.md` | `claude mcp add` command in the preview. |
+| Claude Code | `.mcp.json`, `CLAUDE.md` | `claude mcp add --scope project --transport …` in the preview. |
 | Cursor | `.cursor/mcp.json`, `.cursor/rules/reposcope.mdc` | Deep-link command in the preview. |
-| VS Code / Copilot | `.vscode/mcp.json` (`servers`), portable `.mcp.json`, `.github/copilot-instructions.md` | Use the `servers` key. |
-| Codex CLI | `.codex/config.toml`, `AGENTS.md` | `[mcp_servers.reposcope]`. |
+| VS Code / Copilot | `.vscode/mcp.json` (`servers`), `.github/copilot-instructions.md` | `servers.reposcope`, with `type`. |
+| Codex CLI | `.codex/config.toml`, `AGENTS.md` | `[mcp_servers.reposcope]`; no empty parent table. |
 | Kiro | `.kiro/settings/mcp.json`, `.kiro/steering/reposcope.md` | Project-scoped. |
-| Antigravity | `.agents/mcp_config.json`, `AGENTS.md`, `.agents/skills/` | Also dogfood against RepoScope. |
-| Windsurf / Devin | `.windsurf/mcp_config.json`, `.windsurfrules` | Global `~/.codeium/windsurf/mcp_config.json` is shown, never written. |
-| Cline / Roo | `.cline/data/settings/cline_mcp_settings.json` preview, `.roo/mcp.json`, `.clinerules` | The global Cline path is shown, never written by default. |
-| OpenCode | `opencode.json` with nested `mcp.servers` | Project-scoped. |
+| Antigravity | `.agents/mcp_config.json`, `AGENTS.md` | `.agents/skills/` is Phase 4. Also dogfood against RepoScope. |
+| Windsurf / Devin | `.devin/mcp_config.json`, `.windsurf/rules/reposcope.md` | Global `~/.codeium/windsurf/mcp_config.json` and `~/.config/devin/mcp_config.json` are display-only. |
+| Cline / Roo | `.roo/mcp.json`, `.clinerules` | Global `~/.cline/data/settings/cline_mcp_settings.json` is display-only. |
+| OpenCode | `opencode.json` with `mcp.reposcope` | Current schema is `mcp.<name>` with `"type": "local"` or `"remote"`. There is no `mcp.servers` key. |
 
 For each target record:
 
@@ -72,24 +108,22 @@ Phase 3 must support `stdio` for all nine. `http` is included only where the ven
 
 ### Branch and worktree
 
-After Rook's announcement:
+The backend branch is **local and unpushed**. Create your worktree directly
+from it:
 
 ```bash
-git fetch origin
-git worktree add ../RepoScope-wren-phase3 -b wren/phase-3-harness <rook-phase-3-commit>
+git worktree add "../RepoScope-wren-phase3" -b wren/phase-3-harness rook/phase-3-harness
 cd ../RepoScope-wren-phase3
+git log --oneline -1
 npm --prefix frontend ci
 npm --prefix frontend run build
 ```
 
-Replace `<rook-phase-3-commit>` with the hash Rook posts. Confirm `git log --oneline -1` matches it before editing. Do not branch from `main`.
-
-If Rook's branch is not available locally, fetch it explicitly:
-
-```bash
-git fetch origin rook/phase-3-harness
-git worktree add ../RepoScope-wren-phase3 -b wren/phase-3-harness origin/rook/phase-3-harness
-```
+`git log --oneline -3` must include `69b9620 feat(api): add nine-agent harness
+generator`. The branch head may be a later handoff-docs commit; verify the
+backend commit is in your history with `git merge-base --is-ancestor 69b9620
+HEAD`. Do not `git fetch origin` for this branch; origin does not have it.
+Do not branch from `main` or from an older `experimental` head.
 
 ### Files you own
 
@@ -131,7 +165,7 @@ The full contract is in plan §6. The parts you consume:
   "label": "Claude Code",
   "transport": "stdio",
   "root": "D:\\repo",
-  "command": "claude mcp add reposcope -- reposcope-mcp --root D:\\repo",
+  "command": "claude mcp add --scope project --transport stdio reposcope -- reposcope-mcp --root \"D:\\repo\"",
   "apply_enabled": false,
   "requires_force": false,
   "files": [
@@ -195,7 +229,7 @@ The new Playwright journey must:
 - preview Claude and assert `.mcp.json`, `mcpServers.reposcope`, and the command;
 - preview VS Code and assert the `servers` key;
 - preview Codex and assert `[mcp_servers.reposcope]`;
-- preview OpenCode and assert nested `mcp.servers`;
+- preview OpenCode and assert `mcp.reposcope` (not `mcp.servers`);
 - assert the preview never shows a success/write confirmation;
 - assert the apply control is disabled when `apply_enabled` is false;
 - check the modal at 1280×800 for no horizontal overflow;
@@ -211,13 +245,20 @@ One commit on your branch:
 feat(ui): add nine-agent harness configurator
 ```
 
-Push only your branch:
+Commit locally and **do not push**:
 
 ```bash
-git push -u origin wren/phase-3-harness
+git add <your files>
+git commit -m "feat(ui): add nine-agent harness configurator"
+git log --oneline -1
+git status --short --branch
 ```
 
-Do not push to `experimental` or `main`. Do not merge your branch yourself. Rook reviews it, squashes it into the single Phase 3 commit, and merges with `--no-ff`.
+Leave `wren/phase-3-harness` local. The owner reviews it and explicitly
+authorizes any push. Rook reviews the local commit, squashes the backend and UI
+into the single Phase 3 commit, and merges with `--no-ff` into local
+`experimental`. Do not merge your branch yourself. `main` stays untouched until
+the owner authorizes it separately.
 
 Append a handoff to `docs/coordination/DIALOGUE.md` and update `docs/coordination/WREN.md` with:
 

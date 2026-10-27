@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck, ExternalLink, Network, Boxes } from "lucide-react";
+import { Bug, Keyboard, Settings, Link2, X, Menu, GraduationCap, ShieldCheck, ExternalLink, Network, Boxes, Bot } from "lucide-react";
 import { clsx } from "clsx";
 import type { RepoLoader } from "../hooks/useRepoLoader";
 import LoadingStepper from "./LoadingStepper";
@@ -23,6 +23,8 @@ interface Props {
   onToggleSidebar?: () => void;
   /** Open the editor settings modal (Milestone 2.1). */
   onOpenEditorSettings?: () => void;
+  /** Open the nine-agent harness configurator modal (Phase 3). */
+  onOpenHarness?: () => void;
   /**
    * True when the loaded repository is a local directory.
    *
@@ -47,7 +49,7 @@ const MODES: { id: Mode; label: string }[] = [
 
 export default function TopBar({
   repo, mode, onModeChange, viewMode = "graph", onViewModeChange, debugMode, onDebugToggle, studentMode, onStudentModeToggle,
-  onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal, onOpenEditorSettings,
+  onShowShortcuts, loader, onClearRepo, onToggleSidebar, isLocal, onOpenEditorSettings, onOpenHarness,
   previewName = null,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -201,6 +203,21 @@ export default function TopBar({
 
       {/* ── Right: mode pills + icon buttons ── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Connect AI agent (MCP) */}
+        {onOpenHarness && (
+          <button
+            type="button"
+            data-testid="open-harness"
+            onClick={onOpenHarness}
+            title="Connect AI agent (MCP harness configurator)"
+            aria-label="Connect AI agent"
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap border-[1.5px] border-border-subtle bg-bg-panel text-text-primary hover:bg-bg-panel-alt transition-all duration-150 mr-0.5"
+          >
+            <Bot size={13} className="text-accent-cyan" />
+            <span className="hidden min-[640px]:inline">Connect AI agent</span>
+          </button>
+        )}
+
         {/* ── View Mode switch: Graph ⇄ Mind Map ── */}
         {onViewModeChange && (
           <div

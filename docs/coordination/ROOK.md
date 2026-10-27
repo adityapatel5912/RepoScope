@@ -11,10 +11,10 @@ for the commit history.
   contract. **Complete and frozen.**
 - Phase 2 — vertical six-pillar mind map. **Complete and merged into `main`
   at `ff4ac6a`; CI green (`40339282947`).**
-- Phase 3 — nine-agent harness generator. **Planned, not started.** Do not
-  create a branch, worktree, or code change until the owner signals the start.
-  The frozen scope, contract, and Wren handoff are in
-  `docs/coordination/HANDOFF_PHASE_3.md` and plan §6.
+- Phase 3 — nine-agent harness configurator. **Complete; merged into
+  `experimental` and awaiting owner testing.** Backend `69b9620`, handoff docs
+  `5d1f3f0`, UI `4a8a5de`; the review fixes and final gate are recorded in the
+  Phase 3 section below and in `DIALOGUE.md`.
 
 ## Claims (Phase 0)
 
@@ -50,18 +50,18 @@ for the commit history.
 | `docs/API.md` | claimed | Additive endpoint docs. |
 | `docs/FEATURES.md` | claimed | Limits and flags. |
 
-## Claims (Phase 3 — planned, not started)
+## Claims (Phase 3 — complete)
 
 | File | Status | Notes |
 |---|---|---|
-| `backend/harness_generator.py` | planned | Nine-agent registry, preview/merge/apply, five skill descriptors. |
-| `backend/api/routers/harness.py` | planned | Four endpoints; no network. |
-| `backend/api/__init__.py` | planned | Mount the harness router. |
-| `backend/tests/test_harness_generator.py` | planned | Registry, formats, merge, path safety. |
-| `backend/tests/test_harness_api.py` | planned | L2 contract and apply behavior. |
-| `docs/API.md` | planned | Document the four endpoints. |
-| `docs/FEATURES.md` | planned | Apply flag, global-path limits, Phase 4 boundary. |
-| `CHANGELOG.md` | planned | Phase 3 entry. |
+| `backend/harness_generator.py` | complete | Nine-agent registry, preview/merge/apply, five skill descriptors. |
+| `backend/api/routers/harness.py` | complete | Four endpoints; no network. |
+| `backend/api/__init__.py` | complete | Mounted the harness router. |
+| `backend/tests/test_harness_generator.py` | complete | Registry, formats, merge, path safety. |
+| `backend/tests/test_harness_api.py` | complete | L2 contract and apply behavior. |
+| `docs/API.md` | complete | Documented the four endpoints. |
+| `docs/FEATURES.md` | complete | Apply flag, global-path limits, Phase 4 boundary. |
+| `CHANGELOG.md` | complete | Phase 3 entry. |
 | `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` | done | Phase 3 status and frozen contract. |
 | `docs/coordination/ROOK.md`, `DIALOGUE.md` | done | This planning record. |
 
@@ -156,33 +156,45 @@ Status: accepted at Wren's amended head `478376d`; merge follows.
   Wren's single implementation commit. `main` stays untouched until the user
   tests `experimental`.
 
-### Phase 3 (planned, not started)
+### Phase 3 (complete; merged into experimental)
 
-Status: prepared on 2026-10-26; no code, branch, or worktree exists yet.
+Status: complete. Rook's frozen backend is `69b9620`; the handoff docs are
+`5d1f3f0`; Wren's UI is `4a8a5de`. Rook reviewed the UI, fixed the findings
+below, ran the independent gate, squashed the three commits and fixes into one
+Phase 3 commit, and merged it into local `experimental` with `--no-ff`.
+The owner authorized pushing `experimental` on 2026-10-27. `main` remains
+untouched until the owner tests `experimental` and explicitly approves main.
 
-- Scope: the nine-agent harness generator from plan §6. Wren owns the nine-target
-  registry research, fixture validation, the `HarnessModal` UI,
-  `docs/AGENT_INTEGRATION.md`, and the L3 journey. Rook owns the API contract,
-  generator, apply safety, backend tests, API docs, review, and merge.
-- Sequence: owner signal → Wren registry handoff → Rook backend commit on
-  `rook/phase-3-harness` → Wren UI commit on `wren/phase-3-harness` based on
-  the backend commit → Rook review, squash the UI commit into the phase
-  commit, and merge into `experimental` with `--no-ff`.
+- Scope: the nine-agent harness generator from plan §6, the `HarnessModal`
+  UI, `docs/AGENT_INTEGRATION.md`, five evidence screenshots, and the L3
+  journey. No backend contract change was required.
+- Review fixes: apply success is preserved across the post-write preview
+  refresh; initial focus enters the dialog and Shift+Tab cannot escape it; the
+  nine-target loop asserts fresh content per target; H02 exercises the diff,
+  warning, force checkbox, disabled/enabled action, and second confirmation
+  without a POST; H05 proves the success banner survives the refresh.
+- Gate: harness 5/5 (H01–H05); journeys 16/16 with J22 excluded; mindmap 3/3;
+  frontend build pass; `tsc` 0 errors; backend 473 passed, 1 skipped;
+  `compileall` and `pip check` clean; `git diff --check` clean.
+- J22's 100 ms threshold is unchanged and remains excluded from the local gate
+  because of the recorded environmental timings. The single pytest skip is the
+  Windows unprivileged symlink test.
 - Apply is off by default (`REPOSCOPE_HARNESS_APPLY=1` enables writes);
   preview never writes; global paths are display-only; existing files need a
   diff and `force: true`.
-- Gate: nine target fixtures, JSON/TOML parsing, path-traversal rejection,
-  no writes outside the root, nine modal previews without writing, Antigravity
-  dogfood, L2 API tests, the Playwright journey, the full suite, frontend
-  build, `tsc`, `compileall`, `pip check`, and a green CI run.
-- Explicit non-goals: MCP tool/resource changes, `SKILL.md` bodies, npm/PyPI
-  packaging, and any write outside the project root.
+- Registry deltas: OpenCode uses `mcp.<name>` (not `mcp.servers`),
+  Windsurf/Devin uses `.devin/mcp_config.json`, Cline/Roo writes
+  `.roo/mcp.json`, and Antigravity skills remain Phase 4.
+- Wren's self-contained prompt is `WREN_PROMPT_PHASE_3.md`.
+- Explicit non-goals remain: MCP tool/resource changes, `SKILL.md` bodies,
+  npm/PyPI packaging, any write outside the project root, and any main-branch
+  change before owner approval.
 
 ## Open decisions
 
 - None for Phase 2. The mind-map contract is frozen; Wren consumes it without
   editing backend graph code.
-- Phase 3 start is the owner's decision. Until then, no branch, worktree, or
-  code change is created.
-- Phase 3 registry deltas are resolved at kickoff; Wren's verification is the
-  input, Rook's contract is the authority.
+- Phase 3 integration is complete on `experimental`; the owner is testing it
+  next. Main waits for explicit approval after that test.
+- Phase 3 registry deltas are resolved; Wren's verification is the input,
+  Rook's contract is the authority.

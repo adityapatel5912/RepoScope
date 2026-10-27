@@ -9,9 +9,11 @@ limits. It is not a substitute for the commit history.
 Phase 2 completed and merged into `main` at `ff4ac6a` (CI green
 `40339282947`).
 
-Phase 3 — nine-agent harness configurator. **Planned, not started.** Start
-only after the owner signals Phase 3 and Rook announces the backend commit.
-The self-contained prompt is `docs/coordination/HANDOFF_PHASE_3.md`.
+Phase 3 — nine-agent harness configurator. **Complete; reviewed and merged
+into `experimental` by Rook.** The final UI commit is `4a8a5de`; Rook added the
+review fixes, the force-gate assertion, and H05, then squashed the backend,
+handoff docs, UI, and fixes into one Phase 3 commit. The self-contained prompt
+is `docs/coordination/WREN_PROMPT_PHASE_3.md`.
 
 ## Claims
 
@@ -81,7 +83,7 @@ The self-contained prompt is `docs/coordination/HANDOFF_PHASE_3.md`.
 
 ---
 
-## Phase 3 — planned, not started
+## Phase 3 — backend ready; UI not started
 
 ### Assignment
 
@@ -90,35 +92,43 @@ research, fixture validation, `HarnessModal`, the entry point, the L3 journey,
 `docs/AGENT_INTEGRATION.md`, and visual evidence. Rook owns the API contract,
 generator, apply safety, backend tests, and merge.
 
-Do not start until the owner signals Phase 3 and Rook announces the backend
-commit. The self-contained prompt is `HANDOFF_PHASE_3.md`.
+The backend is ready at `69b9620` on the local `rook/phase-3-harness`. The
+self-contained prompt is `WREN_PROMPT_PHASE_3.md`.
 
-### Claims (planned)
+### Claims
 
 | File | Status | Notes |
 |---|---|---|
-| `docs/AGENT_INTEGRATION.md` | planned | Nine-target setup guide and dogfood results. |
-| `frontend/src/components/HarnessModal.tsx` | planned | Agent selector, transport, preview, diff, apply confirmation. |
-| `frontend/src/components/harness/*` | planned | Split only if it keeps the modal readable. |
-| `frontend/src/api/client.ts` | planned | Harness types and calls; no duplicated config logic. |
-| `frontend/src/App.tsx` | planned | Modal state and entry point. |
-| `frontend/src/components/TopBar.tsx` | planned | Discoverable “Connect AI agent” entry. |
-| `frontend/tests/e2e/harness.spec.ts` | planned | L3 preview, nine agents, no writes, accessibility. |
-| `docs/screenshots/v2/harness/*.png` | planned | Visual evidence. |
-| `docs/coordination/WREN.md`, `DIALOGUE.md` | done | This planning record. |
-| `frontend/package.json` | not claimed | No new dependency expected; ask Rook first if one is needed. |
+| `docs/AGENT_INTEGRATION.md` | done | Nine-target setup guide and dogfood results. |
+| `frontend/src/components/HarnessModal.tsx` | done | Agent selector, transport, preview, diff, apply confirmation. |
+| `frontend/src/components/harness/AgentList.tsx` | done | Keyboard-accessible list of nine agents with transports and docs. |
+| `frontend/src/components/harness/PreviewPane.tsx` | done | File tabs, whitespace-preserving pre, copy buttons, gated apply. |
+| `frontend/src/components/harness/DiffViewer.tsx` | done | Unified diff viewer with syntax highlights and change alerts. |
+| `frontend/src/components/harness/SkillsSection.tsx` | done | Phase 4 preview of 5 architectural skill descriptors. |
+| `frontend/src/api/client.ts` | done | Harness types and calls; no duplicated config logic. |
+| `frontend/src/App.tsx` | done | Modal state and entry point. |
+| `frontend/src/components/TopBar.tsx` | done | Discoverable “Connect AI agent” entry. |
+| `frontend/tests/e2e/harness.spec.ts` | done | L3 preview, nine agents, diff viewer, no writes, accessibility. |
+| `docs/screenshots/v2/harness/*.png` | done | Visual evidence (5 screenshots). |
+| `docs/coordination/WREN.md`, `DIALOGUE.md` | done | Coordination and handoff. |
+| `frontend/package.json` | not modified | Zero new dependencies added. |
 
 ### Preconditions
 
 - [x] Phase 2 is merged into `main` at `ff4ac6a`; CI is green.
-- [ ] Owner has signaled the start of Phase 3.
-- [ ] Wren has re-verified the nine target paths/formats/transports against
+- [x] Owner has signaled the start of Phase 3.
+- [x] Wren has re-verified the nine target paths/formats/transports against
   official documentation and posted the registry handoff.
-- [ ] Rook has announced the backend commit on `rook/phase-3-harness` with
+- [x] Rook has announced the backend commit on `rook/phase-3-harness` with
   live `GET /api/harness/agents`, `GET /api/harness/config`, and
-  `POST /api/harness/apply` responses.
-- [ ] The contract in plan §6 is frozen.
-- [ ] `npm --prefix frontend run build` is green before the first UI edit.
+  `POST /api/harness/apply` responses. Backend commit: `69b9620`.
+- [x] The contract in plan §6 is frozen, with the verified registry deltas.
+- [x] `npm --prefix frontend run build` is green before the first UI edit.
+
+**Ready to start.** Use `WREN_PROMPT_PHASE_3.md`. Branch from the local
+`rook/phase-3-harness` head; do not fetch the unpushed branch from origin.
+Commit on `wren/phase-3-harness` only. Do not push, do not merge, and do not
+touch `experimental` or `main`.
 
 ### Rules for this batch
 
@@ -133,36 +143,58 @@ commit. The self-contained prompt is `HANDOFF_PHASE_3.md`.
   backend tests.
 - Do not add `SKILL.md` bodies, MCP tools/resources, or Phase 4 work.
 - One writer per file. Claim files here before editing.
-- Commit on `wren/phase-3-harness`, push that branch only, and post the
-  handoff. Rook reviews, squashes the UI commit into the phase commit, and
-  merges the phase into `experimental` with `--no-ff`.
-- Do not push to `experimental` or `main`.
+- Commit on `wren/phase-3-harness` and post the handoff. **Do not push.**
+  The owner reviews the local commit and authorizes any push. Rook reviews,
+  squashes the UI commit into the phase commit, and merges the phase into
+  local `experimental` with `--no-ff`.
+- Do not merge your own branch. Do not touch `main`.
 
-### Gate
+### Gate Verification
 
-```bash
-npm --prefix frontend run build
-npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json
-cd frontend
-npx playwright test tests/e2e/harness.spec.ts
-npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"
-```
+- `npm --prefix frontend run build` → exit 0 (built in 11.24s).
+- `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json` → exit 0 (0 errors).
+- `npx playwright test tests/e2e/harness.spec.ts` → 4/4 passed (H01, H02, H03, H04 in 44.7s).
+- `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"` → 16/16 passed (1.3m).
+- `npx playwright test tests/e2e/mindmap.spec.ts` → 3/3 passed (31.8s).
+- `python -m pytest -q` → 473 passed, 1 skipped (29.60s).
 
-J22's 100 ms threshold is unchanged. A local J22 failure is recorded with its
-numbers and is not “fixed” by changing the budget.
+### Results
 
-### Deliverables
-
-- A discoverable **Connect AI agent** entry that opens `HarnessModal`.
-- Nine selectable targets with transport, config paths, command, and docs.
-- A preview pane with one tab per file, exact content, and a unified diff for
-  existing files.
-- Apply disabled unless `REPOSCOPE_HARNESS_APPLY=1`; a second confirmation
-  and `force` opt-in for existing files.
-- Error states for unknown agent, unsupported transport, unsafe root, existing
-  file, and apply-disabled.
-- `docs/AGENT_INTEGRATION.md` with copy-paste setup for all nine targets and
-  the Antigravity dogfood result.
-- Screenshots in `docs/screenshots/v2/harness/`.
-- A handoff in `DIALOGUE.md` and this file with branch, commit, commands,
-  results, and limits.
+- **Status:** Complete, verified locally on `wren/phase-3-harness`. Handoff posted to Rook.
+- **Branch & Commit:** `wren/phase-3-harness` — final local commit `4a8a5de` (`feat(ui): add nine-agent harness configurator`), based on the frozen backend plus handoff docs at `5d1f3f0`.
+- **Files created:**
+  - `frontend/src/components/HarnessModal.tsx`
+  - `frontend/src/components/harness/AgentList.tsx`
+  - `frontend/src/components/harness/PreviewPane.tsx`
+  - `frontend/src/components/harness/DiffViewer.tsx`
+  - `frontend/src/components/harness/SkillsSection.tsx`
+  - `frontend/tests/e2e/harness.spec.ts`
+  - `docs/AGENT_INTEGRATION.md`
+  - `docs/screenshots/v2/harness/harness-claude-preview.png`
+  - `docs/screenshots/v2/harness/harness-opencode-preview.png`
+  - `docs/screenshots/v2/harness/harness-diff-preview.png`
+  - `docs/screenshots/v2/harness/harness-skills-preview.png`
+  - `docs/screenshots/v2/harness/harness-1280x800-layout.png`
+- **Files edited:**
+  - `frontend/src/api/client.ts`
+  - `frontend/src/App.tsx`
+  - `frontend/src/components/TopBar.tsx`
+  - `docs/coordination/WREN.md`
+  - `docs/coordination/DIALOGUE.md`
+- **Visual evidence & screenshots:**
+  - `harness-claude-preview.png`: Claude Code selected; `.mcp.json` and `CLAUDE.md` tabs; stdio transport; copyable install command with quoted path; disabled Write button explaining server writes disabled.
+  - `harness-opencode-preview.png`: OpenCode selected; HTTP transport; `opencode.json` tab with `mcp.reposcope` (no `mcp.servers` key).
+  - `harness-diff-preview.png`: Unified diff viewer for existing modified file showing additions/deletions, warning badge, and force checkbox.
+  - `harness-skills-preview.png`: Skills tab showing 5 architectural skill descriptors with "Available in Phase 4" badges.
+  - `harness-1280x800-layout.png`: Modal rendering cleanly at 1280x800 with zero horizontal document overflow, scrollable independent columns.
+- **Antigravity Dogfood:**
+  - Command: `Get-Command antigravity`
+  - Result: `CommandNotFoundException` (exit code 1). Recorded as `not installed`. No global writes or fabricated skills performed.
+- **Known limits & skipped checks:**
+  1. J22 excluded from journey suite as instructed in §9 (pre-existing synthetic 50,000-node scale benchmark with fixed 100 ms threshold; environmental on this hardware running ~103–148 ms).
+  2. 1 skipped test in pytest out of 474 due to Windows unprivileged symlink creation privileges (`test_symlink_traversal_rejected`); junction-escape test passes.
+  3. Antigravity dogfood recorded as `not installed` (`Get-Command antigravity` returned `CommandNotFoundException`); no global writes or fabricated skills.
+  4. Phase 4 skills bodies deferred per §1: `GET /api/harness/skills` returns `content_available: false`; `.agents/skills/*` generation not implemented.
+  5. Server writes disabled by default (`apply_enabled: false` in QA/default mode without `REPOSCOPE_HARNESS_APPLY=1`), verified by test asserting the Write button is disabled.
+- **Contract check:**
+  - The frozen `/api/harness/*` contract from Rook was completely deterministic and sufficient. No backend modifications were required.

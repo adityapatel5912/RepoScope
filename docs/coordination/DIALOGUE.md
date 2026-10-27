@@ -734,3 +734,20 @@ preserving the real endpoints (`/api/chat/stream`, `/api/repo/reverse-prompt`,
 Extension publishing (Open VSX, VS Code Marketplace, VSIX) is explicitly
 excluded from the plan at the owner's direction. Extension compile/test may
 remain a pre-existing artifact check only.
+
+---
+
+## 2026-10-27 - Owner - Phase 5+ workflow decided
+
+The owner set the Phase 5+ workflow:
+
+- **One phase per commit, not one branch per phase.** Do not create
+  `wren/phase-N-*` branches.
+- **Commit each phase directly to `experimental`.** Local `experimental` is
+  fast-forwarded to include the Phase 4 tree and the Phase 5–14 plan.
+- Wren commits after every phase, before the handoff. Rook pushes
+  `experimental` only after the independent verifier signs off. `main` changes
+  require separate owner approval.
+
+The plan and Wren prompts now reflect this decision. The verifier identity and
+the Phase 13 MCP question remain open.

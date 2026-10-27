@@ -257,10 +257,12 @@ gate.
 - Phase 3 registry deltas are resolved; Wren's verification is the input,
   Rook's contract is the authority.
 - Phase 4 is merged into `main` at `74bd2fb`; `experimental` is unchanged.
-  The integration target for Phase 5+ is still open.
+  The Phase 5+ integration target is **decided: `experimental`** (owner,
+  2026-10-27). One phase per commit; no per-phase branch. Local `experimental`
+  is fast-forwarded to include Phase 4 and the Phase 5–14 plan.
 - Phase 5–14 workflow: Wren implements each phase; an independent verifier
   (to be introduced by the owner) runs the gate; Rook plans, writes the prompt,
-  and integrates. Wren may start Phase 5; the verifier must be named before the
-  Phase 5 gate and merge.
+  and pushes. Wren may start Phase 5; the verifier must be named before the
+  Phase 5 gate and push.
 - The Phase 5–14 plan and prompts are on local `rook/phase-5-14-plan`, based on
   `839bb6e`; not pushed. The plan excludes extension publishing.

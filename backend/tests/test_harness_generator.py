@@ -424,10 +424,20 @@ def test_opencode_adds_mcp_reposcope_and_leaves_legacy_key_alone(repo, monkeypat
 # ── Path safety and roots ───────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    "bad",
-    ["../escape.json", "..\\escape.json", "/etc/passwd", "C:\\Windows\\x.json"],
-)
+# On POSIX, a backslash is an ordinary filename character, so
+# "..\\escape.json" names a file inside the root rather than escaping it.
+# Only include that case where the platform treats the backslash as a
+# separator.
+_UNSAFE_CONFIG_PATHS = [
+    "../escape.json",
+    "/etc/passwd",
+    "C:\\Windows\\x.json",
+]
+if os.name == "nt":
+    _UNSAFE_CONFIG_PATHS.append("..\\escape.json")
+
+
+@pytest.mark.parametrize("bad", _UNSAFE_CONFIG_PATHS)
 def test_unsafe_config_paths_are_rejected(repo, bad):
     with pytest.raises(H.HarnessError) as exc:
         H.resolve_config_path(repo, bad)

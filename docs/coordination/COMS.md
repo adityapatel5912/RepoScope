@@ -10,14 +10,16 @@ Git commits, tests, and the frozen contracts are the source of truth.
 |---|---|
 | Phase | 4 - token-compact context, MCP surface, and skills |
 | Release | V2.5 |
-| Planning branch | `rook/phase-4-context` (local, unpushed) |
-| Implementation branch | `wren/phase-4-context` |
+| Planning branch | `rook/phase-4-context` at `5b881b4` (local, unpushed) |
+| Implementation branch | `wren/phase-4-context` at `cae15fb` |
+| Verification branch | `rook/phase-4-review`, based on `cae15fb` |
 | Implementation worktree | `D:\Aditya\Hackathon Projects\RepoScope-wren-phase4` |
+| Verification worktree | `D:\Aditya\Hackathon Projects\RepoScope-rook-phase4-verify` |
 | Base | `main` at `7ff5291` (Phase 3 merged) |
 | Contract status | frozen |
-| Implementation status | `handed-off` |
-| Review status | `not-started` |
-| Merge status | `blocked on owner approval` |
+| Implementation status | `verified` |
+| Review status | `complete` |
+| Merge status | `owner-authorized; fast-forward into main` |
 
 ## Ownership
 
@@ -31,8 +33,9 @@ Git commits, tests, and the frozen contracts are the source of truth.
 | `backend/harness_generator.py` skill preview/apply | Wren | `done` |
 | Frontend `SkillsSection` and browser journey | Wren | `done` |
 | TOON benchmark and measured documentation | Wren | `done` |
-| Full test gate, diff review, merge | Rook | `not-started` |
-| `main` / `experimental` | Owner only | `blocked` |
+| Full test gate, diff review, merge | Rook | `done` |
+| `main` merge and push | Owner authorized; Rook executes | `in-progress` |
+| `experimental` | Unchanged at `7ff5291`; not in Phase 4 scope | `not-in-scope` |
 
 ## Frozen surface
 
@@ -51,6 +54,70 @@ Git commits, tests, and the frozen contracts are the source of truth.
 - Five frozen skill IDs: `blast-radius-guard`, `zero-grep-architect`,
   `pr-contract-shield`, `onboarding-navigator`, `dead-code-surgeon`.
 
+## Verification record (2026-10-27)
+
+Rook verified Wren's handoff at `cae15fb` in a fresh worktree
+(`RepoScope-rook-phase4-verify`) on `rook/phase-4-review` and re-ran the full
+gate. The review found documentation that described tools and resources that do
+not exist, a context-pack contract that did not match the implementation, a
+path-dependent benchmark, and missing coverage for the per-symbol character cap.
+
+### Gate
+
+| Check | Result |
+|---|---|
+| `python -m pytest -q` | **509 passed, 1 skipped** (30.55 s) |
+| `python -m compileall -q backend` | pass |
+| `python -m pip check` | no broken requirements |
+| `npm --prefix frontend run build` | pass |
+| `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json` | pass, 0 errors |
+| `npx playwright test tests/e2e/harness.spec.ts` | **5/5** |
+| `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"` | **16/16** |
+| `npx playwright test tests/e2e/mindmap.spec.ts` | **3/3** |
+| `git diff --check` | clean |
+
+The single pytest skip is the Windows unprivileged symlink test. J22 remains
+excluded for the recorded environmental 100 ms threshold; the threshold is
+unchanged.
+
+### Independent TOON rerun
+
+Rook re-cloned the five repositories at the exact commits in
+`docs/TOON_BENCHMARK.md` and re-ran `benchmarks/toon_benchmark.py` with
+`budget=8000`, `detail=skeleton`. Every commit was verified with
+`git rev-parse HEAD`. Results: **5/5 roundtrip PASS**, **median +39.1% token
+saving**, **median +26.8% byte saving** against compact JSON. The previous
+runner embedded the absolute checkout path in `root`, which made byte counts
+depend on the clone directory; the runner now replaces `root` with `<repo>`
+before serialization, and the documented table matches the normalized rerun.
+
+### Review fixes
+
+- `README.md`, `docs/FEATURES.md`, `docs/MCP.md`: replaced eight tool names and
+  five resource URIs that do not exist with the real 13 tools and 8 resources;
+  corrected signatures, argument defaults, caveats, and the nine-agent skill
+  matrix.
+- `docs/API.md`, `docs/MCP.md`: corrected the context-pack contract — `tokens`
+  is `{pack, budget}`, `counts` is `{files_included, files_requested,
+  symbols_included}`, omission reasons are `budget`, `not-indexed`,
+  `ambiguous`, `outside-root`, and `unreadable`, caps apply **per symbol** at
+  120 lines / 12,000 characters, the unchanged envelope has no `message`, and
+  path traversal is an omission rather than HTTP 400.
+- `docs/MCP.md`: documented that the MCP `get_context_pack` tool is JSON-only
+  and that `REPOSCOPE_TOON=0` affects only the REST export.
+- `benchmarks/toon_benchmark.py`: normalized the volatile `root` field before
+  measuring, so byte and token counts reproduce from any checkout path.
+- `backend/tests/test_context_compressor.py`: added
+  `test_context_pack_full_detail_char_cap`, which exercises `MAX_BODY_CHARS`
+  and the `max-chars` cap.
+- `docs/screenshots/v2/`: restored 16 unrelated journey and harness binaries
+  to `5b881b4`; only `harness/harness-skills-preview.png` is retained as Phase 4
+  evidence.
+
+No graph schema, edge meaning, MCP tool name, resource URI, or existing
+endpoint path changed in the review fixes. The Phase 4 surface remains 13 tools
+and 8 resources.
+
 ## Claim protocol
 
 1. Wren claims the Phase 4 implementation files in `WREN.md` before editing.
@@ -63,15 +130,16 @@ Git commits, tests, and the frozen contracts are the source of truth.
 
 ## Handoff checklist
 
-- [ ] Branch and commit hash recorded.
-- [ ] Files changed and claims released.
-- [ ] Every command and result recorded.
-- [ ] Measured TOON table with five real repositories and exact commits.
-- [ ] Known limits and skipped checks recorded with reasons.
-- [ ] No push; no `main` or `experimental` change; no secret exposure.
+- [x] Branch and commit hash recorded.
+- [x] Files changed and claims released.
+- [x] Every command and result recorded.
+- [x] Measured TOON table with five real repositories and exact commits.
+- [x] Known limits and skipped checks recorded with reasons.
+- [x] No push; no `main` or `experimental` change; no secret exposure.
 
 ## Blockers
 
-None. The only expected environmental skips are the Windows symlink test and
-the locally excluded J22 journey; both are recorded in the Phase 3 baseline and
-must be repeated in the Phase 4 handoff.
+None. The owner authorized the `main` merge and push on 2026-10-27. The only
+expected environmental skips are the Windows symlink test and the locally
+excluded J22 journey; both are recorded in the Phase 3 baseline and repeated in
+the Phase 4 handoff.

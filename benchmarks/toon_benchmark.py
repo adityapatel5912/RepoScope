@@ -93,13 +93,20 @@ def run_benchmark(
         files_inc = pack.get("counts", {}).get("files_included", 0)
         symbols_inc = pack.get("counts", {}).get("symbols_included", 0)
 
+        # The absolute root is local, volatile metadata and is excluded from the
+        # content hash. Replace it with a fixed placeholder so the measured byte
+        # and token counts reproduce from any checkout directory.
+        measured_pack = dict(pack)
+        if "root" in measured_pack:
+            measured_pack["root"] = "<repo>"
+
         # 3. Compact JSON serialization
-        compact_json = json.dumps(pack, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        compact_json = json.dumps(measured_pack, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         json_bytes = len(compact_json.encode("utf-8"))
         json_tokens = estimate_tokens(compact_json)
 
         # 4. TOON serialization
-        toon_text = encode_toon(pack)
+        toon_text = encode_toon(measured_pack)
         toon_bytes = len(toon_text.encode("utf-8"))
         toon_tokens = estimate_tokens(toon_text)
 

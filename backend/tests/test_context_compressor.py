@@ -212,6 +212,48 @@ def test_context_pack_full_detail_and_caps(tmp_path: Path):
     assert any(c["reason"] == "max-lines" for c in pack["caps"])
 
 
+def test_context_pack_full_detail_char_cap(tmp_path: Path):
+    repo_dir = tmp_path / "repo_wide"
+    repo_dir.mkdir()
+    # Two lines, but the second line is longer than the per-symbol char cap.
+    long_line = "    x = \"" + ("a" * (MAX_BODY_CHARS + 500)) + "\"\n"
+    (repo_dir / "wide.py").write_text("def wide():\n" + long_line, encoding="utf-8")
+
+    graph = {
+        "nodes": [
+            {
+                "id": "file:wide.py",
+                "type": "file",
+                "label": "wide.py",
+                "path": "wide.py",
+                "role": "utility",
+                "pillar": "backend",
+            },
+            {
+                "id": "func:wide.py:wide",
+                "type": "function",
+                "label": "wide",
+                "file": "wide.py",
+                "line": 1,
+                "end_line": 2,
+                "signature": "def wide():",
+                "role": "utility",
+            },
+        ],
+        "edges": [],
+    }
+
+    pack = build_context_pack(graph, str(repo_dir), paths=["wide.py"], detail="full")
+    assert pack["available"] is True
+    sym = pack["files"][0]["symbols"][0]
+    assert sym["body_truncated"] is True
+    assert len(sym["body"]) == MAX_BODY_CHARS
+    assert any(
+        c["reason"] == "max-chars" and c["limit"] == MAX_BODY_CHARS
+        for c in pack["caps"]
+    )
+
+
 def test_context_pack_budget_omissions(sample_graph):
     repo_dir, graph = sample_graph
     # Budget too small to fit any file (minimum budget is 500)

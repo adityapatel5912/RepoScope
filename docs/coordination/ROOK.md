@@ -15,6 +15,11 @@ for the commit history.
   and `experimental`.** Backend `69b9620`, handoff docs `5d1f3f0`, UI
   `4a8a5de`; the review fixes and final gate are recorded in the Phase 3
   section below and in `DIALOGUE.md`.
+- Phase 4 — token-compact context, MCP surface, and skills. **Verified; owner
+  authorized the `main` merge.** Wren implemented at `bb4b268` + `cae15fb`;
+  Rook reviewed on `rook/phase-4-review`, corrected the documentation, added
+  the missing cap test, normalized the benchmark root, and re-ran the full
+  gate. Details in the Phase 4 section below.
 
 ## Claims (Phase 0)
 
@@ -64,6 +69,22 @@ for the commit history.
 | `CHANGELOG.md` | complete | Phase 3 entry. |
 | `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` | done | Phase 3 status and frozen contract. |
 | `docs/coordination/ROOK.md`, `DIALOGUE.md` | done | This planning record. |
+
+## Claims (Phase 4 review — complete)
+
+| File | Status | Notes |
+|---|---|---|
+| `README.md` | complete | Real 13 tools / 8 resources; corrected benchmark median. |
+| `docs/FEATURES.md` | complete | Real MCP surface and context behavior. |
+| `docs/MCP.md` | complete | Full reference rewrite; JSON-only MCP pack; omitted reasons. |
+| `docs/API.md` | complete | Correct context-pack contract, caps, and status codes. |
+| `docs/TOON_BENCHMARK.md` | complete | Normalized root, exact-commit rerun, runbook. |
+| `CHANGELOG.md` | complete | Per-symbol caps and measured median. |
+| `benchmarks/toon_benchmark.py` | complete | Normalize volatile `root` before measuring. |
+| `backend/tests/test_context_compressor.py` | complete | Add `MAX_BODY_CHARS` coverage. |
+| `docs/screenshots/v2/*` | complete | Reverted 16 unrelated binaries; kept the Skills preview. |
+| `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` | complete | Phase 4 status and gate. |
+| `docs/coordination/COMS.md`, `DIALOGUE.md`, `ROOK.md` | complete | Verification record. |
 
 ## Claims (CI hermeticity)
 
@@ -191,6 +212,35 @@ main merge and branch cleanup. `experimental` was merged into `main` with
   npm/PyPI packaging, any write outside the project root, and any main-branch
   change before owner approval.
 
+### Phase 4 review (complete; owner authorized the main merge)
+
+Status: verified at Wren's head `cae15fb`. Rook reviewed in the fresh
+`RepoScope-rook-phase4-verify` worktree on `rook/phase-4-review`, fixed the
+findings, and re-ran the full gate.
+
+- Review findings: `README.md`, `docs/FEATURES.md`, and `docs/MCP.md` listed
+  eight tool names and five resource URIs that do not exist; `docs/API.md` and
+  `docs/MCP.md` described the wrong context-pack fields, applied the body caps
+  per file instead of per symbol, invented an unchanged-envelope `message`
+  field, and returned HTTP 400 for path traversal. The benchmark embedded the
+  absolute `root`, so byte counts depended on the checkout path. The
+  `MAX_BODY_CHARS` branch had no test.
+- Fixes: corrected all documentation against the implementation, normalized
+  `root` to `<repo>` in `benchmarks/toon_benchmark.py`, added
+  `test_context_pack_full_detail_char_cap`, restored 16 unrelated screenshot
+  binaries to `5b881b4`, and kept only the Skills preview as Phase 4 evidence.
+- Gate: **509 passed, 1 skipped**; `compileall` and `pip check` clean;
+  frontend build pass; `tsc` 0 errors; harness **5/5**; journeys **16/16**
+  with J22 excluded; mindmap **3/3**; `git diff --check` clean.
+- Independent TOON rerun at the five exact commits: **5/5 roundtrip PASS**,
+  **median +39.1% token saving**, **median +26.8% byte saving** against
+  compact JSON. No 85% claim remains.
+- No graph/schema, edge, existing tool, existing resource, or existing
+  endpoint change was introduced by the review fixes. The Phase 4 surface
+  remains 13 tools and 8 resources.
+- The owner authorized the `main` merge and push. `experimental` remains at
+  `7ff5291` and is intentionally not part of this merge.
+
 ## Open decisions
 
 - None for Phase 2. The mind-map contract is frozen; Wren consumes it without
@@ -199,3 +249,9 @@ main merge and branch cleanup. `experimental` was merged into `main` with
   remain.
 - Phase 3 registry deltas are resolved; Wren's verification is the input,
   Rook's contract is the authority.
+- Phase 4 is verified and owner-authorized for `main`; `experimental` is
+  unchanged. The integration target for Phase 5+ is still open.
+- Phase 5–14 workflow: Wren implements each phase; an independent verifier
+  (to be introduced by the owner) runs the gate; Rook plans, writes the prompt,
+  and integrates. Wren may start Phase 5; the verifier must be named before the
+  Phase 5 gate and merge.

@@ -120,30 +120,30 @@ The same index, exposed to agents.
 
 **Tools (13):**
 
-- `get_symbol_impact`: Traces direct and transitive dependent callers of a symbol.
-- `get_file_impact`: Measures downstream dependents of a modified file.
-- `get_architecture_overview`: High-level summary of layers, entry points, and coupling.
-- `find_circular_dependencies`: Detects cycles within and across architectural layers.
-- `find_unreachable_symbols`: Flags statically unreferenced symbols for dead-code investigation.
-- `explain_architecture_rules`: Explains layer hierarchy and identifies rule violations.
-- `get_active_tour`: Returns steps and narrative for guided repository tours.
-- `calculate_churn_metrics`: Analyzes git commit hotspots and co-change coupling.
+- `get_architecture_overview`: High-level summary of layers, hubs, entry points, and reachability.
+- `calculate_blast_radius`: Traces direct and transitive dependents of a file or symbol.
+- `get_dependency_lineage`: Shows what a file needs and what needs it.
+- `explain_architectural_rule`: Checks one import against the declared layer boundaries.
+- `get_repo_map`: Returns a centrality-ranked map that fits a token budget.
+- `find_dependency_cycles`: Detects file-level and symbol-level cycles and the layers they span.
+- `get_hotspots`: Ranks files by churn x centrality.
+- `find_unreachable_symbols`: Flags statically unreferenced symbol candidates for review.
 - `get_mindmap_hierarchy`: Returns the hierarchical semantic tree (pillar to symbol).
 - `get_ast_skeleton`: Extracts symbol signatures and line numbers without bodies.
-- `get_context_pack`: Builds deterministic, budgeted context packs with delta hash sync.
-- `diff_interface_contracts`: Detects export and API contract breaking changes across git refs.
-- `get_ranked_reading_path`: Produces prioritized reading paths for codebase onboarding.
+- `get_context_pack`: Builds deterministic, budgeted context packs with delta hash sync (JSON only over MCP).
+- `diff_interface_contracts`: Diffs export and API contract changes from a patch or a source pair.
+- `get_ranked_reading_path`: Produces a three-level reading path for codebase onboarding.
 
 **Resources (8):**
 
-- `reposcope://repo-map`: Full file and symbol registry.
-- `reposcope://arch-rules`: Defined architectural rules and violation evidence.
-- `reposcope://active-tour`: Current guided tour steps.
-- `reposcope://churn-report`: High-frequency commit churn analysis.
+- `reposcope://graph/summary`: Node and edge counts, layer split, and top hubs.
+- `reposcope://hotspots`: Churn x centrality hotspot report.
+- `reposcope://repo-map`: Budgeted repository map with context-saving metrics.
 - `reposcope://dead-code`: Unreferenced symbol candidates for review.
+- `reposcope://cycles`: Dependency cycles and their layer spans.
 - `reposcope://mindmap`: Semantic hierarchy tree.
-- `reposcope://api-routes`: Declared HTTP route handlers and methods.
-- `reposcope://context-pack`: Default budgeted context pack.
+- `reposcope://api-routes`: Detected HTTP route handlers and methods.
+- `reposcope://context-pack`: Default skeleton context pack at an 8,000-token budget.
 
 **Transports:** stdio (default) and Streamable HTTP. SSE is not offered.
 

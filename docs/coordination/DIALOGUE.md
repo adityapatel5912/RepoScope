@@ -637,3 +637,62 @@ Phase 4 implementation of token-compact context, MCP surface expansion, and skil
 
 ### 6. Next Open Decision
 - Ready for Rook to create a fresh verification worktree, run the full gate, review the diff, and request owner authorization to merge.
+
+---
+
+## 2026-10-27 - Rook - Phase 4 verification complete; owner authorized the main merge
+
+Rook verified Wren's Phase 4 handoff at `cae15fb` in the fresh
+`RepoScope-rook-phase4-verify` worktree, on `rook/phase-4-review`. The full
+gate is green and the review fixes are ready to merge.
+
+### Findings fixed
+
+- `README.md`, `docs/FEATURES.md`, `docs/MCP.md`: eight named tools and five
+  resource URIs did not exist. Replaced with the real 13 tools and 8 resources
+  and corrected the argument lists, defaults, caveats, and the skill matrix.
+- `docs/API.md`, `docs/MCP.md`: the context-pack contract was wrong. Corrected
+  `tokens={pack,budget}`, `counts={files_included,files_requested,
+  symbols_included}`, per-symbol caps (120 lines / 12,000 characters), the
+  omission reasons, the unchanged envelope (no `message`), and the status-code
+  behavior (`outside-root` is an omission, not HTTP 400). Documented that the
+  MCP `get_context_pack` tool is JSON-only.
+- `benchmarks/toon_benchmark.py`: replaced the absolute `root` with `<repo>`
+  before serialization so byte and token counts are reproducible from any
+  checkout path.
+- `backend/tests/test_context_compressor.py`: added
+  `test_context_pack_full_detail_char_cap` to exercise `MAX_BODY_CHARS` and the
+  `max-chars` cap.
+- Restored 16 unrelated screenshot binaries to `5b881b4`; only
+  `docs/screenshots/v2/harness/harness-skills-preview.png` remains as Phase 4
+  evidence.
+
+### Gate on `rook/phase-4-review`
+
+- `python -m pytest -q`: **509 passed, 1 skipped** (30.55 s).
+- `python -m compileall -q backend`, `python -m pip check`: clean.
+- `npm --prefix frontend run build`, `tsc --noEmit`: pass, 0 errors.
+- Harness **5/5**; journeys **16/16** with J22 excluded; mindmap **3/3**;
+  `git diff --check` clean.
+
+### Independent benchmark
+
+Re-cloned the five repositories at the exact commits in
+`docs/TOON_BENCHMARK.md` and re-ran the runner. All five HEADs matched the
+claimed SHAs. Result: **5/5 roundtrip PASS**, **median +39.1% token saving**,
+**median +26.8% byte saving** against compact JSON. The documented table now
+matches the normalized rerun.
+
+### Decision
+
+The owner authorized the Phase 4 merge into `main` and the push on
+2026-10-27. `experimental` remains at `7ff5291` and is not part of this merge.
+The Phase 4 surface is unchanged: exactly 13 tools and 8 resources, with all
+pre-existing names and URIs preserved.
+
+### Next
+
+Merge `rook/phase-4-review` into `main` as a fast-forward, push `main`, and
+record the merge. Then write the Phase 5–14 execution plan under the new
+workflow: Wren implements, an independent verifier runs the gate, and Rook
+plans and integrates. The plan excludes extension publishing.

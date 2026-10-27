@@ -12,8 +12,8 @@ on a separate marketplace.
 - **Context compression, AST skeleton, and delta sync (Phase 4).**
   Deterministic repository context packs via `GET /api/context/pack` and MCP
   tool `get_context_pack`. `detail=skeleton` extracts symbol declarations
-  without bodies; `detail=full` enforces a strict 120-line / 12,000-character cap
-  per file. Content SHA-256 delta hash excludes volatile fields, providing an
+  without bodies; `detail=full` enforces a strict per-symbol cap of 120 lines /
+  12,000 characters. Content SHA-256 delta hash excludes volatile fields, providing an
   unchanged envelope when matching `since_hash`. Token-budgeted allocation
   (500 to 200,000 tokens) reports omitted files and reasons.
 - **Five new MCP tools and three new resources.**
@@ -30,8 +30,9 @@ on a separate marketplace.
 - **Optional TOON serialization & measured benchmark.**
   Lazily-loaded `format=toon` adapter via `reposcope[toon]` (`toon-format>=1.2,<2`)
   with kill-switch `REPOSCOPE_TOON=0`. Measured benchmark across 5 real repositories
-  (`requests`, `flask`, `httpx`, `express`, `got`) proves a **median 39.0% token reduction**
-  over compact JSON with 100% roundtrip fidelity. No unverified 85% token-saving claims.
+  (`requests`, `flask`, `httpx`, `express`, `got`) measured a **median 39.1% token
+  reduction** over compact JSON with 100% roundtrip fidelity. No unverified 85%
+  token-saving claims.
 
 - **v2.0 pitch deck** in PDF and editable PPTX form, linked from the README
   and the documentation index.

@@ -461,32 +461,52 @@ GET /api/context/pack?paths=backend/main.py&format=json&detail=skeleton&budget=8
 |---|---|---|---|
 | `paths` | `str` | `""` | Comma-separated list of relative file paths. If empty, the pack selects files guided by PageRank and entry-point heuristics. |
 | `format` | `Literal["json", "toon"]` | `"json"` | Output format. `json` returns compact single-line JSON. `toon` returns Token-Oriented Object Notation. |
-| `detail` | `Literal["skeleton", "full"]` | `"skeleton"` | Detail mode. `skeleton` extracts symbol signatures and metadata, omitting bodies. `full` includes code up to 120 lines / 12,000 characters per file. |
-| `budget` | `int` | `8000` | Token budget, clamped between `500` and `200,000`. |
-| `since_hash` | `str \| None` | `None` | SHA-256 content hash from a previous request. |
+| `detail` | `Literal["skeleton", "full"]` | `"skeleton"` | Detail mode. `skeleton` extracts symbol signatures and metadata, omitting bodies. `full` includes symbol bodies, each capped at 120 lines / 12,000 characters. |
+| `budget` | `int` | `8000` | Token budget. The HTTP endpoint validates `500 <= budget <= 200000`; out-of-range values return `422`. |
+| `since_hash` | `str \| None` | `None` | Content hash (including the `sha256:` prefix) from a previous request. |
 
 #### Response Headers
 
-- `X-RepoScope-Context-Hash`: The SHA-256 content hash of the pack payload. Computed over content excluding volatile fields (`format`, `since_hash`, `root`, `tokens`). Identical for both JSON and TOON representations.
+- `X-RepoScope-Context-Hash`: The SHA-256 content hash of the pack payload. Computed over content excluding volatile fields (`format`, `since_hash`, `root`, `hash`, token-count fields, and timestamps). Identical for both JSON and TOON representations.
 - `X-RepoScope-Context-Unchanged`: Set to `1` when the provided `since_hash` matches the current content hash.
 
 #### Full Response Example (`format=json`, `200 OK`)
 
 ```json
-{"schema_version": 1, "available": true, "format": "json", "detail": "skeleton", "budget": 8000, "root": "/work/repo", "hash": "a1b2c3d4...", "files": [{"path": "backend/main.py", "role": "entry_point", "pillar": "backend", "route_count": 5, "symbols": [{"name": "app", "kind": "variable", "line": 20, "end_line": 20, "exported": true, "complexity": 1, "role": "entry_point", "signature": "app = FastAPI()"}]}], "omitted": [], "caps": [], "tokens": {"files_estimated": 450, "budget": 8000, "budget_exceeded": false}, "counts": {"files": 1, "symbols": 1, "omitted": 0}}
+{"schema_version":1,"available":true,"detail":"skeleton","budget":8000,"files":[{"path":"backend/main.py","role":"entry_point","pillar":"backend","route_count":5,"symbols":[{"name":"app","kind":"variable","line":20,"end_line":20,"exported":true,"complexity":1,"role":"entry_point","signature":"app = FastAPI()"}]}],"omitted":[],"caps":[],"truncated":false,"counts":{"files_included":1,"files_requested":1,"symbols_included":1},"hash":"sha256:...","tokens":{"pack":1234,"budget":8000},"format":"json","root":"/work/repo"}
 ```
+
+- `tokens.pack` is the estimated token count of the pack; `tokens.budget` echoes the requested budget.
+- `counts` reports `files_included`, `files_requested`, and `symbols_included`.
+- `truncated` is true when any file was omitted or any symbol body was capped.
+
+#### Omitted Files and Caps
+
+Files that cannot be included are listed in `omitted` with one of these reasons:
+
+| Reason | Meaning |
+|---|---|
+| `budget` | The file did not fit within the token budget. |
+| `not-indexed` | The requested path has no file node in the current graph. |
+| `ambiguous` | The requested path matches more than one indexed file. |
+| `outside-root` | The path is absolute, drive-qualified, or contains `..`. It is omitted, not returned as an HTTP error. |
+| `unreadable` | `detail=full` was requested but the file could not be read from disk. |
+
+Per-symbol caps appear in `caps` with `reason` `max-lines` or `max-chars` and the applied `limit`. The symbol's `body_truncated` flag is set.
 
 #### Delta Sync Unchanged Envelope Example (`since_hash` match, `200 OK`)
 
 ```json
-{"schema_version": 1, "available": true, "unchanged": true, "hash": "a1b2c3d4...", "message": "Context unchanged since provided hash"}
+{"schema_version":1,"available":true,"unchanged":true,"detail":"skeleton","budget":8000,"hash":"sha256:...","format":"json"}
 ```
+
+The unchanged envelope intentionally carries no `files`, `omitted`, `caps`, `counts`, `tokens`, or `message` field. It is always returned as JSON, even when `format=toon` was requested.
 
 #### Status Codes & Error Behavior
 
 - `200`: Success. Returns compact JSON (`application/json`) or TOON (`text/toon; charset=utf-8`).
-- `400`: Invalid parameters, path traversal attempt, TOON disabled via `REPOSCOPE_TOON=0`, or optional dependency `toon-format` not installed.
-- `422`: Validation error on query parameters (e.g. budget outside 500..200000).
+- `400`: TOON was requested while disabled via `REPOSCOPE_TOON=0`, or the optional `toon-format` dependency is not installed.
+- `422`: Query validation failed (invalid `format`/`detail`, or `budget` outside 500..200000).
 - `503`: No repository is currently loaded.
 
 ---

@@ -1,9 +1,9 @@
 # RepoScope V2.5–V2.8 — Implementation Plan
 
-**Status:** Approved - Phase 0-3 complete; Phase 3 is merged into `main` and `experimental`.
+**Status:** Approved - Phase 0-4 complete; Phase 4 is verified and owner-authorized for the `main` merge. `experimental` remains at the Phase 3 tree (`7ff5291`).
 **Source draft:** [`RepoScope_V2.5_AI_Expansion_Plan.md`](../RepoScope_V2.5_AI_Expansion_Plan.md) (preserved unchanged).
 **Target repository:** this repository, `adityapatel5912/RepoScope`. The plan does **not** migrate to `RepoScope-V2`.
-**Integration branch:** `experimental`. `main` is untouched until the owner tests `experimental` and merges it.
+**Integration branch:** `experimental` remains the planned integration branch for V2.6+. The owner authorized a direct Phase 4 merge into `main`, so `main` and `experimental` intentionally diverge until the Phase 5 integration target is decided.
 **Baseline measured:** 2026-10-26.
 **Rule:** do not start a phase until the prior phase's acceptance gate is green. Commit once per phase. Do not mix two phases in one commit.
 
@@ -1043,25 +1043,25 @@ rules still apply. The Skills panel shows `Ready` and a real body preview.
 
 ### Acceptance gate
 
-- [ ] 13 MCP tools and 8 resources exactly; all existing names and URIs
+- [x] 13 MCP tools and 8 resources exactly; all existing names and URIs
       unchanged.
-- [ ] Context pack is deterministic: same graph + same params → same hash.
-- [ ] Skeleton mode preserves signatures, paths, lines, and roles; it omits
+- [x] Context pack is deterministic: same graph + same params → same hash.
+- [x] Skeleton mode preserves signatures, paths, lines, and roles; it omits
       bodies only. Full mode caps bodies and reports caps.
-- [ ] Budget, omissions, unreadable files, and traversal attempts are
+- [x] Budget, omissions, unreadable files, and traversal attempts are
       reported safely.
-- [ ] JSON and TOON share the content hash; `since_hash` returns the compact
+- [x] JSON and TOON share the content hash; `since_hash` returns the compact
       unchanged envelope.
-- [ ] TOON round-trips on the benchmark corpus; the measured table has at
+- [x] TOON round-trips on the benchmark corpus; the measured table has at
       least five real repositories and exact commits.
-- [ ] No 85% claim remains; token numbers are measured.
-- [ ] Five real skill bodies exist in canonical form and in both checked-in
+- [x] No 85% claim remains; token numbers are measured.
+- [x] Five real skill bodies exist in canonical form and in both checked-in
       locations; frontmatter, allowlist, size, and caveats are tested.
-- [ ] Harness preview/apply writes skill files for Claude and Antigravity;
+- [x] Harness preview/apply writes skill files for Claude and Antigravity;
       the UI shows `Ready` and previews the body.
-- [ ] Backend tests, compileall, pip check, frontend build, tsc, harness,
+- [x] Backend tests, compileall, pip check, frontend build, tsc, harness,
       journeys (J22 excluded locally), mindmap, and `git diff --check` pass.
-- [ ] No Phase 5+ files, packaging, citation verifier, reverse prompt, or
+- [x] No Phase 5+ files, packaging, citation verifier, reverse prompt, or
       security suite are touched.
 
 ### Commit

@@ -908,44 +908,171 @@ phase branch is merged into `experimental` with `--no-ff`.
 **Release:** V2.5
 **Depends on:** Phases 1–3
 **Risk:** medium — token claims must be measured
-**Owner:** Rook (compressor, MCP); Wren (skills copy, panel polish)
+**Owner:** Wren (implementation: compressor, MCP, skills, harness, frontend);
+Rook (contract review, verification, integration)
 
 ### Goal
 
-Add TOON behind a flag, a deterministic AST skeleton, a delta hash, context packs, and the new MCP tools/resources. The default stays JSON until a RepoScope-specific benchmark proves a real saving with round-trip fidelity.
+Add TOON behind an explicit opt-in, a deterministic AST skeleton, a delta
+hash, context packs, five new MCP tools, three new MCP resources, and the five
+real `SKILL.md` bundles. JSON remains the default. No token-saving claim ships
+until a RepoScope-specific benchmark measures compact JSON against TOON with
+round-trip fidelity.
+
+Phase 4 is one Wren implementation pass followed by one Rook verification
+pass. Wren works on `wren/phase-4-context`, based on the local
+`rook/phase-4-context` planning branch. Rook does not edit implementation
+files while the claim is active. The owner approves any merge into
+`experimental` or `main`.
 
 ### Files
 
-`backend/context_compressor.py`, `backend/mcp_server/server.py`, `backend/mcp_server/tools.py`, `backend/api/routers/context.py`, `backend/tests/test_context_compressor.py`, `backend/tests/test_mcp_v25.py`, `.agents/skills/*/SKILL.md`, `.claude/skills/*/SKILL.md`, `docs/MCP.md`, `docs/TOON_BENCHMARK.md`.
+- `backend/context_compressor.py` — skeleton, full-body caps, budget,
+  deterministic hash, context pack, lazy TOON adapter.
+- `backend/skill_library.py` — the five canonical `SKILL.md` bodies and
+  validation.
+- `backend/api/routers/context.py` — `GET /api/context/pack`.
+- `backend/api/__init__.py` — mount the context router.
+- `backend/mcp_server/tools.py` and `backend/mcp_server/server.py` — five
+  tools and three resources.
+- `backend/harness_generator.py` — skill bodies in the registry and skill
+  files in preview/apply.
+- `backend/tests/test_context_compressor.py`,
+  `backend/tests/test_context_api.py`,
+  `backend/tests/test_skill_library.py`,
+  `backend/tests/test_mcp_v25.py`, and updates to
+  `backend/tests/test_mcp_server.py`, `test_harness_generator.py`, and
+  `test_harness_api.py`.
+- `.claude/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md` — ten checked-in
+  copies of the canonical bodies.
+- `frontend/src/api/client.ts`,
+  `frontend/src/components/harness/SkillsSection.tsx`,
+  `frontend/tests/e2e/harness.spec.ts`.
+- `benchmarks/toon_benchmark.py`, `docs/MCP.md`,
+  `docs/TOON_BENCHMARK.md`, `docs/API.md`, `docs/AGENT_INTEGRATION.md`,
+  `docs/FEATURES.md`, `README.md`, `CHANGELOG.md`.
+- `pyproject.toml` and `.github/workflows/qa.yml` for the optional TOON
+  dependency. Do not add TOON to `backend/requirements.txt`.
 
 ### API and tools
 
-- `GET /api/context/pack?format=json|toon&detail=full|skeleton&budget=8000&since_hash=...`
-- New MCP tools: `get_mindmap_hierarchy`, `get_ast_skeleton`, `get_context_pack`, `get_dependency_lineage` (existing name preserved), `diff_interface_contracts`, `get_ranked_reading_path`.
-- New MCP resources: `reposcope://mindmap`, `reposcope://api-routes`, `reposcope://context-pack`.
-- Existing tools/resources keep their names and URIs.
+```
+GET /api/context/pack
+  ?paths=<comma-separated repo-relative paths>
+  &format=json|toon          (default json)
+  &detail=skeleton|full      (default skeleton)
+  &budget=8000               (500..200000)
+  &since_hash=sha256:...     (optional)
+```
+
+New MCP tools:
+
+- `get_mindmap_hierarchy(include_symbols=True, max_nodes=2000)`
+- `get_ast_skeleton(file_path, max_symbols=200)`
+- `get_context_pack(paths="", detail="skeleton", budget=8000, since_hash=None)`
+- `diff_interface_contracts(file_path, patch=None, old_source=None,
+  new_source=None, include_consumers=True)`
+- `get_ranked_reading_path(max_files=12)`
+
+New MCP resources:
+
+- `reposcope://mindmap`
+- `reposcope://api-routes`
+- `reposcope://context-pack`
+
+The existing 8 tools and 5 resources keep their names, signatures, and URIs.
+The final surface is exactly 13 tools and 8 resources.
+
+### Context-pack contract
+
+The pack is deterministic for the same graph, paths, detail, and budget. It
+contains:
+
+- `schema_version`, `available`, `detail`, `budget`;
+- ordered `files`, each with `path`, `role`, `pillar`, `route_count`, and
+  ordered `symbols`;
+- `omitted` with reasons `budget`, `not-indexed`, `ambiguous`, `outside-root`,
+  or `unreadable`;
+- `caps` with `max-lines` or `max-chars` and the applied limit;
+- `truncated`, `counts`, `hash`, `tokens`, `format`, and `root`.
+
+Skeleton mode preserves paths, lines, end lines, roles, kinds, and normalized
+signatures; it omits bodies only. Full mode reads source bodies capped at 120
+lines and 12,000 characters per symbol and reports every cap.
+
+The hash is SHA-256 over canonical compact JSON with `format`, `since_hash`,
+`hash`, `root`, and all token-count fields removed. JSON and TOON therefore
+share the same content hash. `tokens.pack` is estimated from the content with
+the token fields neutralized, so it is not circular. A matching `since_hash`
+returns a compact JSON envelope with `unchanged: true` and no files.
+
+Path safety is part of the contract: absolute paths, drive-qualified paths,
+`..` components, and symlink escapes are omitted, never read.
 
 ### TOON policy
 
-- `toon-format` is an optional dependency, never imported at module import time.
-- `format=toon` returns `400` with a clear install instruction when the package is absent.
-- The benchmark records bytes, estimated tokens, and round-trip equality on at least five real repositories. If the median saving is below 20% or round-trip fidelity fails, TOON stays opt-in and the 85% claim is removed from the docs.
-- JSON remains the default.
+- `toon-format` is an optional dependency (`[project.optional-dependencies].toon`)
+  and is imported lazily, never at module import time.
+- `format=toon` returns HTTP 400 with clear install guidance when the package
+  is absent.
+- `REPOSCOPE_TOON=0` is a kill switch; JSON remains available.
+- JSON is the default in every case.
+- The benchmark records bytes, estimated tokens, and round-trip equality on
+  at least five real repositories with exact commit SHAs. The baseline is
+  compact JSON, not pretty-printed JSON.
+- No 85% claim ships. If median saving is below 20%, the docs state the
+  measured result and TOON remains opt-in. If round-trip fails, the phase
+  stops rather than shipping a lossy path.
+
+### Skills
+
+The five IDs are frozen: `blast-radius-guard`, `zero-grep-architect`,
+`pr-contract-shield`, `onboarding-navigator`, `dead-code-surgeon`.
+
+Each body is a real 60-100 line workflow with frontmatter, a token budget, a
+frozen first tool call, an output contract, and stop conditions. Canonical
+bodies live in `backend/skill_library.py`; checked-in copies live in both
+`.claude/skills/<id>/SKILL.md` and `.agents/skills/<id>/SKILL.md`. There is no
+`.opencode/skills/` copy. `dead-code-surgeon` must state that static
+reachability is an estimate, not proof of dead code.
+
+The harness generator returns bodies from `list_skills()` and includes the
+five skill files in Claude and Antigravity preview/apply. The other seven
+agents are unchanged. Existing force, diff, atomic-write, and path-safety
+rules still apply. The Skills panel shows `Ready` and a real body preview.
 
 ### Acceptance gate
 
+- [ ] 13 MCP tools and 8 resources exactly; all existing names and URIs
+      unchanged.
 - [ ] Context pack is deterministic: same graph + same params → same hash.
-- [ ] Skeleton mode preserves signatures, paths, lines, and roles; it omits bodies only.
-- [ ] TOON round-trips on the benchmark corpus or is documented as opt-in only.
-- [ ] All existing MCP tools still register and pass.
-- [ ] Five skills exist and are referenced by the harness generator.
-- [ ] Token numbers are measured, not asserted from the source draft.
+- [ ] Skeleton mode preserves signatures, paths, lines, and roles; it omits
+      bodies only. Full mode caps bodies and reports caps.
+- [ ] Budget, omissions, unreadable files, and traversal attempts are
+      reported safely.
+- [ ] JSON and TOON share the content hash; `since_hash` returns the compact
+      unchanged envelope.
+- [ ] TOON round-trips on the benchmark corpus; the measured table has at
+      least five real repositories and exact commits.
+- [ ] No 85% claim remains; token numbers are measured.
+- [ ] Five real skill bodies exist in canonical form and in both checked-in
+      locations; frontmatter, allowlist, size, and caveats are tested.
+- [ ] Harness preview/apply writes skill files for Claude and Antigravity;
+      the UI shows `Ready` and previews the body.
+- [ ] Backend tests, compileall, pip check, frontend build, tsc, harness,
+      journeys (J22 excluded locally), mindmap, and `git diff --check` pass.
+- [ ] No Phase 5+ files, packaging, citation verifier, reverse prompt, or
+      security suite are touched.
 
 ### Commit
 
 ```
 feat(context): add skeleton, context packs, TOON flag, and MCP tools
 ```
+
+Phase 4 is one implementation commit plus a coordination handoff commit. It is
+reviewed on a fresh worktree and merged only after owner approval. Rollback is
+`git revert <phase-4-commit>`; there is no graph or schema migration.
 
 ## 8. Phase 5 — Verified chat citations
 
@@ -1468,7 +1595,7 @@ chore(release): harden, package, and verify the v2.5–v2.8 train
 | Mind-map API contract | owner | consumer |
 | Mind-map components and layout | review | owner |
 | Harness API and safety | owner | registry/fixtures/UI |
-| TOON/context compressor | owner | docs/skills copy |
+| Phase 4 TOON/context compressor, MCP surface, skill bodies | verify and integrate | owner (implementation) |
 | Citation verifier | owner | UI |
 | Reverse prompt/scaffolder | owner | UI |
 | Tour/onboarding/metrics/impact/security UI | review | owner |
@@ -1548,7 +1675,7 @@ Every tool response carries `path` and `line` where applicable. A tool that cann
 
 ## Appendix G — Feature flags and rollback
 
-- `REPOSCOPE_TOON=1` — TOON output; default off.
+- `REPOSCOPE_TOON=0` — disable the opt-in `format=toon` path; JSON is the default and is always available.
 - `REPOSCOPE_MINDMAP=1` — expose the mind-map mode; default on after Phase 2, off if the gate fails.
 - `REPOSCOPE_SECURITY_ENGINES` — comma-separated allowlist; default all six.
 - `REPOSCOPE_HARNESS_APPLY=1` — enable writes; preview is always available.

@@ -528,3 +528,54 @@ the same Phase 3 tree. The local feature branches `rook/phase-3-harness`,
 `rook/phase-3-integration`, `wren/phase-3-harness`, and `nine_agent_harness_ui`
 were deleted. The remote already contained only `main` and `experimental`; the existing
 tags were left in place.
+
+---
+
+## 2026-10-27 — Rook — Phase 4 contract frozen; Wren executes, Rook verifies
+
+Phase 4 planning is complete on local branch `rook/phase-4-context`, based on
+`main` at `7ff5291`. Nothing is pushed. The branch carries the research
+handoff, the implementation prompt, the revised plan section, and this board.
+
+### Sequence
+
+Wren executes the whole Phase 4 implementation on
+`wren/phase-4-context`; Rook then verifies and integrates. This supersedes the
+earlier split where Rook owned the compressor. Rook does not edit
+implementation files while Wren holds the claim.
+
+### Frozen contract
+
+- Final MCP surface: exactly 13 tools and 8 resources. The existing 8 tools
+  and 5 resources keep their names, signatures, and URIs.
+- New tools: `get_mindmap_hierarchy`, `get_ast_skeleton`, `get_context_pack`,
+  `diff_interface_contracts`, `get_ranked_reading_path`.
+- New resources: `reposcope://mindmap`, `reposcope://api-routes`,
+  `reposcope://context-pack`.
+- New HTTP route: `GET /api/context/pack` with `format=json|toon`,
+  `detail=skeleton|full`, `budget=8000` (500..200000), and optional
+  `since_hash`.
+- Context defaults stay JSON, skeleton, 8000. The hash excludes `format`,
+  `since_hash`, `root`, and token-count fields, so JSON and TOON share a
+  content hash. A matching `since_hash` returns a compact JSON
+  `unchanged: true` envelope.
+- TOON is opt-in and lazily imported. `REPOSCOPE_TOON=0` is the kill switch.
+  A missing package is HTTP 400 with install guidance. `toon-format` is an
+  optional extra, not a runtime requirement.
+- Five skill IDs stay frozen: `blast-radius-guard`, `zero-grep-architect`,
+  `pr-contract-shield`, `onboarding-navigator`, `dead-code-surgeon`. Bodies
+  are canonical in `backend/skill_library.py` and checked in under both
+  `.claude/skills/<id>/SKILL.md` and `.agents/skills/<id>/SKILL.md`. No
+  `.opencode` copy.
+- `dead-code-surgeon` must state that static reachability is an estimate, not
+  proof of dead code. No 85% token-saving claim ships; every number is
+  measured against compact JSON on at least five real repositories with exact
+  commits.
+
+### Next
+
+Wren creates `D:\Aditya\Hackathon Projects\RepoScope-wren-phase4` from local
+`rook/phase-4-context`, implements the phase, commits locally, updates
+`WREN.md`/`COMS.md`/`DIALOGUE.md`, and stops without pushing. Rook then
+creates a fresh verification worktree and runs the full gate. Merge requires
+owner approval.

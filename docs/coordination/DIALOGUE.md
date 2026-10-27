@@ -711,3 +711,26 @@ integration target is an open decision.
 
 Next: write the Phase 5–14 execution and publishing plan, then hand Wren the
 phase prompts. The plan excludes extension publishing.
+
+---
+
+## 2026-10-27 - Rook - Phase 5–14 plan and Wren prompts prepared
+
+Rook prepared the post-Phase-4 execution and publishing plan and a
+self-contained prompt block for every remaining phase on local branch
+`rook/phase-5-14-plan`, based on `main` at `839bb6e`. Nothing is pushed.
+
+- `docs/coordination/PLAN_PHASE_5_14.md`: workflow, roles, order, gates,
+  publishing scope, real-surface corrections, and open decisions.
+- `docs/coordination/WREN_PROMPTS_PHASE_5_14.md`: the common preamble plus one
+  prompt per phase for Phases 5–14.
+
+Decisions still open: verifier identity, the Phase 5+ integration target
+(`main` vs `experimental`), and whether Phase 13 adds a 14th MCP tool. The plan
+defaults to keeping the Phase 4 surface at 13 tools and 8 resources and to
+preserving the real endpoints (`/api/chat/stream`, `/api/repo/reverse-prompt`,
+`/api/onboard`).
+
+Extension publishing (Open VSX, VS Code Marketplace, VSIX) is explicitly
+excluded from the plan at the owner's direction. Extension compile/test may
+remain a pre-existing artifact check only.

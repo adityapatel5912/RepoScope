@@ -20,6 +20,10 @@ for the commit history.
   Rook reviewed on `rook/phase-4-review`, corrected the documentation, added
   the missing cap test, normalized the benchmark root, and re-ran the full
   gate. Details in the Phase 4 section below.
+- Phase 5–14 — execution and publishing plan plus per-phase Wren prompts
+  prepared on local `rook/phase-5-14-plan`, based on `main` at `839bb6e`.
+  Not pushed. Awaiting the owner's verifier and the integration-target
+  decision.
 
 ## Claims (Phase 0)
 
@@ -258,3 +262,5 @@ gate.
   (to be introduced by the owner) runs the gate; Rook plans, writes the prompt,
   and integrates. Wren may start Phase 5; the verifier must be named before the
   Phase 5 gate and merge.
+- The Phase 5–14 plan and prompts are on local `rook/phase-5-14-plan`, based on
+  `839bb6e`; not pushed. The plan excludes extension publishing.

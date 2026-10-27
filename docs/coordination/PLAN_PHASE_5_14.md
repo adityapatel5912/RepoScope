@@ -34,7 +34,7 @@ The verifier does not need to be named before Wren starts implementation, but mu
 
 ## 3. Non-negotiable rules
 
-1. **One phase per branch and per commit.** Do not mix two phases, packaging, or a refactor into one handoff.
+1. **One phase per branch and per commit.** Do not mix two phases, packaging, or a refactor into one handoff. Wren commits after every phase, before the handoff; the commit includes the implementation, tests, docs, CHANGELOG, and the coordination handoff. No phase is handed off with uncommitted work.
 2. **Preserve compatibility.** v1 node ids (`file:`, `func:`, `class:`) and edge meanings (`contains`, `imports`, `calls`) stay unchanged. Existing endpoint paths and keys remain; new keys are additive. Existing MCP tool names and resource URIs remain.
 3. **Deterministic evidence.** The graph, AST, git history, or a deterministic template is the source of truth. An LLM may write prose, never a fact, path, line, signature, or file set.
 4. **JSON remains the default.** TOON stays opt-in. No unverified token-saving claim ships.
@@ -286,7 +286,7 @@ A phase is done only when:
 - The contract and limits are documented against the real code.
 - No existing endpoint, schema, tool, resource, or test regressed.
 - The rollback is understood and recorded.
-- The phase is one commit per phase, merged by Rook, with the exact SHA and push result recorded.
+- The phase is committed on its branch before the handoff (one phase commit), merged by Rook, with the exact SHA and push result recorded.
 - The next phase does not start until the prior merge is green.
 
 Phase 14 is done when the release artifacts install cleanly, the measured numbers are reproduced at the release commit, the rollback is rehearsed, and the owner has approved the release. Extension publishing is not part of that definition.

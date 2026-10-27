@@ -8,11 +8,20 @@
 ## How to use this file
 
 1. Give Wren the **common preamble** plus **exactly one** phase block.
-2. Wren creates a fresh worktree and branch, implements that phase only, runs the author gate, commits, updates the coordination files, and stops.
+2. Wren creates a fresh worktree and branch, implements that phase only, runs the author gate, updates the coordination files, and **commits the complete phase before stopping**. No phase ends with uncommitted work.
 3. Rook hands the exact commit to the independent verifier. The verifier runs the gate and signs off or rejects.
 4. Only after sign-off does Rook integrate. Do not give Wren the next phase block until the prior phase is merged.
 
-If the owner wants Wren to work through all phases in one session, give the common preamble and the phase index below, and require Wren to stop after each handoff and wait for the verifier's verdict before starting the next phase.
+If the owner wants Wren to work through all phases in one session, give the common preamble and the phase index below, and require Wren to **commit after every phase**, stop after each handoff, and wait for the verifier's verdict before starting the next phase.
+
+### Commit policy
+
+Wren commits after every phase, before the handoff. One phase is one local
+commit containing the implementation, tests, docs, CHANGELOG, and the
+`WREN.md`/`COMS.md`/`DIALOGUE.md` handoff. If the verifier rejects the phase,
+the fixes go on the same branch as new commits; never amend or rewrite the
+commit the verifier reviewed. Wren never starts the next phase with a dirty
+tree or with the previous phase uncommitted.
 
 ---
 
@@ -37,14 +46,21 @@ Setup:
 3. Claim every file you will edit in docs/coordination/WREN.md before editing.
 4. Implement the phase completely: backend, frontend, tests, docs, CHANGELOG.
 5. Run the author gate and record the exact commands and results.
-6. Commit once with the prescribed message. Do not amend or rewrite history.
-7. Update WREN.md, COMS.md, and DIALOGUE.md with the five-part handoff:
+6. Update WREN.md, COMS.md, and DIALOGUE.md with the five-part handoff:
    branch/commit; files and claims released; commands/results; limits/skips;
    next open decision.
+7. Commit after every phase. Stage and commit the complete phase — code, tests,
+   docs, CHANGELOG, and the coordination handoff — with the prescribed message.
+   Never carry uncommitted work into the next phase. Do not amend or rewrite
+   history.
 8. Stop. Do not start the next phase. Do not push.
 
 Rules:
 - One phase only. No later-phase files, no packaging, no extension publishing.
+- Commit after every phase before handoff. A phase is not handed off until the
+  phase commit exists and `git status` is clean. If the verifier rejects it,
+  commit the fixes as new commits on the same branch; never amend the reviewed
+  commit.
 - Preserve v1 node ids and edge meanings, existing endpoint paths and keys, and
   existing MCP tool names and resource URIs. New keys and endpoints are additive.
 - JSON remains the default; TOON stays opt-in; never ship an unverified token
@@ -775,7 +791,8 @@ Stop after the handoff. This is the final phase; no next phase starts.
 
 Every phase handoff in `WREN.md`, `COMS.md`, and `DIALOGUE.md` must contain:
 
-1. **Branch and commit:** branch name, exact SHA, base SHA.
+1. **Branch and commit:** branch name, exact SHA, base SHA, and confirmation
+   that the phase is committed and `git status` is clean.
 2. **Files and claims:** every changed file, every claim released, and any
    deviation from the plan's suggested paths.
 3. **Commands and results:** the exact gate commands and their results,
@@ -785,4 +802,6 @@ Every phase handoff in `WREN.md`, `COMS.md`, and `DIALOGUE.md` must contain:
 5. **Next open decision:** the one thing Rook or the verifier must decide before
    the next phase.
 
-A handoff without all five parts is incomplete. Wren stops after posting it.
+A handoff without all five parts is incomplete. The phase commit is mandatory
+before the handoff; a handoff with uncommitted changes is rejected. Wren stops
+after posting it.

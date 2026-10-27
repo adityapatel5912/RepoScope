@@ -1,7 +1,7 @@
 # RepoScope Phase 5–14 — execution and publishing plan
 
 **Status:** Owner-approved workflow; verifier TBD. Wren commits each phase directly to local `experimental`; Rook pushes only after verifier sign-off.
-**Baseline:** `main` at `839bb6e` (Phase 4 merged and pushed). Local `experimental` is fast-forwarded to the Phase 5–14 plan tip, so it includes the Phase 4 tree. `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
+**Baseline:** `main` at `839bb6e` (Phase 4 merged and pushed). Local `experimental` is at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`; confirm with `git log -1 --format=%H experimental`. Later phases start at the then-current `experimental` tip. `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
 **Integration target:** `experimental` (owner decision, 2026-10-27). One phase per commit; no per-phase branch.
 **Source of truth:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17. This document assigns the post-Phase-4 workflow, order, verification, and publishing scope. It does not replace any phase contract.
 **Scope exclusion:** extension publishing (Open VSX, VS Code Marketplace, VSIX publication) is out of scope for this plan.
@@ -183,7 +183,7 @@ Phase 4 shipped docs that named tools and resources that did not exist. Do not r
 
 ### 7.1 Author gate (Wren, before handoff)
 
-Run from the phase worktree on `experimental` and record the exact results:
+Run from the phase worktree on `experimental` and record the exact results. Only one worktree can have `experimental` checked out; detach or remove the previous phase worktree before creating the next one.
 
 ```powershell
 python -m pytest -q

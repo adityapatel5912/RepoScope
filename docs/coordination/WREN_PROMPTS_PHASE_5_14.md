@@ -1,7 +1,7 @@
 # Wren — Phase 5–14 execution prompts
 
 **Status:** Ready for the owner to hand to Wren, one phase at a time. Wren commits each phase directly to local `experimental`; no per-phase branch. Rook pushes only after verifier sign-off.
-**Baseline:** local `experimental` at the Phase 5–14 plan tip, fast-forwarded from `7ff5291` so it includes the Phase 4 tree (`main` at `839bb6e`). `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
+**Baseline:** local `experimental` at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`. Later phases start at the then-current `experimental` tip; confirm with `git log -1 --format=%H experimental`. `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
 **Companion plan:** `docs/coordination/PLAN_PHASE_5_14.md`.
 **Authoritative contracts:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17.
 
@@ -34,10 +34,11 @@ phase per handoff. The workflow is: Wren implements, an independent verifier
 introduced by the owner verifies on a fresh worktree, and Rook integrates only
 after sign-off. You do not push, merge, tag, publish, or self-certify.
 
-Baseline: local experimental at the Phase 5-14 plan tip, fast-forwarded from
-7ff5291 so it includes the Phase 4 tree (main at 839bb6e). origin/experimental
-remains at 7ff5291 until Rook pushes after the first verified phase. Confirm the
-exact tip with `git log -1 --format=%H experimental` before starting.
+Baseline: local experimental at the current Phase 5-14 plan tip (Phase 4 plus
+this plan), fast-forwarded from 7ff5291. Later phases start at the then-current
+experimental tip; confirm with `git log -1 --format=%H experimental` before
+starting. origin/experimental remains at 7ff5291 until Rook pushes after the
+first verified phase.
 
 Authoritative contract: docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md sections 8-17,
 plus the phase block below. docs/coordination/PLAN_PHASE_5_14.md section 6
@@ -45,9 +46,12 @@ contains binding corrections where the plan's suggested paths differ from the
 real tree.
 
 Setup:
-1. Create a fresh worktree from local experimental:
-   D:\Aditya\Hackathon Projects\RepoScope-wren-phaseN
-2. Check out experimental in that worktree. Do NOT create a per-phase branch.
+0. Run `git worktree list`. Only one worktree can have experimental checked
+   out. If an older worktree holds it, detach that worktree with
+   `git -C <path> switch --detach` before adding yours.
+1. Create a fresh worktree on local experimental:
+   git worktree add "D:\Aditya\Hackathon Projects\RepoScope-wren-phaseN" experimental
+2. Do NOT create a per-phase branch. Commit directly to experimental.
 3. Claim every file you will edit in docs/coordination/WREN.md before editing.
 4. Implement the phase completely: backend, frontend, tests, docs, CHANGELOG.
 5. Run the author gate and record the exact commands and results.

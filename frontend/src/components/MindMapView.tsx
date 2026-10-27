@@ -46,6 +46,7 @@ import {
   getInitialExpandedIds,
   getAllExpandableIds,
   searchTree,
+  findAncestors,
 } from "../lib/mindmapTree";
 import { computeMindmapLayout } from "../lib/mindmapLayout";
 import { MindMapToolbar } from "./mindmap/MindMapToolbar";
@@ -64,6 +65,7 @@ export interface MindMapViewProps {
   impactTarget?: string | null;
   impactDirect?: string[];
   impactTransitive?: string[];
+  focusNodeId?: string | null;
 }
 
 export default function MindMapView({
@@ -78,6 +80,7 @@ export default function MindMapView({
   impactTarget: externalImpactTarget = null,
   impactDirect: externalImpactDirect = [],
   impactTransitive: externalImpactTransitive = [],
+  focusNodeId = null,
 }: MindMapViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +318,44 @@ export default function MindMapView({
     },
     [layout.nodes, scale],
   );
+
+  // Focus external node (e.g. from citation click)
+  useEffect(() => {
+    if (!focusNodeId || !payload?.root) return;
+    const ancestors = findAncestors(payload.root, focusNodeId);
+    if (ancestors.length > 0) {
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        ancestors.forEach((id) => next.add(id));
+        next.add(focusNodeId);
+        return next;
+      });
+    }
+    setSelectedNodeId(focusNodeId);
+    centerNode(focusNodeId);
+  }, [focusNodeId, payload?.root, centerNode]);
+
+  // Listen for citation click event
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.nodeId && payload?.root) {
+        const ancestors = findAncestors(payload.root, detail.nodeId);
+        if (ancestors.length > 0) {
+          setExpandedIds((prev) => {
+            const next = new Set(prev);
+            ancestors.forEach((id) => next.add(id));
+            next.add(detail.nodeId);
+            return next;
+          });
+        }
+        setSelectedNodeId(detail.nodeId);
+        centerNode(detail.nodeId);
+      }
+    };
+    window.addEventListener("reposcope:focus-node", handler);
+    return () => window.removeEventListener("reposcope:focus-node", handler);
+  }, [payload?.root, centerNode]);
 
   // Focus current search match
   useEffect(() => {

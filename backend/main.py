@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from ai_byok import PROVIDERS, resolve_provider
 from byok_manager import get_user_token, set_user_token
+from citation_verifier import verify_citation, verify_citations_in_text
 from graph_builder import build_graph_from_repo
 from graph_utils import build_adjacency, find_node_by_label
 from impact_analyzer import compute_blast_radius, generate_impact_narrative
@@ -578,6 +579,37 @@ async def repo_file(path: str):
     return FileResponse(target, filename=target.name)
 
 
+
+@app.get("/api/citation/verify")
+async def verify_citation_endpoint(
+    path: str,
+    line: Optional[int] = None,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+    raw: Optional[str] = None,
+    repo: Optional[str] = None,
+):
+    """Verify a code citation against indexed AST symbols and file disk content."""
+    state = load_state()
+    local_path = state.get("local_path")
+    graph = None
+    if local_path:
+        try:
+            from graph_store import open_graph_store
+            store = open_graph_store(local_path)
+            graph = store.load()
+        except Exception:
+            pass
+
+    eff_line = start_line if start_line is not None else line
+    return verify_citation(
+        path=path,
+        line=eff_line,
+        end_line=end_line,
+        raw=raw,
+        repo_root=local_path,
+        graph=graph,
+    )
 REVERSE_SYSTEM_PROMPT = (
     "You reverse-engineer an agent-ready build prompt from a repository.\n"
     "Rules (strict):\n"
@@ -1249,6 +1281,12 @@ async def chat_stream(
 
             if "tracking" in ctx:
                 yield _sse("tracking", ctx["tracking"])
+
+            # Phase 5: Verified chat citations event
+            state = load_state()
+            local_path = state.get("local_path")
+            citations = verify_citations_in_text(answer, repo_root=local_path, graph=ctx)
+            yield _sse("citations", {"type": "citations", "citations": citations})
 
             yield _sse("done", {"ok": True, "req_id": req_id})
             log.info("[%s] stream complete", req_id)

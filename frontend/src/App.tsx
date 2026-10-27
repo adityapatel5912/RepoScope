@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import type { CitationItem } from "./api/client";
 import TopBar, { type ViewMode } from "./components/TopBar";
 import LeftPanel from "./components/LeftPanel";
 import GraphCanvas from "./components/GraphView";
@@ -90,6 +91,7 @@ export default function App() {
   const [repoInfo,    setRepoInfo]    = useState<RepoInfo | null>(null);
   const [mode,        setMode]        = useState<Mode>("understanding");
   const [viewMode,    setViewMode]    = useState<ViewMode>("graph");
+  const [mindmapFocusNodeId, setMindmapFocusNodeId] = useState<string | null>(null);
   const [rawNodes,    setRawNodes]    = useState<unknown[]>([]);
   const [rawEdges,    setRawEdges]    = useState<unknown[]>([]);
   const [tracking,    setTracking]    = useState<unknown>(null);
@@ -352,6 +354,16 @@ export default function App() {
     [idePrefs.alwaysAsk, localRoot],
   );
 
+  const handleCitationClick = useCallback((citation: CitationItem) => {
+    setViewMode("mindmap");
+    if (citation.node_id) {
+      setMindmapFocusNodeId(citation.node_id);
+    }
+    if (citation.path) {
+      void handleOpenInEditor(citation.path, citation.start_line ?? 1);
+    }
+  }, [handleOpenInEditor]);
+
   // ── Live graph (local mode) ───────────────────────────────────────────────
   //
   // The backend watches the repository and pushes a fresh `context` event
@@ -525,6 +537,7 @@ export default function App() {
                 impactTarget={impactTarget}
                 impactDirect={impactDirect}
                 impactTransitive={impactTransitive}
+                focusNodeId={mindmapFocusNodeId}
               />
             ) : (
               <GraphCanvas
@@ -593,6 +606,7 @@ export default function App() {
                   debugMode={debugMode}
                   prefillMessage={prefill}
                   onPrefillConsumed={() => setPrefill(undefined)}
+                  onCitationClick={handleCitationClick}
                 />
               </div>
             </section>

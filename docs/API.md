@@ -44,6 +44,7 @@ contracts that clients depend on, not every request model.
 | `GET` | `/api/repo/file` | File content for the viewer. |
 | `GET` | `/api/repo/demos` | Available demo repositories. |
 | `POST` | `/api/chat/stream` | SSE answer with citations. |
+| `GET` | `/api/citation/verify` | Verify citation against AST symbol table and disk. |
 | `POST` | `/api/impact/analyze` | Blast radius and impact narrative. |
 | `POST` | `/api/onboard` | Student Mode path, quizzes, and Good First Issues. |
 
@@ -636,3 +637,49 @@ prevents the graph from being returned.
 
 The golden test pins the v1 node set and the v1 edge subset. New v2 edges are
 validated separately, so a snapshot can never hide a v1 drift.
+
+
+---
+
+## Verified chat citations (Phase 5)
+
+### `GET /api/citation/verify`
+
+Debug endpoint for verifying a code citation against indexed AST symbols and disk.
+
+**Query parameters:**
+- `path`: File path relative to repository root (required).
+- `line` or `start_line`: 1-based start line number (optional).
+- `end_line`: 1-based end line number (optional).
+- `raw`: Original citation string (optional).
+
+**Response (200 OK):**
+```json
+{
+  "raw": "[backend/main.py:391-414]",
+  "path": "backend/main.py",
+  "start_line": 391,
+  "end_line": 414,
+  "symbol": "health",
+  "node_id": "func:backend/main.py:health",
+  "verified": true,
+  "confidence": 1.0,
+  "reason": "exact symbol range",
+  "preview": "def health():\n    return ..."
+}
+```
+
+- A non-existent path returns `verified: false` with `reason: "file not found"` and HTTP 200.
+- Near-miss line numbers within 5 lines of a symbol start snap to that symbol with `reason: "snapped"`.
+- Ranges spanning multiple symbols return `reason: "partial"`.
+- Line numbers outside symbol boundaries return `reason: "file line"` and `node_id: "file:<path>"`.
+- Paths that attempt directory traversal are rejected with `reason: "path escape"`.
+
+### `POST /api/chat/stream` SSE citations event
+
+Chat streaming yields a final `citations` event before `done`:
+
+```
+event: citations
+data: {"type": "citations", "citations": [...]}
+```

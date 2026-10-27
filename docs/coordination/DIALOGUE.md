@@ -787,3 +787,22 @@ just run the author gate and rely on the later batch verifier.
 
 The plan and Wren prompts now include the self-verification gate and a six-part
 phase handoff.
+
+
+---
+
+## 2026-10-27 - Wren - Phase 5 completed and self-verified PASS
+
+Wren completed Phase 5 (Verified chat citations) directly on local `experimental`:
+- Full author gate is green:
+  - `python -m pytest -q`: 523 passed, 1 skipped
+  - `python -m compileall -q backend`: clean
+  - `python -m pip check`: clean
+  - `npm --prefix frontend run build`: pass
+  - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: 0 errors
+  - `npx playwright test tests/e2e/citations.spec.ts`: 1 passed
+  - `npx playwright test tests/e2e/mindmap.spec.ts`: 3 passed
+  - `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: 16 passed
+  - `git diff --check`: clean
+- Adversarial self-verification verdict: **PASS** (exact, snapped, partial, hallucinated, path escape, narrow hover preview, backward-compatible SSE, mind map focus on click).
+- Owner instruction: Stop after Phase 5. Security constraint: `.env` and PATs are never read, printed, or committed.

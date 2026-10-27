@@ -177,12 +177,26 @@ export async function commit(message: string) {
 
 // ── SSE Chat ──────────────────────────────────────────────────────────────
 
+export interface CitationItem {
+  raw: string;
+  path: string;
+  start_line: number | null;
+  end_line: number | null;
+  symbol: string | null;
+  node_id: string | null;
+  verified: boolean;
+  confidence: number;
+  reason: string;
+  preview: string;
+}
+
 export interface SSECallbacks {
-  onContext:  (d: ContextPayload) => void;
-  onToken:    (t: string) => void;
-  onTracking: (d: unknown) => void;
-  onDone:     () => void;
-  onError?:   (msg: string) => void;
+  onContext:   (d: ContextPayload) => void;
+  onToken:     (t: string) => void;
+  onTracking:  (d: unknown) => void;
+  onCitations?: (citations: CitationItem[]) => void;
+  onDone:      () => void;
+  onError?:    (msg: string) => void;
 }
 
 export interface ContextPayload {
@@ -236,6 +250,10 @@ export async function streamChat(
         if (event === "context")       cb.onContext(JSON.parse(data));
         else if (event === "token")    cb.onToken(JSON.parse(data).t ?? "");
         else if (event === "tracking") cb.onTracking(JSON.parse(data));
+        else if (event === "citations") {
+          const parsed = JSON.parse(data);
+          cb.onCitations?.(parsed.citations ?? []);
+        }
         else if (event === "done")     cb.onDone();
         else if (event === "error")    cb.onError?.(JSON.parse(data).message ?? "Unknown error");
       } catch (e) {
@@ -345,4 +363,21 @@ export async function applyHarnessConfig(body: {
 
 export async function getHarnessSkills(): Promise<HarnessSkills> {
   return _json(await _fetchWithTimeout(`${BASE}/api/harness/skills`));
+}
+
+export async function verifyCitation(
+  path: string,
+  line?: number | null,
+  endLine?: number | null,
+  raw?: string,
+): Promise<CitationItem> {
+  const params = new URLSearchParams({ path });
+  if (line != null) params.set("line", String(line));
+  if (endLine != null) params.set("end_line", String(endLine));
+  if (raw != null) params.set("raw", raw);
+  const resp = await fetch(`${BASE}/api/citation/verify?${params.toString()}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to verify citation: ${resp.statusText}`);
+  }
+  return resp.json();
 }

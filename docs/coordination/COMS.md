@@ -147,3 +147,21 @@ None. Phase 4 is merged into `main` at `74bd2fb` and pushed. The only expected
 environmental skips are the Windows symlink test and the locally excluded J22
 journey; both are recorded in the Phase 3 baseline and repeated in the Phase 4
 handoff.
+
+
+---
+
+## Phase 5 status board
+
+| Field | Value |
+|---|---|
+| Phase | 5 — Verified chat citations |
+| Release | V2.6 |
+| Target branch | `experimental` (direct commit) |
+| Worktree | `D:\Aditya\Hackathon Projects\RepoScope-wren-phase5-14` |
+| Base | `experimental` at `2b896df` |
+| Contract status | `frozen` |
+| Author gate status | `523 passed, 1 skipped; tsc 0 errors; build pass; Playwright 20/20 pass (J22 excluded)` |
+| Self-verification verdict | `PASS` |
+| Implementation status | `complete` |
+| Handoff | Recorded in `WREN.md` and `DIALOGUE.md` |

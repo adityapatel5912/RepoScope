@@ -4,7 +4,8 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { streamChat } from "../api/client";
-import type { ContextPayload } from "../api/client";
+import type { ContextPayload, CitationItem } from "../api/client";
+import CitationPill from "./CitationPill";
 import { toast } from "./Toasts";
 import { Send, Copy, Check, Mic, MicOff, User } from "lucide-react";
 
@@ -13,6 +14,7 @@ interface Message {
   text: string;
   ts: number;
   done?: boolean;
+  citations?: CitationItem[];
 }
 
 interface DebugEvent {
@@ -32,6 +34,7 @@ interface Props {
   debugMode: boolean;
   prefillMessage?: string;
   onPrefillConsumed?: () => void;
+  onCitationClick?: (citation: CitationItem) => void;
 }
 
 // FILE 2 — six example prompts for the empty state (2×3 grid)
@@ -48,13 +51,47 @@ const EXAMPLE_PROMPTS = [
 const CITATION_RE = /^[\w./@-]+\.[A-Za-z0-9]+(:\d+)?$/;
 const InTableContext = createContext(false);
 const PreContext = createContext(false);
+const CitationsContext = createContext<{
+  citations?: CitationItem[];
+  onCitationClick?: (c: CitationItem) => void;
+}>({});
+
 
 // Proper named component so useContext hook is valid
 function InlineCode({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) {
   const inTable = useContext(InTableContext);
+  const { citations, onCitationClick } = useContext(CitationsContext);
   const text = String(children ?? "").replace(/\n$/, "");
-  if (!inTable && CITATION_RE.test(text)) {
-    return <span className="citation-chip">{text}</span>;
+  if (!inTable && (CITATION_RE.test(text) || text.includes(".py:") || text.includes(".ts:") || text.includes(".js:") || text.includes(".go:") || text.includes(".rs:"))) {
+    const match = citations?.find(
+      (c) =>
+        c.raw === text ||
+        c.raw === `[${text}]` ||
+        c.raw === `\`${text}\`` ||
+        (c.path && text.startsWith(c.path))
+    );
+    if (match) {
+      return <CitationPill citation={match} onCitationClick={onCitationClick} />;
+    }
+    const parts = text.split(":");
+    const lineNum = parts[1] ? parseInt(parts[1], 10) : null;
+    return (
+      <CitationPill
+        citation={{
+          raw: text,
+          path: parts[0],
+          start_line: isNaN(Number(lineNum)) ? null : lineNum,
+          end_line: null,
+          symbol: null,
+          node_id: null,
+          verified: false,
+          confidence: 0,
+          reason: "unverified",
+          preview: "",
+        }}
+        onCitationClick={onCitationClick}
+      />
+    );
   }
   return <code className={className} {...props}>{children}</code>;
 }
@@ -259,7 +296,7 @@ function EmptyChat({ repoName, onPick }: { repoName: string; onPick: (p: string)
 
 export default function ChatPanel({
   mode, repo, disabled, onContext, onTracking, onToken, onEvent,
-  debugMode, prefillMessage, onPrefillConsumed,
+  debugMode, prefillMessage, onPrefillConsumed, onCitationClick,
 }: Props) {
   const [msgs, setMsgs]         = useState<Message[]>([]);
   const [input, setInput]       = useState("");
@@ -327,6 +364,18 @@ export default function ChatPanel({
           onTracking(d);
           addDebug("tracking", "tracking data received");
           onEvent("tracking");
+        },
+        onCitations: (citations) => {
+          setMsgs((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last) {
+              copy[copy.length - 1] = { ...last, citations };
+            }
+            return copy;
+          });
+          addDebug("citations", `${citations.length} citations verified`);
+          onEvent("citations");
         },
         onDone: () => {
           setMsgs((m) => {
@@ -464,6 +513,7 @@ export default function ChatPanel({
                   ">
                     {m.text ? (
                       <div className="md-body">
+                        <CitationsContext.Provider value={{ citations: m.citations, onCitationClick }}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -498,6 +548,7 @@ export default function ChatPanel({
                         >
                           {normalizeMarkdownTables(m.text)}
                         </ReactMarkdown>
+                        </CitationsContext.Provider>
                       </div>
                     ) : busy && i === msgs.length - 1 ? (
                       <span className="flex gap-1.5 items-center py-1">

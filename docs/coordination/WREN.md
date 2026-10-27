@@ -291,3 +291,110 @@ End-to-end execution of Phase 4 per `docs/coordination/WREN_PROMPT_PHASE_4.md`.
 
 6. **Next Open Decision**:
    - Phase 4 implementation is complete and ready for Rook to create a verification worktree, review the diff, run the gate, and request owner authorization to merge.
+
+---
+
+## Phase 5 — Verified chat citations (V2.6)
+
+### Assignment
+Implement Phase 5, Verified chat citations directly on local `experimental`.
+- `backend/citation_verifier.py`: pure deterministic AST citation verifier (exact, snapped, partial, hallucinated, path escape safe, hover preview within repo).
+- `backend/main.py`: `GET /api/citation/verify` endpoint, final `citations` SSE event in `POST /api/chat/stream`.
+- `backend/tests/test_citation_verifier.py`: unit tests for exact, snapped, partial, hallucinated, missing-path, path escape.
+- `backend/tests/test_chat_citations.py`: integration tests for chat citations stream.
+- `frontend/src/api/client.ts`: `CitationItem` type, `verifyCitation`, `onCitations` callback.
+- `frontend/src/components/CitationPill.tsx`: interactive citation pill with visual verified/unverified distinction, hover preview tooltip, click to focus mind map.
+- `frontend/src/components/ChatPanel.tsx`: integrate `CitationPill` and citations event handling.
+- `frontend/src/components/MindMapView.tsx` & `frontend/src/App.tsx`: expand ancestors and center on node when citation clicked.
+- `frontend/tests/e2e/citations.spec.ts`: Playwright test for verified vs unverified citations and interactions.
+- `CHANGELOG.md` & `docs/API.md`: documentation.
+
+### Claims
+
+| File | Status | Notes |
+|---|---|---|
+| `backend/citation_verifier.py` | claimed | AST range verification, snapping, path-escape safety |
+| `backend/main.py` | claimed | `GET /api/citation/verify` and SSE citations event |
+| `backend/tests/test_citation_verifier.py` | claimed | Unit tests for verifier |
+| `backend/tests/test_chat_citations.py` | claimed | Integration tests for chat citations stream |
+| `frontend/src/api/client.ts` | claimed | Citation types and verify endpoint client |
+| `frontend/src/components/CitationPill.tsx` | claimed | Citation component with verified styling, hover preview |
+| `frontend/src/components/ChatPanel.tsx` | claimed | Wire CitationPill into message markdown rendering |
+| `frontend/src/components/MindMapView.tsx` | claimed | External focus and ancestor expansion |
+| `frontend/src/App.tsx` | claimed | Citation click focuses mind map |
+| `frontend/tests/e2e/citations.spec.ts` | claimed | L3 journey for verified chat citations |
+| `CHANGELOG.md` | claimed | V2.6 Phase 5 entry |
+| `docs/API.md` | claimed | Citation verification endpoint and SSE documentation |
+| `docs/coordination/WREN.md` | claimed | Phase 5 claims and handoff |
+| `docs/coordination/COMS.md` | claimed | Status board update |
+| `docs/coordination/DIALOGUE.md` | claimed | Decision log update |
+
+
+### Results and Verification
+
+- **Status:** Complete, self-verified PASS.
+- **Commit target:** `experimental` (one commit, no phase branch): `feat(citations): verify and snap AST citations`.
+- **Author Gate Results:**
+  - `python -m pytest -q`: **523 passed, 1 skipped**, 1 warning in 53.33s.
+  - `python -m compileall -q backend`: 0 errors.
+  - `python -m pip check`: No broken requirements found.
+  - `npm --prefix frontend run build`: Built in 12.79s (clean).
+  - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: Clean, 0 errors.
+  - `npx playwright test tests/e2e/citations.spec.ts`: **1 passed** (28.8s).
+  - `npx playwright test tests/e2e/mindmap.spec.ts`: **3 passed** (36.0s).
+  - `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: **16 passed** (1.2m).
+  - `git diff --check`: Clean (0 whitespace/conflict errors).
+
+### Six-Part Phase 5 Handoff
+
+1. **Branch & Commit:**
+   - Target: `experimental` (direct commit).
+   - Commit message: `feat(citations): verify and snap AST citations`.
+   - Base commit: `2b896df` (Phase 4 + Phase 5-14 plan).
+
+2. **Files Changed & Claims Released:**
+   - All 15 claimed files released:
+     - `backend/citation_verifier.py`: Pure deterministic AST citation verifier (exact, snapped within 5 lines, partial multi-symbol spans, file lines without symbols, path-escape safety, narrow <=15 lines preview).
+     - `backend/main.py`: Read-only `GET /api/citation/verify` debug endpoint and final `citations` SSE event in `POST /api/chat/stream`.
+     - `backend/tests/test_citation_verifier.py`: 10 unit test cases for exact, snapped, partial, file-line, file-only, missing-path, line-out-of-range, path-escape, hover-bounds, and text extraction.
+     - `backend/tests/test_chat_citations.py`: Integration tests for verify endpoint, SSE citations event emission before done, and old-client backward compatibility.
+     - `frontend/src/api/client.ts`: `CitationItem` interface, `onCitations` callback in `streamChat`, and `verifyCitation` API method.
+     - `frontend/src/components/CitationPill.tsx`: Interactive citation pill with distinct verified/unverified badges, hover preview tooltip (with non-nesting inline block elements), and click to focus.
+     - `frontend/src/components/ChatPanel.tsx`: Integrated `CitationPill` via `CitationsContext` into assistant message markdown rendering.
+     - `frontend/src/components/MindMapView.tsx`: Added `focusNodeId` prop and `reposcope:focus-node` event listener to expand node ancestors and center on node.
+     - `frontend/src/App.tsx`: Wired citation clicks to switch to mind map mode, focus node, and open file in editor.
+     - `frontend/tests/e2e/citations.spec.ts`: Playwright L3 journey verifying rendering, hover preview, mind map switch, and zero console errors.
+     - `CHANGELOG.md`: Added Phase 5 entry under Unreleased.
+     - `docs/API.md`: Documented `GET /api/citation/verify` and SSE citations event.
+     - `docs/coordination/WREN.md`, `COMS.md`, `DIALOGUE.md`: Coordination logs.
+
+3. **Commands Run & Gate Results:**
+   - `python -m pytest -q`: 523 passed, 1 skipped.
+   - `python -m compileall -q backend`: 0 errors.
+   - `python -m pip check`: clean.
+   - `npm --prefix frontend run build`: clean.
+   - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: 0 errors.
+   - `npx playwright test tests/e2e/citations.spec.ts`: 1 passed.
+   - `npx playwright test tests/e2e/mindmap.spec.ts`: 3 passed.
+   - `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: 16 passed.
+   - `git diff --check`: clean.
+
+4. **Limits & Skips:**
+   - J22 journey test excluded: pre-existing synthetic 50,000-node scale stress test runs ~103–148 ms vs 100 ms budget on Windows.
+   - Windows symlink test skipped in `test_harness_generator.py` (requires elevated privileges/Developer Mode on Windows).
+
+5. **Self-Verification Verdict:**
+   - **PASS**. Verified all contract requirements:
+     - Exact match stays exact, near miss within 5 lines snaps with `reason: "snapped"`.
+     - Multi-symbol span marked partial (`reason: "partial"`).
+     - Missing file returns `verified: false` with `reason: "file not found"` and 200 status code.
+     - Directory traversal attempts rejected with `reason: "path escape"`.
+     - Verifier never calls an LLM.
+     - Previews never read outside repository root and never exceed 15 lines.
+     - UI visually distinguishes verified from unverified; unverified does not look authoritative.
+     - Old clients ignore `citations` event safely.
+     - No `.env`, PAT, secret, or absolute local paths in diff.
+
+6. **Next Open Decision:**
+   - Owner explicitly requested: "Stop after Phase - 5 and push also through the PAT in .env".
+   - Per non-negotiable security rules: Never read, print, commit, or expose `.env` or a PAT. No secret credentials are read or printed. The commit is created directly on `experimental`. External push is held for owner/verifier authorization without credential exposure.

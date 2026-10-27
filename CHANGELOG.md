@@ -9,6 +9,17 @@ on a separate marketplace.
 
 ### Added
 
+- **Verified chat citations (Phase 5, V2.6).**
+  Deterministic AST verification for code citations emitted in chat responses.
+  Every citation is checked against the repository index and file disk content;
+  exact matches stay exact, near misses within 5 lines snap to the symbol range,
+  ranges spanning multiple symbols are marked partial, and nonexistent paths are
+  visibly unverified (`verified: false`). Added `GET /api/citation/verify` debug
+  endpoint and final `citations` SSE event in `POST /api/chat/stream`. Frontend
+  `CitationPill` component renders verified badges, code hover previews (confined
+  strictly within the repository root), and expands the mind map on click to focus
+  the cited file and symbol.
+
 - **Context compression, AST skeleton, and delta sync (Phase 4).**
   Deterministic repository context packs via `GET /api/context/pack` and MCP
   tool `get_context_pack`. `detail=skeleton` extracts symbol declarations

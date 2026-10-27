@@ -1,14 +1,14 @@
 """
 api/routers/harness.py
-The nine-agent harness configurator (Phase 3).
+The nine-agent harness configurator (Phase 3 and Phase 4).
 
 Four endpoints, all thin wrappers around `harness_generator`:
 
     GET  /api/harness/agents   the frozen registry for the modal
-    GET  /api/harness/config    the exact files a preview would write
-    POST /api/harness/apply     a dry run by default; writes only when
+    GET  /api/harness/config   the exact files a preview would write
+    POST /api/harness/apply    a dry run by default; writes only when
                                REPOSCOPE_HARNESS_APPLY=1 and force allows it
-    GET  /api/harness/skills    the five Phase 4 skill descriptors
+    GET  /api/harness/skills   the five canonical skills and their SKILL.md bodies
 
 The browser never writes files. Preview is guaranteed side-effect-free:
 `build_preview` only reads. Apply is refused with 403 when the server
@@ -100,12 +100,7 @@ async def apply(body: ApplyRequest) -> dict:
 
 @router.get("/skills")
 async def skills() -> dict:
-    """
-    The five skill descriptors.
-
-    Bodies are deliberately absent in Phase 3: `content_available` is
-    false for every entry until Phase 4 ships the SKILL.md files.
-    """
+    """The five canonical skills and their SKILL.md bodies."""
     return list_skills()
 
 

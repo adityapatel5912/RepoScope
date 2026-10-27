@@ -227,6 +227,66 @@ def build_server(root: str | None = None):
         """
         return T.unreachable_symbols(graph)
 
+    # ── Phase 4 Tools ─────────────────────────────────────────────────────
+
+    @mcp.tool()
+    def get_mindmap_hierarchy(
+        include_symbols: bool = True,
+        max_nodes: int = 2000,
+    ) -> dict:
+        """
+        Return the hierarchical mind-map tree of the repository: root -> pillars ->
+        folders -> files -> symbols. Deterministic projection bounded by `max_nodes`.
+        """
+        return T.mindmap_hierarchy(graph, root_text, include_symbols, max_nodes)
+
+    @mcp.tool()
+    def get_ast_skeleton(file_path: str, max_symbols: int = 200) -> dict:
+        """
+        Return the AST skeleton of a file: symbols, signatures, lines, roles, and
+        complexity. Deterministic output that omits bodies to conserve tokens.
+        """
+        return T.ast_skeleton(graph, root_text, file_path, max_symbols)
+
+    @mcp.tool()
+    def get_context_pack(
+        paths: str = "",
+        detail: str = "skeleton",
+        budget: int = 8000,
+        since_hash: str | None = None,
+    ) -> dict:
+        """
+        Build a deterministic, token-budget-bounded context pack.
+        JSON only over MCP (TOON format is an HTTP export). Detail can be 'skeleton'
+        or 'full'. If since_hash matches, returns an unchanged envelope.
+        """
+        return T.context_pack(graph, root_text, paths, detail, budget, since_hash)
+
+    @mcp.tool()
+    def diff_interface_contracts(
+        file_path: str,
+        patch: str | None = None,
+        old_source: str | None = None,
+        new_source: str | None = None,
+        include_consumers: bool = True,
+    ) -> dict:
+        """
+        Diff interface contracts and boundary crossings between a patch or source pair.
+        Deterministic check. Caveat: No finding is not proof that no consumer breaks;
+        dynamic dispatch, reflection, and unsupported languages are invisible to this check.
+        """
+        return T.diff_interface_contracts(
+            graph, file_path, patch, old_source, new_source, include_consumers
+        )
+
+    @mcp.tool()
+    def get_ranked_reading_path(max_files: int = 12) -> dict:
+        """
+        Return a ranked, three-level reading path: Entry Points -> Core Modules -> Utils & Leaves.
+        Caveat: Ranking uses static graph connectivity; it is a starting path, not a measure of code quality.
+        """
+        return T.ranked_reading_path(graph, root_text, max_files)
+
     # ── Resources ─────────────────────────────────────────────────────────
     #
     # Resources are the READ side: an agent can pull a summary without
@@ -267,6 +327,35 @@ def build_server(root: str | None = None):
     def cycles_resource() -> str:
         """The dependency cycles, with the layers they span."""
         return json.dumps(T.find_dependency_cycles(graph), indent=2, sort_keys=True)
+
+    # ── Phase 4 Resources ─────────────────────────────────────────────────
+
+    @mcp.resource("reposcope://mindmap")
+    def mindmap_resource() -> str:
+        """The hierarchical mindmap projection of the repository."""
+        return json.dumps(
+            T.mindmap_hierarchy(graph, root_text, include_symbols=True, max_nodes=2000),
+            indent=2,
+            sort_keys=True,
+        )
+
+    @mcp.resource("reposcope://api-routes")
+    def api_routes_resource() -> str:
+        """The detected API routes in the repository."""
+        return json.dumps(
+            T.api_routes_resource(graph, root_text),
+            indent=2,
+            sort_keys=True,
+        )
+
+    @mcp.resource("reposcope://context-pack")
+    def context_pack_resource() -> str:
+        """The default skeleton context pack for the repository within 8000 tokens."""
+        return json.dumps(
+            T.context_pack(graph, root_text, detail="skeleton", budget=8000),
+            indent=2,
+            sort_keys=True,
+        )
 
     return mcp
 

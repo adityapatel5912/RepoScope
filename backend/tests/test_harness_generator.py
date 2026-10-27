@@ -129,7 +129,8 @@ def test_every_target_previews_both_transports_without_writing(repo, agent, tran
     assert preview["root"] == str(repo.resolve())
     assert preview["apply_enabled"] is False
     assert preview["command"]
-    assert len(preview["files"]) == len(H.AGENTS_BY_ID[agent].files)
+    expected_count = 7 if agent in ("claude", "antigravity") else len(H.AGENTS_BY_ID[agent].files)
+    assert len(preview["files"]) == expected_count
     assert {item["format"] for item in preview["files"]} <= {"json", "toml", "markdown"}
     assert all(item["exists"] is False for item in preview["files"])
     assert all(item["diff"] is None for item in preview["files"])
@@ -220,10 +221,63 @@ def test_global_paths_are_display_only_and_never_files(repo):
     assert any("~/.codeium/windsurf/mcp_config.json" in warning for warning in preview["warnings"])
 
 
-def test_antigravity_skills_are_not_written_in_phase_three(repo):
-    preview = H.build_preview("antigravity", "stdio", str(repo))
-    assert all(".agents/skills/" not in item["path"] for item in preview["files"])
-    assert any("Phase 4" in note for note in H.AGENTS_BY_ID["antigravity"].notes)
+def test_preview_and_apply_skill_files(repo, monkeypatch):
+    root_str = str(repo)
+    # Claude preview has exactly 7 files (2 config + 5 skills)
+    claude_preview = H.build_preview("claude", "stdio", root_str)
+    assert len(claude_preview["files"]) == 7
+    claude_paths = [f["path"] for f in claude_preview["files"]]
+    assert ".mcp.json" in claude_paths
+    assert "CLAUDE.md" in claude_paths
+    assert ".claude/skills/blast-radius-guard/SKILL.md" in claude_paths
+
+    # Antigravity preview has exactly 7 files (2 config + 5 skills)
+    anti_preview = H.build_preview("antigravity", "stdio", root_str)
+    assert len(anti_preview["files"]) == 7
+    anti_paths = [f["path"] for f in anti_preview["files"]]
+    assert ".agents/mcp_config.json" in anti_paths
+    assert "AGENTS.md" in anti_paths
+    assert ".agents/skills/blast-radius-guard/SKILL.md" in anti_paths
+
+    # The other seven agents still have 2 files
+    for other_id in ("cursor", "vscode", "codex", "kiro", "windsurf", "cline", "opencode"):
+        p = H.build_preview(other_id, "stdio", root_str)
+        assert len(p["files"]) == len(H.AGENTS_BY_ID[other_id].files)
+        assert all("skills" not in f["path"] for f in p["files"])
+
+    # Preview writes nothing
+    assert not (repo / ".claude").exists()
+    assert not (repo / ".agents").exists()
+
+    # Apply writes all 7
+    monkeypatch.setenv("REPOSCOPE_HARNESS_APPLY", "1")
+    applied_res = H.apply_config("claude", "stdio", root_str, apply=True, force=False)
+    assert len(applied_res["applied"]) == 7
+    for f in applied_res["applied"]:
+        assert (repo / f).is_file()
+
+    # Second apply is unchanged
+    second_res = H.apply_config("claude", "stdio", root_str, apply=True, force=False)
+    assert len(second_res["unchanged"]) == 7
+    assert len(second_res["applied"]) == 0
+
+    # A changed existing skill file needs force
+    skill_file = repo / ".claude" / "skills" / "blast-radius-guard" / "SKILL.md"
+    skill_file.write_text("modified content", encoding="utf-8")
+    preview_changed = H.build_preview("claude", "stdio", root_str)
+    assert preview_changed["requires_force"] is True
+    skill_entry = [f for f in preview_changed["files"] if f["path"] == ".claude/skills/blast-radius-guard/SKILL.md"][0]
+    assert skill_entry["diff"] is not None
+    assert skill_entry["will_write"] is True
+
+    # Apply without force raises 409
+    with pytest.raises(H.HarnessError) as exc_force:
+        H.apply_config("claude", "stdio", root_str, apply=True, force=False)
+    assert exc_force.value.status_code == 409
+
+    # Apply with force succeeds
+    force_res = H.apply_config("claude", "stdio", root_str, apply=True, force=True)
+    assert ".claude/skills/blast-radius-guard/SKILL.md" in force_res["applied"]
 
 
 # ── Commands ────────────────────────────────────────────────────────────────
@@ -310,7 +364,8 @@ def test_apply_creates_files_and_a_second_apply_is_a_no_op(repo, monkeypatch):
     first = H.apply_config("claude", "stdio", str(repo), apply=True, force=False)
 
     assert first["apply"] is True
-    assert sorted(first["applied"]) == [".mcp.json", "CLAUDE.md"]
+    assert len(first["applied"]) == 7
+    assert {".mcp.json", "CLAUDE.md"} <= set(first["applied"])
     assert first["unchanged"] == []
     assert (repo / ".mcp.json").exists()
     assert (repo / "CLAUDE.md").exists()
@@ -318,7 +373,8 @@ def test_apply_creates_files_and_a_second_apply_is_a_no_op(repo, monkeypatch):
 
     second = H.apply_config("claude", "stdio", str(repo), apply=True, force=False)
     assert second["applied"] == []
-    assert sorted(second["unchanged"]) == [".mcp.json", "CLAUDE.md"]
+    assert len(second["unchanged"]) == 7
+    assert {".mcp.json", "CLAUDE.md"} <= set(second["unchanged"])
     assert second["requires_force"] is False
     assert all(item["diff"] is None for item in second["files"])
 
@@ -553,9 +609,9 @@ def test_unknown_agent_and_transport_are_400(repo):
 # ── Skills ──────────────────────────────────────────────────────────────────
 
 
-def test_skills_are_descriptors_only_in_phase_three():
+def test_skills_are_available_with_content():
     payload = H.list_skills()
-    assert payload["content_available"] is False
+    assert payload["content_available"] is True
     assert [skill["id"] for skill in payload["skills"]] == [
         "blast-radius-guard",
         "zero-grep-architect",
@@ -564,7 +620,8 @@ def test_skills_are_descriptors_only_in_phase_three():
         "dead-code-surgeon",
     ]
     for skill in payload["skills"]:
-        assert skill["content_available"] is False
-        assert "content" not in skill
+        assert skill["content_available"] is True
+        assert "content" in skill
+        assert len(skill["content"]) > 100
         assert skill["description"]
         assert skill["files"]

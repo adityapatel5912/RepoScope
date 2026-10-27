@@ -13,7 +13,7 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import analysis, arch, harness, local, mindmap, pr_chat
+from api.routers import analysis, arch, context, harness, local, mindmap, pr_chat
 
 
 def register_routers(app: FastAPI) -> None:
@@ -33,6 +33,8 @@ def register_routers(app: FastAPI) -> None:
     # Phase 3: the nine-agent harness configurator. Preview is always
     # side-effect-free; writes require REPOSCOPE_HARNESS_APPLY=1.
     app.include_router(harness.router)
+    # Phase 4: deterministic context compressor and context pack endpoint.
+    app.include_router(context.router)
 
     # QA-only routes exist so the browser-QA harness can reach a known state
     # without touching the network. They are mounted ONLY in QA mode, so a

@@ -82,11 +82,23 @@ def test_agents_endpoint_reflects_the_server_apply_flag(client, monkeypatch):
     assert _json(client.get("/api/harness/agents"))["apply_enabled"] is True
 
 
-def test_skills_endpoint_is_descriptors_only(client):
+def test_skills_endpoint_returns_canonical_bodies(client):
     payload = _json(client.get("/api/harness/skills"))
-    assert payload["content_available"] is False
+    assert payload["content_available"] is True
     assert len(payload["skills"]) == 5
-    assert all(skill["content_available"] is False for skill in payload["skills"])
+    assert all(skill["content_available"] is True for skill in payload["skills"])
+    assert all(len(skill.get("content", "")) > 100 for skill in payload["skills"])
+
+
+def test_harness_config_includes_skills_for_claude_and_antigravity(client, tmp_path):
+    repo_dir = str(tmp_path)
+    res_claude = _json(client.get(f"/api/harness/config?agent=claude&root={repo_dir}"))
+    assert len(res_claude["files"]) == 7
+    assert any(".claude/skills/" in f["path"] for f in res_claude["files"])
+
+    res_anti = _json(client.get(f"/api/harness/config?agent=antigravity&root={repo_dir}"))
+    assert len(res_anti["files"]) == 7
+    assert any(".agents/skills/" in f["path"] for f in res_anti["files"])
 
 
 def test_harness_routes_are_registered(client):
@@ -112,7 +124,8 @@ def test_config_previews_the_contract_shape_without_writing(client, repo):
     assert payload["apply_enabled"] is False
     assert payload["requires_force"] is False
     assert payload["command"].startswith("claude mcp add --scope project")
-    assert layer_names(payload) == [".mcp.json", "CLAUDE.md"]
+    assert layer_names(payload)[:2] == [".mcp.json", "CLAUDE.md"]
+    assert len(layer_names(payload)) == 7
     assert all(item["exists"] is False for item in payload["files"])
     assert all(item["will_write"] is True for item in payload["files"])
     assert payload["warnings"] == []
@@ -214,12 +227,14 @@ def test_apply_writes_only_after_the_flag_and_force_allow_it(client, repo, monke
     monkeypatch.setenv("REPOSCOPE_HARNESS_APPLY", "1")
     payload = _apply(client, repo, apply=True)
     assert payload["apply"] is True
-    assert sorted(payload["applied"]) == [".mcp.json", "CLAUDE.md"]
-    assert sorted(path.name for path in repo.iterdir()) == [".mcp.json", "CLAUDE.md"]
+    assert len(payload["applied"]) == 7
+    assert {".mcp.json", "CLAUDE.md"} <= set(payload["applied"])
+    assert {".mcp.json", "CLAUDE.md", ".claude"} <= {path.name for path in repo.iterdir()}
 
     again = _apply(client, repo, apply=True)
     assert again["applied"] == []
-    assert sorted(again["unchanged"]) == [".mcp.json", "CLAUDE.md"]
+    assert len(again["unchanged"]) == 7
+    assert {".mcp.json", "CLAUDE.md"} <= set(again["unchanged"])
 
 
 def test_apply_409s_for_a_changed_existing_file_without_force(client, repo, monkeypatch):

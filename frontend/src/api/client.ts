@@ -304,6 +304,7 @@ export interface HarnessSkill {
   targets: string[];
   files: string[];
   content_available: boolean;
+  content: string;
 }
 
 export interface HarnessSkills {

@@ -264,7 +264,7 @@ ANTIGRAVITY = AgentSpec(
     verified_at="2026-10-26",
     notes=(
         "The workspace file is .agents/mcp_config.json.",
-        ".agents/skills/ belongs to Phase 4; no skill bodies are written here.",
+        "Writes five RepoScope skills to .agents/skills/<id>/SKILL.md.",
     ),
     command_kind="server",
     command_note="Antigravity installs through its /mcp manager or the file below; start the server with this command.",
@@ -439,12 +439,19 @@ def list_agents() -> dict[str, Any]:
 
 
 def list_skills() -> dict[str, Any]:
-    """The five skill descriptors. Bodies are deliberately absent."""
+    """The five canonical skill descriptors and bodies."""
+    import skill_library
+
     return {
         "skills": [
-            {**skill, "content_available": False} for skill in SKILLS
+            {
+                **skill,
+                "content": skill_library.skill_body(skill["id"]),
+                "content_available": True,
+            }
+            for skill in SKILLS
         ],
-        "content_available": False,
+        "content_available": True,
     }
 
 
@@ -1033,6 +1040,54 @@ def build_preview(
                 "will_write": changed,
             }
         )
+
+    if agent.id in ("claude", "antigravity"):
+        import skill_library
+
+        for skill_id in skill_library.SKILL_IDS:
+            if agent.id == "claude":
+                skill_path = f".claude/skills/{skill_id}/SKILL.md"
+            else:
+                skill_path = f".agents/skills/{skill_id}/SKILL.md"
+
+            target = resolve_config_path(resolved_root, skill_path)
+            existing, unparseable = _read_existing(target)
+            exists = target.exists()
+            canonical = skill_library.skill_body(skill_id)
+            norm_content = canonical.replace("\r\n", "\n").rstrip("\n") + "\n"
+
+            if existing is None:
+                if unparseable:
+                    warnings.append(
+                        f"{skill_path} exists but cannot be read as UTF-8 text; "
+                        "force is required to replace it."
+                    )
+                content = norm_content
+                diff = None
+                changed = True
+            else:
+                content = norm_content
+                existing_norm = existing.replace("\r\n", "\n")
+                if existing_norm != norm_content:
+                    changed = True
+                    diff = _diff(skill_path, existing, norm_content)
+                else:
+                    changed = False
+                    diff = None
+
+            needs_force = exists and changed
+            requires_force = requires_force or needs_force
+
+            files.append(
+                {
+                    "path": skill_path,
+                    "format": "markdown",
+                    "content": content,
+                    "exists": exists,
+                    "diff": diff,
+                    "will_write": changed,
+                }
+            )
 
     return {
         "ok": True,

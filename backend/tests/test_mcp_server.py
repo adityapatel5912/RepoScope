@@ -40,6 +40,11 @@ EXPECTED_TOOLS = {
     "find_dependency_cycles",
     "get_hotspots",
     "find_unreachable_symbols",
+    "get_mindmap_hierarchy",
+    "get_ast_skeleton",
+    "get_context_pack",
+    "diff_interface_contracts",
+    "get_ranked_reading_path",
 }
 
 #: The resources — the READ side, which costs no tool call.
@@ -49,6 +54,9 @@ EXPECTED_RESOURCES = {
     "reposcope://repo-map",
     "reposcope://dead-code",
     "reposcope://cycles",
+    "reposcope://mindmap",
+    "reposcope://api-routes",
+    "reposcope://context-pack",
 }
 
 

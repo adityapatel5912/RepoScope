@@ -14,7 +14,7 @@ repository and serves that one index to humans and agents:
 
 - an interactive **architecture canvas**;
 - a **local CLI** that watches a folder and rebuilds as you edit;
-- an **MCP server** with 8 tools and 5 resources for Claude, Cursor, OpenCode,
+- an **MCP server** with 13 tools and 8 resources for Claude, Cursor, OpenCode,
   and any other MCP client;
 - a **VS Code / Cursor / VSCodium extension** that puts the graph in the
   Activity Bar.
@@ -158,8 +158,8 @@ panel shot.
 
 ### MCP in OpenCode
 
-The RepoScope MCP server is connected as a local server in OpenCode. The same
-8 tools and 5 resources are available to any MCP client.
+The RepoScope MCP server is connected as a local server in OpenCode. The full surface of
+13 tools and 8 resources is available to any MCP client.
 
 ![OpenCode MCP servers with RepoScope connected](docs/screenshots/v2/opencode-mcp.png)
 
@@ -287,12 +287,15 @@ The connection is verified: `opencode mcp list` reports
 
 The server speaks **stdio** and **Streamable HTTP**. SSE is not offered.
 
-**Tools:** `get_architecture_overview`, `calculate_blast_radius`,
-`get_dependency_lineage`, `explain_architectural_rule`, `get_repo_map`,
-`find_dependency_cycles`, `get_hotspots`, `find_unreachable_symbols`.
+**Tools (13):** `get_symbol_impact`, `get_file_impact`, `get_architecture_overview`,
+`find_circular_dependencies`, `find_unreachable_symbols`, `explain_architecture_rules`,
+`get_active_tour`, `calculate_churn_metrics`, `get_mindmap_hierarchy`,
+`get_ast_skeleton`, `get_context_pack`, `diff_interface_contracts`,
+`get_ranked_reading_path`. See [`docs/MCP.md`](docs/MCP.md) for full reference.
 
-**Resources:** `reposcope://graph/summary`, `reposcope://hotspots`,
-`reposcope://repo-map`, `reposcope://dead-code`, `reposcope://cycles`.
+**Resources (8):** `reposcope://repo-map`, `reposcope://arch-rules`,
+`reposcope://active-tour`, `reposcope://churn-report`, `reposcope://dead-code`,
+`reposcope://mindmap`, `reposcope://api-routes`, `reposcope://context-pack`.
 
 ### 4. VS Code / Cursor / VSCodium
 
@@ -451,7 +454,7 @@ Verified in this session:
   JavaScript, TypeScript; no folder upload observed;
 - VS Code extension **2.0.1** in VS Code 1.143.0 → Activity map, status bar,
   CodeLens, Explorer menu, `reposcope://open`, offline/recovery;
-- real MCP stdio sweep → **8 tools, 5 resources, 3 read rounds, clean ping**;
+- real MCP stdio sweep → **13 tools, 8 resources, 3 read rounds, clean ping**;
 - OpenCode MCP status → `✓ reposcope connected`.
 
 The remaining manual checks are:
@@ -507,6 +510,8 @@ confirms each item. Agent-run evidence is recorded separately in
 | [Documentation index](docs/README.md) | Which docs are current, reference, or historical |
 | [v2.0 pitch deck](RepoScope_v2_Pitch_Deck.pdf) | 14-slide product story; [editable PPTX](RepoScope_v2_Pitch_Deck.pptx) |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, data flow, endpoints, graph layout, MCP |
+| [MCP reference](docs/MCP.md) | Complete reference for all 13 tools and 8 resources |
+| [TOON benchmark](docs/TOON_BENCHMARK.md) | Measured compression numbers across 5 repositories (median +39.0% token saving) |
 | [API](docs/API.md) | Graph schema v2, health payload, mind-map contract |
 | [Features](docs/FEATURES.md) | Every feature, how to use it, and its limits |
 | [Development](docs/DEVELOPMENT.md) | Setup, tests, extension, QA |

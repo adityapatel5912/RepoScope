@@ -1,4 +1,5 @@
-import { Sparkles, FileCode, AlertCircle } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, FileCode, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import type { HarnessSkill } from "../../api/client";
 
 interface Props {
@@ -8,6 +9,15 @@ interface Props {
 }
 
 export default function SkillsSection({ skills, loading, error }: Props) {
+  const [openPreviews, setOpenPreviews] = useState<Record<string, boolean>>({});
+
+  const togglePreview = (id: string) => {
+    setOpenPreviews((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   if (loading) {
     return (
       <div className="py-12 flex flex-col items-center justify-center gap-2 text-text-muted">
@@ -31,49 +41,95 @@ export default function SkillsSection({ skills, loading, error }: Props) {
       <div className="p-3 rounded-xl border border-accent-cyan/20 bg-accent-cyan/5 text-xs text-text-secondary flex items-start gap-2.5">
         <Sparkles size={16} className="text-accent-cyan shrink-0 mt-0.5" />
         <div>
-          <span className="font-semibold text-text-primary">Phase 4 Skills Preview: </span>
-          RepoScope defines 5 specialized skills for AI coding agents. In Phase 3, descriptors are visible; full executable SKILL.md bundles are enabled in Phase 4.
+          <span className="font-semibold text-text-primary">Skills: </span>
+          RepoScope ships 5 specialized skills for AI coding agents. Applying the harness writes each skill to <code className="text-accent-cyan font-mono text-[11px]">.claude/skills/&lt;id&gt;/SKILL.md</code> and <code className="text-accent-cyan font-mono text-[11px]">.agents/skills/&lt;id&gt;/SKILL.md</code>.
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="harness-skills-list">
-        {skills.map((skill) => (
-          <div
-            key={skill.id}
-            className="card p-3.5 flex flex-col justify-between gap-3 border-border-subtle hover:border-accent-cyan/40 transition-colors"
-            data-testid={`harness-skill-${skill.id}`}
-          >
-            <div>
-              <div className="flex items-start justify-between gap-2 mb-1.5">
-                <h4 className="text-xs font-bold text-text-primary">{skill.label}</h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider bg-bg-panel-alt border border-border-subtle text-text-muted shrink-0">
-                  {skill.content_available ? "Ready" : "Available in Phase 4"}
-                </span>
-              </div>
-              <p className="text-2xs text-text-secondary leading-relaxed mb-3">
-                {skill.description}
-              </p>
-            </div>
+        {skills.map((skill) => {
+          const isOpen = Boolean(openPreviews[skill.id]);
+          const preId = `skill-body-${skill.id}`;
 
-            <div className="pt-2 border-t border-border-hairline flex flex-col gap-1.5 text-[11px]">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-2xs text-text-muted font-mono uppercase tracking-wider">Targets:</span>
-                {skill.targets.map((target) => (
+          return (
+            <div
+              key={skill.id}
+              className="card p-3.5 flex flex-col justify-between gap-3 border-border-subtle hover:border-accent-cyan/40 transition-colors"
+              data-testid={`harness-skill-${skill.id}`}
+            >
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <h4 className="text-xs font-bold text-text-primary">{skill.label}</h4>
                   <span
-                    key={target}
-                    className="px-1.5 py-0.5 rounded bg-bg-panel-alt text-2xs font-mono text-text-secondary border border-border-subtle"
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider border shrink-0 ${
+                      skill.content_available
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                        : "bg-bg-panel-alt border-border-subtle text-text-muted"
+                    }`}
                   >
-                    {target}
+                    {skill.content_available ? "Ready" : "Available in Phase 4"}
                   </span>
-                ))}
+                </div>
+                <p className="text-2xs text-text-secondary leading-relaxed mb-3">
+                  {skill.description}
+                </p>
+
+                {skill.content_available && skill.content && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => togglePreview(skill.id)}
+                      aria-expanded={isOpen}
+                      aria-controls={preId}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-bg-panel-alt hover:bg-bg-panel hover:text-text-primary border border-border-subtle text-2xs font-medium text-text-secondary transition-colors self-start"
+                      data-testid={`toggle-skill-preview-${skill.id}`}
+                    >
+                      {isOpen ? (
+                        <>
+                          <ChevronUp size={12} />
+                          <span>Hide SKILL.md</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={12} />
+                          <span>Preview SKILL.md</span>
+                        </>
+                      )}
+                    </button>
+
+                    {isOpen && (
+                      <pre
+                        id={preId}
+                        data-testid={`harness-skill-body-${skill.id}`}
+                        className="p-2.5 rounded-lg bg-bg-panel-alt border border-border-subtle text-[11px] font-mono text-text-primary overflow-x-auto overflow-y-auto max-h-56 whitespace-pre leading-relaxed scrollbar-thin"
+                      >
+                        {skill.content}
+                      </pre>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <FileCode size={11} className="text-text-muted shrink-0" />
-                <span className="text-2xs text-text-muted font-mono">{skill.files.join(", ")}</span>
+
+              <div className="pt-2 border-t border-border-hairline flex flex-col gap-1.5 text-[11px]">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-2xs text-text-muted font-mono uppercase tracking-wider">Targets:</span>
+                  {skill.targets.map((target) => (
+                    <span
+                      key={target}
+                      className="px-1.5 py-0.5 rounded bg-bg-panel-alt text-2xs font-mono text-text-secondary border border-border-subtle"
+                    >
+                      {target}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <FileCode size={11} className="text-text-muted shrink-0" />
+                  <span className="text-2xs text-text-muted font-mono">{skill.files.join(", ")}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

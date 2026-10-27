@@ -74,6 +74,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+toon = ["toon-format>=1.2,<2"]
 
 [project.urls]
 Homepage = "https://github.com/adityapatel5912/RepoScope"
@@ -93,6 +94,7 @@ py-modules = [
     "ai_byok",
     "arch_rules",
     "byok_manager",
+    "context_compressor",
     "git_history",
     "graph_analysis",
     "graph_builder",
@@ -113,6 +115,7 @@ py-modules = [
     "repo_tracker",
     "runtime_config",
     "security_scanner",
+    "skill_library",
     "sse",
     "token_metrics",
     "tour_generator",

@@ -197,7 +197,7 @@ test.describe("Nine-Agent Harness Configurator (Phase 3)", () => {
       ).toContainText(expectation.token);
     }
 
-    // 10. Switch to Skills tab and verify 5 Phase 4 descriptors
+    // 10. Switch to Skills tab and verify 5 shipped skills with Ready badges
     const skillsTab = page.locator('[role="tab"]').filter({ hasText: "Skills" });
     await expect(skillsTab).toBeVisible();
     await skillsTab.click();
@@ -212,15 +212,36 @@ test.describe("Nine-Agent Harness Configurator (Phase 3)", () => {
     for (const skillId of expectedSkills) {
       const skillCard = page.locator(`[data-testid="harness-skill-${skillId}"]`);
       await expect(skillCard).toBeVisible();
-      await expect(skillCard).toContainText(/Phase 4/i);
+      await expect(skillCard).toContainText("Ready");
+      await expect(skillCard).not.toContainText(/Available in Phase 4/i);
     }
 
-    // Capture Skills preview screenshot
+    // Toggle preview on first card
+    const firstToggleBtn = page.locator('[data-testid="toggle-skill-preview-blast-radius-guard"]');
+    await expect(firstToggleBtn).toBeVisible();
+    await firstToggleBtn.click();
+
+    const firstBodyPre = page.locator('[data-testid="harness-skill-body-blast-radius-guard"]');
+    await expect(firstBodyPre).toBeVisible();
+    await expect(firstBodyPre).toContainText("name: blast-radius-guard");
+    await expect(firstBodyPre).toContainText("get_ast_skeleton");
+
+    // Capture Skills preview screenshot with one preview open
     await captureJourney(page, "harness", "harness-skills-preview");
+
+    // Toggle close
+    await firstToggleBtn.click();
+    await expect(firstBodyPre).toHaveCount(0);
 
     // Switch back to Agents tab
     const agentsTab = page.locator('[role="tab"]').filter({ hasText: "Agents" });
     await agentsTab.click();
+
+    // Assert Claude file list includes skill file tab
+    const claudeAgentBtn = page.locator('[data-testid="harness-agent-claude"]');
+    await claudeAgentBtn.click();
+    const claudeSkillTab = previewPane.getByRole("tab").filter({ hasText: ".claude/skills/blast-radius-guard/SKILL.md" });
+    await expect(claudeSkillTab).toBeVisible();
 
     // 11. Assert preview never shows success/write confirmation
     const successBanner = page.locator('[data-testid="harness-apply-success"]');

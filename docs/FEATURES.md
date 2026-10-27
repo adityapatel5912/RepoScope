@@ -118,24 +118,32 @@ From a checkout, the same commands run as `python -m cli.main ...`.
 
 The same index, exposed to agents.
 
-**Tools (8):**
+**Tools (13):**
 
-- `get_architecture_overview`
-- `calculate_blast_radius`
-- `get_dependency_lineage`
-- `explain_architectural_rule`
-- `get_repo_map`
-- `find_dependency_cycles`
-- `get_hotspots`
-- `find_unreachable_symbols`
+- `get_symbol_impact`: Traces direct and transitive dependent callers of a symbol.
+- `get_file_impact`: Measures downstream dependents of a modified file.
+- `get_architecture_overview`: High-level summary of layers, entry points, and coupling.
+- `find_circular_dependencies`: Detects cycles within and across architectural layers.
+- `find_unreachable_symbols`: Flags statically unreferenced symbols for dead-code investigation.
+- `explain_architecture_rules`: Explains layer hierarchy and identifies rule violations.
+- `get_active_tour`: Returns steps and narrative for guided repository tours.
+- `calculate_churn_metrics`: Analyzes git commit hotspots and co-change coupling.
+- `get_mindmap_hierarchy`: Returns the hierarchical semantic tree (pillar to symbol).
+- `get_ast_skeleton`: Extracts symbol signatures and line numbers without bodies.
+- `get_context_pack`: Builds deterministic, budgeted context packs with delta hash sync.
+- `diff_interface_contracts`: Detects export and API contract breaking changes across git refs.
+- `get_ranked_reading_path`: Produces prioritized reading paths for codebase onboarding.
 
-**Resources (5):**
+**Resources (8):**
 
-- `reposcope://graph/summary`
-- `reposcope://hotspots`
-- `reposcope://repo-map`
-- `reposcope://dead-code`
-- `reposcope://cycles`
+- `reposcope://repo-map`: Full file and symbol registry.
+- `reposcope://arch-rules`: Defined architectural rules and violation evidence.
+- `reposcope://active-tour`: Current guided tour steps.
+- `reposcope://churn-report`: High-frequency commit churn analysis.
+- `reposcope://dead-code`: Unreferenced symbol candidates for review.
+- `reposcope://mindmap`: Semantic hierarchy tree.
+- `reposcope://api-routes`: Declared HTTP route handlers and methods.
+- `reposcope://context-pack`: Default budgeted context pack.
 
 **Transports:** stdio (default) and Streamable HTTP. SSE is not offered.
 
@@ -163,8 +171,9 @@ Cline / Roo, and OpenCode.
   traversal, absolute paths, and symlink/junction escapes are rejected.
 - **Merge, not replace:** unrelated JSON/TOML keys survive; markdown
   instruction files get one delimited RepoScope section.
-- **Skills:** the five bundle descriptors are visible now; the `SKILL.md`
-  bodies and `.agents/skills/*` files are Phase 4.
+- **Skills:** five specialized agent skills are shipped (`blast-radius-guard`,
+  `zero-grep-architect`, `pr-contract-shield`, `onboarding-navigator`,
+  `dead-code-surgeon`), written to `.claude/skills/*` and `.agents/skills/*`.
 
 The frozen HTTP contract is in
 [API.md](API.md#harness-configurator-phase-3). Setup instructions for all nine
@@ -351,7 +360,6 @@ These are intentionally not presented as shipped:
 
 - WebGL rendering tier for very large graphs.
 - The `kuzu` graph-store flag.
-- `SKILL.md` bodies and `.agents/skills/*` bundles (Phase 4).
 - Monorepo cross-package edges.
 - Ownership overlay (the endpoint exists; the data is not populated).
 - Critical-path panel in the UI (analysis endpoint exists).

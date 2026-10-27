@@ -35,7 +35,8 @@ contracts that clients depend on, not every request model.
 | `GET` | `/api/harness/agents` | The nine supported agent targets and their paths. |
 | `GET` | `/api/harness/config` | Preview the files and command for one agent. |
 | `POST` | `/api/harness/apply` | Dry run by default; write only when the server flag allows it. |
-| `GET` | `/api/harness/skills` | The five skill descriptors. Bodies are Phase 4. |
+| `GET` | `/api/harness/skills` | The five skill descriptors and canonical bodies. |
+| `GET` | `/api/context/pack` | Deterministic, budgeted context pack (JSON or TOON) with delta hash. |
 | `POST` | `/api/repo/load` | Clone and index a GitHub repository. |
 | `POST` | `/api/repo/load-demo/{demo_id}` | Load a bundled demo repository. |
 | `GET` | `/api/repo/status` | Current repository state. |
@@ -422,9 +423,10 @@ the response is the preview shape plus:
 
 ### `GET /api/harness/skills`
 
-Returns the five skill descriptors with `content_available: false`. Phase 3
-shows what will be available; it does not write `SKILL.md` bodies, and it does
-not expose `.agents/skills/*` files. Those are Phase 4 work.
+Returns the five canonical skill descriptors with `content_available: true`
+and their full markdown `content`. Applying the harness for Claude Code writes
+`.claude/skills/<id>/SKILL.md`; applying for Antigravity writes
+`.agents/skills/<id>/SKILL.md`.
 
 ### Registry deltas from Appendix E
 
@@ -435,8 +437,57 @@ not expose `.agents/skills/*` files. Those are Phase 4 work.
 - **Cline/Roo** writes Roo Code's project file `.roo/mcp.json`. Cline's global
   settings path `~/.cline/data/settings/cline_mcp_settings.json` is
   display-only.
-- **Antigravity** skills belong to Phase 4. Phase 3 writes only
-  `.agents/mcp_config.json`.
+- **Antigravity** writes `.agents/mcp_config.json` plus the five skills under
+  `.agents/skills/<id>/SKILL.md`.
+
+---
+
+## Context pack (Phase 4)
+
+Deterministic, budgeted repository context packs designed for LLM prompts,
+agent grounding, and cache-friendly delta synchronizations.
+
+For MCP tools and resource reference, see [MCP Server Reference](MCP.md).
+
+### `GET /api/context/pack`
+
+```
+GET /api/context/pack?paths=backend/main.py&format=json&detail=skeleton&budget=8000&since_hash=...
+```
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `paths` | `str` | `""` | Comma-separated list of relative file paths. If empty, the pack selects files guided by PageRank and entry-point heuristics. |
+| `format` | `Literal["json", "toon"]` | `"json"` | Output format. `json` returns compact single-line JSON. `toon` returns Token-Oriented Object Notation. |
+| `detail` | `Literal["skeleton", "full"]` | `"skeleton"` | Detail mode. `skeleton` extracts symbol signatures and metadata, omitting bodies. `full` includes code up to 120 lines / 12,000 characters per file. |
+| `budget` | `int` | `8000` | Token budget, clamped between `500` and `200,000`. |
+| `since_hash` | `str \| None` | `None` | SHA-256 content hash from a previous request. |
+
+#### Response Headers
+
+- `X-RepoScope-Context-Hash`: The SHA-256 content hash of the pack payload. Computed over content excluding volatile fields (`format`, `since_hash`, `root`, `tokens`). Identical for both JSON and TOON representations.
+- `X-RepoScope-Context-Unchanged`: Set to `1` when the provided `since_hash` matches the current content hash.
+
+#### Full Response Example (`format=json`, `200 OK`)
+
+```json
+{"schema_version": 1, "available": true, "format": "json", "detail": "skeleton", "budget": 8000, "root": "/work/repo", "hash": "a1b2c3d4...", "files": [{"path": "backend/main.py", "role": "entry_point", "pillar": "backend", "route_count": 5, "symbols": [{"name": "app", "kind": "variable", "line": 20, "end_line": 20, "exported": true, "complexity": 1, "role": "entry_point", "signature": "app = FastAPI()"}]}], "omitted": [], "caps": [], "tokens": {"files_estimated": 450, "budget": 8000, "budget_exceeded": false}, "counts": {"files": 1, "symbols": 1, "omitted": 0}}
+```
+
+#### Delta Sync Unchanged Envelope Example (`since_hash` match, `200 OK`)
+
+```json
+{"schema_version": 1, "available": true, "unchanged": true, "hash": "a1b2c3d4...", "message": "Context unchanged since provided hash"}
+```
+
+#### Status Codes & Error Behavior
+
+- `200`: Success. Returns compact JSON (`application/json`) or TOON (`text/toon; charset=utf-8`).
+- `400`: Invalid parameters, path traversal attempt, TOON disabled via `REPOSCOPE_TOON=0`, or optional dependency `toon-format` not installed.
+- `422`: Validation error on query parameters (e.g. budget outside 500..200000).
+- `503`: No repository is currently loaded.
 
 ---
 

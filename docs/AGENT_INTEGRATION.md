@@ -63,7 +63,7 @@ These specifications were re-verified against official vendor documentation on 2
    Project-scoped MCP configuration is written to Roo Code's `.roo/mcp.json` alongside `.clinerules`. Cline's CLI global settings live in user home and are display-only.
 
 4. **Antigravity**:
-   Phase 3 writes project MCP configuration to `.agents/mcp_config.json` and instructions to `AGENTS.md`. The `.agents/skills/` directory and `SKILL.md` files are scheduled for Phase 4.
+   Writes project MCP configuration to `.agents/mcp_config.json`, instructions to `AGENTS.md`, and all 5 canonical skills to `.agents/skills/<id>/SKILL.md`.
 
 ---
 
@@ -127,9 +127,9 @@ Several agents maintain global user-level configuration files (such as `~/.confi
 * **Verification**: Reload Kiro workspace and check MCP server status in developer tools.
 
 ### 6. Antigravity
-* **Project Files**: `.agents/mcp_config.json`, `AGENTS.md`
-* **Setup**: Project-level MCP config at `.agents/mcp_config.json`.
-* **Dogfood Result**: Checked via `Get-Command antigravity`. Command returned `CommandNotFoundException` (exited code 1); recorded as **not installed** on this machine. If installed in your environment, place `.agents/mcp_config.json` in the workspace root and relaunch Antigravity.
+* **Project Files**: `.agents/mcp_config.json`, `AGENTS.md`, plus 5 skill files under `.agents/skills/<id>/SKILL.md`
+* **Setup**: Project-level MCP config at `.agents/mcp_config.json`, instructions in `AGENTS.md`, and skills in `.agents/skills/`.
+* **Dogfood Result**: Checked via `Get-Command antigravity`. Command returned `CommandNotFoundException` (exited code 1); recorded as **not installed** on this machine. If installed in your environment, place `.agents/mcp_config.json` in the workspace root, apply skills, and relaunch Antigravity.
 
 ### 7. Windsurf / Devin
 * **Project Files**: `.devin/mcp_config.json`, `.windsurf/rules/reposcope.md`
@@ -151,17 +151,30 @@ Several agents maintain global user-level configuration files (such as `~/.confi
 
 ---
 
-## 7. Phase 4 Skills Preview
+## 7. Shipped Agent Skills
 
-RepoScope defines five specialized architectural skills designed for AI coding agents:
+RepoScope ships five specialized, deterministic architectural skills designed for AI coding agents:
 
-1. **Blast Radius Guard** (`blast-radius-guard`): Checks direct and transitive dependents before changing a file or symbol.
-2. **Zero-Grep Architect** (`zero-grep-architect`): Answers architecture, layer boundary, and ownership questions from the graph instead of broad textual search.
-3. **PR Contract Shield** (`pr-contract-shield`): Validates interface contracts, API boundaries, and cross-layer imports before opening pull requests.
-4. **Onboarding Navigator** (`onboarding-navigator`): Generates a ranked reading path through an unfamiliar repository using architectural hubs and central symbols.
-5. **Dead Code Surgeon** (`dead-code-surgeon`): Identifies unreferenced symbols with structural graph evidence for safe deprecation and refactoring.
+1. **Blast Radius Guard** (`blast-radius-guard`): Measures direct and transitive impact of file/symbol modifications before editing. First tool call: `get_ast_skeleton`.
+2. **Zero-Grep Architect** (`zero-grep-architect`): Answers architecture, ownership, entry-point, and dependency questions directly from the graph instead of broad grep. First tool call: `get_architecture_overview`.
+3. **PR Contract Shield** (`pr-contract-shield`): Reviews interface contract changes and layer boundary crossings before opening or updating a PR. First tool call: `diff_interface_contracts`.
+4. **Onboarding Navigator** (`onboarding-navigator`): Builds a ranked, budgeted reading path through an unfamiliar codebase. First tool call: `get_ranked_reading_path`.
+5. **Dead Code Surgeon** (`dead-code-surgeon`): Investigates symbols marked statically unreachable for human-confirmed deprecation. First tool call: `find_unreachable_symbols`. *Static reachability is an estimate, not proof of dead code.*
 
-*Status*: In Phase 3, skill descriptors and target file bindings are previewable in the UI via the **Skills** tab. Full executable `SKILL.md` bodies will be delivered in Phase 4.
+### Discovery Matrix
+
+| Agent | Skill Discovery Path | Invocation Mechanism |
+|---|---|---|
+| **Claude Code** | `.claude/skills/<id>/SKILL.md` | Auto-discovered by Claude Code CLI via directory scan. |
+| **Antigravity** | `.agents/skills/<id>/SKILL.md` | Auto-discovered by Antigravity agent system. |
+| **OpenCode** | `.claude/skills/<id>/SKILL.md` or `.agents/skills/<id>/SKILL.md` | Explicit invocation via OpenCode's skill tool. (RepoScope does not claim automatic metadata-only invocation). |
+
+### Harness Application
+
+When applying the harness with write permissions enabled (`REPOSCOPE_HARNESS_APPLY=1`):
+- For **Claude Code**, the harness writes the 5 skill files to `.claude/skills/<id>/SKILL.md`.
+- For **Antigravity**, the harness writes the 5 skill files to `.agents/skills/<id>/SKILL.md`.
+- Other agent targets can read the same checked-in skill files if their environment supports agent skill specifications.
 
 ---
 

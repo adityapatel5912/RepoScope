@@ -9,6 +9,30 @@ on a separate marketplace.
 
 ### Added
 
+- **Context compression, AST skeleton, and delta sync (Phase 4).**
+  Deterministic repository context packs via `GET /api/context/pack` and MCP
+  tool `get_context_pack`. `detail=skeleton` extracts symbol declarations
+  without bodies; `detail=full` enforces a strict 120-line / 12,000-character cap
+  per file. Content SHA-256 delta hash excludes volatile fields, providing an
+  unchanged envelope when matching `since_hash`. Token-budgeted allocation
+  (500 to 200,000 tokens) reports omitted files and reasons.
+- **Five new MCP tools and three new resources.**
+  Expanded the MCP surface to exactly 13 tools and 8 resources while preserving
+  all existing tool names and URIs. New tools: `get_mindmap_hierarchy`,
+  `get_ast_skeleton`, `get_context_pack`, `diff_interface_contracts`,
+  `get_ranked_reading_path`. New resources: `reposcope://mindmap`,
+  `reposcope://api-routes`, `reposcope://context-pack`.
+- **Five canonical agent skills shipped.**
+  `blast-radius-guard`, `zero-grep-architect`, `pr-contract-shield`,
+  `onboarding-navigator`, `dead-code-surgeon`. Harness writes skills to
+  `.claude/skills/<id>/SKILL.md` (Claude Code) and `.agents/skills/<id>/SKILL.md`
+  (Antigravity). Interactive skill preview in frontend UI with `Ready` badges.
+- **Optional TOON serialization & measured benchmark.**
+  Lazily-loaded `format=toon` adapter via `reposcope[toon]` (`toon-format>=1.2,<2`)
+  with kill-switch `REPOSCOPE_TOON=0`. Measured benchmark across 5 real repositories
+  (`requests`, `flask`, `httpx`, `express`, `got`) proves a **median 39.0% token reduction**
+  over compact JSON with 100% roundtrip fidelity. No unverified 85% token-saving claims.
+
 - **v2.0 pitch deck** in PDF and editable PPTX form, linked from the README
   and the documentation index.
 - **V2.5–V2.8 implementation plan and two-agent coordination board.** The
@@ -22,7 +46,7 @@ on a separate marketplace.
   off unless `REPOSCOPE_HARNESS_APPLY=1`; existing files require a diff and
   `force`, JSON/TOML merges preserve unrelated keys, global paths are
   display-only, and absolute or escaping paths are rejected. The SKILL.md
-  bodies remain Phase 4 work.
+  bodies are shipped in Phase 4.
 - **Graph schema v2 (Phase 1).** `inherits`, `exports`, and `api_calls` edges
   now carry repository-relative evidence (file, 1-based line, confidence);
   files and symbols carry `pillar` and `role`, handlers carry their routes,

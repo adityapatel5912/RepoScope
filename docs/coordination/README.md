@@ -33,8 +33,9 @@ handoff instead. The integrator may reassign a claim, but must say so in
   named `rook/<phase>` or `wren/<phase>`.
 - A consumer branch may be based on the producer's phase branch when the
   consumer needs an unmerged contract implementation (Phase 3: Wren's UI branch
-  is based on Rook's backend commit). The consumer still pushes only its own
-  branch; the integrator merges.
+  is based on Rook's backend commit). The consumer commits on its own branch
+  and stops; the owner authorizes any push, and the integrator merges.
+- No branch is pushed without the owner's explicit permission.
 - Merge into `experimental` only when the phase gate is green.
 - Never force-push or rebase a shared branch.
 - Do not run two agents in the same working directory.
@@ -64,7 +65,7 @@ Rook writes a self-contained prompt for Wren
       ↓
 Wren works in a separate worktree on a child branch
       ↓
-Wren pushes the child branch and posts a handoff after the gate is green
+Wren commits locally and posts a handoff after the gate is green
       ↓
 Rook reviews, re-runs the gate on a clean checkout, and merges
       ↓

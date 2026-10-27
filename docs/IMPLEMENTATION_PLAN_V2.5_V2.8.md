@@ -1,6 +1,6 @@
 # RepoScope V2.5–V2.8 — Implementation Plan
 
-**Status:** Approved — Phase 0–2 complete; Phase 3 planned and not started.
+**Status:** Approved - Phase 0-3 complete; Phase 3 is merged into `experimental` and awaiting owner testing before `main`.
 **Source draft:** [`RepoScope_V2.5_AI_Expansion_Plan.md`](../RepoScope_V2.5_AI_Expansion_Plan.md) (preserved unchanged).
 **Target repository:** this repository, `adityapatel5912/RepoScope`. The plan does **not** migrate to `RepoScope-V2`.
 **Integration branch:** `experimental`. `main` is untouched until the owner tests `experimental` and merges it.
@@ -673,7 +673,7 @@ Hide the mode switch behind `localStorage` / a feature flag and leave `MindMapVi
 **Depends on:** Phase 1 (stable MCP tool names) and Phase 2 (a place to surface the modal)
 **Risk:** medium — wrong configs are worse than no configs
 **Owner:** Wren (registry research, fixture validation, UI); Rook (API contract, generator, apply safety, tests, merge)
-**Status (prepared 2026-10-26):** planned, not started. Do not create a branch, worktree, or code change until the owner signals Phase 3.
+**Status (2026-10-27):** complete. Backend `69b9620`, handoff docs `5d1f3f0`, and UI `4a8a5de` were reviewed, squashed into one Phase 3 commit, and merged into `experimental`. The owner authorized pushing `experimental`; `main` waits for owner testing and explicit approval.
 
 ### Goal
 
@@ -703,9 +703,9 @@ section, stop and report it.
 | Codex CLI | `.codex/config.toml`, `AGENTS.md` | `[mcp_servers.reposcope]`. |
 | Kiro | `.kiro/settings/mcp.json`, `.kiro/steering/reposcope.md` | Project-scoped. |
 | Antigravity | `.agents/mcp_config.json`, `AGENTS.md`, `.agents/skills/` | Also dogfood the config against RepoScope. |
-| Windsurf / Devin | `.windsurf/mcp_config.json`, `.windsurfrules` | Global path is `~/.codeium/windsurf/mcp_config.json`; never write outside the repo without explicit confirmation. |
-| Cline / Roo | `.cline/data/settings/cline_mcp_settings.json` preview, `.roo/mcp.json`, `.clinerules` | The global Cline path is shown, not written by default. |
-| OpenCode | `opencode.json` with nested `mcp.servers` | Project-scoped. |
+| Windsurf / Devin | `.devin/mcp_config.json`, `.windsurf/rules/reposcope.md` | Global `~/.codeium/windsurf/mcp_config.json` and `~/.config/devin/mcp_config.json` are shown, never written. |
+| Cline / Roo | `.roo/mcp.json`, `.clinerules` | Cline's global `~/.cline/data/settings/cline_mcp_settings.json` is shown, never written. |
+| OpenCode | `opencode.json` with `mcp.reposcope` | Current schema is `mcp.<name>` with `type: local \| remote`; there is no `mcp.servers` key. |
 
 ### Files
 
@@ -774,7 +774,7 @@ directory.
   "label": "Claude Code",
   "transport": "stdio",
   "root": "D:\\repo",
-  "command": "claude mcp add reposcope -- reposcope-mcp --root D:\\repo",
+  "command": "claude mcp add --scope project --transport stdio reposcope -- reposcope-mcp --root \"D:\\repo\"",
   "apply_enabled": false,
   "requires_force": false,
   "files": [
@@ -862,7 +862,7 @@ Returns the five bundle descriptors: `blast-radius-guard`,
 
 - [ ] Every target has a fixture assertion for path, format, and transport.
 - [ ] Claude’s `.mcp.json`, VS Code’s `servers`, Codex’s TOML, and OpenCode’s
-  nested `mcp.servers` parse successfully in tests.
+  `mcp.reposcope` parse successfully in tests.
 - [ ] A path-traversal attempt is rejected (absolute path, `..`, and
   symlink/junction escape).
 - [ ] No `apply` writes outside the root; preview never writes.
@@ -1519,7 +1519,7 @@ Existing resources keep their URIs. New resources: `reposcope://mindmap`, `repos
 
 Every tool response carries `path` and `line` where applicable. A tool that cannot answer says so; it does not return an empty success that looks like a fact.
 
-## Appendix E — Nine-agent paths (verified 2026-10-26; re-verify at Phase 3 kickoff)
+## Appendix E — Nine-agent paths (verified 2026-10-26)
 
 | Agent | Project config | Notes |
 |---|---|---|
@@ -1529,9 +1529,9 @@ Every tool response carries `path` and `line` where applicable. A tool that cann
 | Codex CLI | `.codex/config.toml` | `[mcp_servers.reposcope]`. |
 | Kiro | `.kiro/settings/mcp.json` | `.kiro/steering/reposcope.md`. |
 | Antigravity | `.agents/mcp_config.json` | `.agents/skills/`; dogfood against RepoScope. |
-| Windsurf / Devin | `.windsurf/mcp_config.json` | Global `~/.codeium/windsurf/mcp_config.json` shown, not written by default. |
+| Windsurf / Devin | `.devin/mcp_config.json` | Global `~/.codeium/windsurf/mcp_config.json` and `~/.config/devin/mcp_config.json` shown, never written. |
 | Cline / Roo | `.roo/mcp.json` | Cline global preview `~/.cline/data/settings/cline_mcp_settings.json`. |
-| OpenCode | `opencode.json` | Nested `mcp.servers`; no Zed target. |
+| OpenCode | `opencode.json` | `mcp.reposcope`; current schema is `mcp.<name>` with `type: local \| remote`. No Zed target. |
 
 ## Appendix F — Phase gate test matrix
 

@@ -13,7 +13,7 @@ import os
 
 from fastapi import FastAPI
 
-from api.routers import analysis, arch, local, mindmap, pr_chat
+from api.routers import analysis, arch, harness, local, mindmap, pr_chat
 
 
 def register_routers(app: FastAPI) -> None:
@@ -30,6 +30,9 @@ def register_routers(app: FastAPI) -> None:
     # Sprint 6 (decision D1): the PR bot's conversational endpoint and
     # the SARIF output.
     app.include_router(pr_chat.router)
+    # Phase 3: the nine-agent harness configurator. Preview is always
+    # side-effect-free; writes require REPOSCOPE_HARNESS_APPLY=1.
+    app.include_router(harness.router)
 
     # QA-only routes exist so the browser-QA harness can reach a known state
     # without touching the network. They are mounted ONLY in QA mode, so a

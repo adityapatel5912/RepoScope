@@ -144,6 +144,35 @@ minutes, then `Received a response for an unknown message ID`). Direct stdio
 reads are instant and the tool calls work. Treat this as a client bridge issue
 until reproduced against the server.
 
+### Nine-agent harness configurator (Phase 3)
+
+The **Connect AI agent** control generates MCP configuration for Claude Code,
+Cursor, VS Code / Copilot, Codex CLI, Kiro, Antigravity, Windsurf / Devin,
+Cline / Roo, and OpenCode.
+
+- **Preview first:** choose an agent and transport; RepoScope shows the exact
+  file contents, the install command, and a unified diff for any file that
+  already exists.
+- **Two transports:** stdio is the default; Streamable HTTP points at
+  `http://127.0.0.1:8765/mcp`. Every target supports both.
+- **Safe writes:** writes are off unless the server runs with
+  `REPOSCOPE_HARNESS_APPLY=1`. Preview never writes. An existing file that
+  would change needs an explicit `force` confirmation.
+- **Project-only:** every path is relative to the loaded repository. Global
+  agent paths are displayed for reference and are never written. Path
+  traversal, absolute paths, and symlink/junction escapes are rejected.
+- **Merge, not replace:** unrelated JSON/TOML keys survive; markdown
+  instruction files get one delimited RepoScope section.
+- **Skills:** the five bundle descriptors are visible now; the `SKILL.md`
+  bodies and `.agents/skills/*` files are Phase 4.
+
+The frozen HTTP contract is in
+[API.md](API.md#harness-configurator-phase-3). Setup instructions for all nine
+targets are in [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md).
+
+**Limit:** Phase 3 writes configuration only. It does not install any agent,
+start a server, or verify a target that is not installed on the machine.
+
 ---
 
 ## 6. VS Code / Cursor / VSCodium extension
@@ -321,9 +350,8 @@ before use.
 These are intentionally not presented as shipped:
 
 - WebGL rendering tier for very large graphs.
-- The vertical Mind Map UI (the `GET /api/mindmap` contract is frozen; the
-  view beside the dependency canvas is Phase 2).
 - The `kuzu` graph-store flag.
+- `SKILL.md` bodies and `.agents/skills/*` bundles (Phase 4).
 - Monorepo cross-package edges.
 - Ownership overlay (the endpoint exists; the data is not populated).
 - Critical-path panel in the UI (analysis endpoint exists).

@@ -14,7 +14,10 @@ const JSON_TIMEOUT_MS = 30_000;
 async function _json(res: Response) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail ?? apiErrorHint(res));
+    const msg = err.detail ?? apiErrorHint(res);
+    const error = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    (error as any).status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -246,4 +249,99 @@ export async function streamChat(
       cb.onError?.(e instanceof Error ? e.message : "Stream interrupted");
     }
   }
+}
+
+// ── Harness Configurator (Phase 3) ──────────────────────────────────────────
+
+export type HarnessTransport = "stdio" | "http";
+
+export interface HarnessAgent {
+  id: string;
+  label: string;
+  config_paths: string[];
+  transport: HarnessTransport[];
+  default_transport: HarnessTransport;
+  global_preview_paths: string[];
+  docs_url: string;
+  verified_at: string;
+  notes: string[];
+}
+
+export interface HarnessFilePreview {
+  path: string;
+  format: "json" | "toml" | "markdown";
+  content: string;
+  exists: boolean;
+  diff: string | null;
+  will_write: boolean;
+}
+
+export interface HarnessPreview {
+  ok: boolean;
+  agent: string;
+  label: string;
+  transport: HarnessTransport;
+  root: string;
+  command: string;
+  command_kind: "install" | "server" | "deeplink";
+  command_note: string;
+  apply_enabled: boolean;
+  requires_force: boolean;
+  files: HarnessFilePreview[];
+  warnings: string[];
+}
+
+export interface HarnessApplyResult extends HarnessPreview {
+  apply: boolean;
+  applied: string[];
+  unchanged: string[];
+}
+
+export interface HarnessSkill {
+  id: string;
+  label: string;
+  description: string;
+  targets: string[];
+  files: string[];
+  content_available: boolean;
+}
+
+export interface HarnessSkills {
+  skills: HarnessSkill[];
+  content_available: boolean;
+}
+
+export async function getHarnessAgents(): Promise<{ agents: HarnessAgent[]; apply_enabled: boolean }> {
+  return _json(await _fetchWithTimeout(`${BASE}/api/harness/agents`));
+}
+
+export async function getHarnessConfig(params: {
+  agent: string;
+  transport: HarnessTransport;
+  root: string;
+}): Promise<HarnessPreview> {
+  const q = new URLSearchParams({
+    agent: params.agent,
+    transport: params.transport,
+    root: params.root,
+  });
+  return _json(await _fetchWithTimeout(`${BASE}/api/harness/config?${q.toString()}`));
+}
+
+export async function applyHarnessConfig(body: {
+  agent: string;
+  transport: HarnessTransport;
+  root: string;
+  apply: boolean;
+  force: boolean;
+}): Promise<HarnessApplyResult> {
+  return _json(await _fetchWithTimeout(`${BASE}/api/harness/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function getHarnessSkills(): Promise<HarnessSkills> {
+  return _json(await _fetchWithTimeout(`${BASE}/api/harness/skills`));
 }

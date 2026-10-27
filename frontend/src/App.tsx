@@ -8,6 +8,7 @@ import StatusBar from "./components/StatusBar";
 import Toasts from "./components/Toasts";
 import ShortcutsModal from "./components/ShortcutsModal";
 import EditorSettings from "./components/EditorSettings";
+import HarnessModal from "./components/HarnessModal";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { useRepoLoader } from "./hooks/useRepoLoader";
 import type { TourGraphState } from "./components/GraphView";
@@ -128,6 +129,8 @@ export default function App() {
   /** The editor settings modal. */
   const [showEditorSettings, setShowEditorSettings] = useState(false);
   const [idePrefs, setIdePrefs] = useState<IdePrefs>(() => loadIdePrefs());
+  /** Nine-agent harness configurator modal (Phase 3). */
+  const [showHarnessModal, setShowHarnessModal] = useState(false);
 
   // Tour + impact graph highlighting
   const [highlightNode, setHighlightNode]       = useState<string | null>(null);
@@ -441,6 +444,7 @@ export default function App() {
         isLocal={isLocal}
         previewName={browserPreview?.name ?? null}
         onOpenEditorSettings={() => setShowEditorSettings(true)}
+        onOpenHarness={() => setShowHarnessModal(true)}
         onToggleSidebar={() => {
           setSidebarCollapsed((v) => {
             const next = !v;
@@ -630,6 +634,14 @@ export default function App() {
         <EditorSettings
           onClose={() => setShowEditorSettings(false)}
           onChange={setIdePrefs}
+        />
+      )}
+
+      {/* Nine-agent harness configurator modal (Phase 3) */}
+      {showHarnessModal && (
+        <HarnessModal
+          localRoot={localRoot}
+          onClose={() => setShowHarnessModal(false)}
         />
       )}
     </div>

@@ -14,6 +14,15 @@ on a separate marketplace.
 - **V2.5–V2.8 implementation plan and two-agent coordination board.** The
   plan is additive to the shipped v2.0 tree and keeps the existing graph,
   endpoints, extension, and provider chain.
+- **Nine-agent harness configurator (Phase 3).** `GET /api/harness/agents`,
+  `GET /api/harness/config`, `POST /api/harness/apply`, and
+  `GET /api/harness/skills` generate and preview MCP configuration for Claude
+  Code, Cursor, VS Code / Copilot, Codex CLI, Kiro, Antigravity,
+  Windsurf / Devin, Cline / Roo, and OpenCode. Preview never writes. Apply is
+  off unless `REPOSCOPE_HARNESS_APPLY=1`; existing files require a diff and
+  `force`, JSON/TOML merges preserve unrelated keys, global paths are
+  display-only, and absolute or escaping paths are rejected. The SKILL.md
+  bodies remain Phase 4 work.
 - **Graph schema v2 (Phase 1).** `inherits`, `exports`, and `api_calls` edges
   now carry repository-relative evidence (file, 1-based line, confidence);
   files and symbols carry `pillar` and `role`, handlers carry their routes,

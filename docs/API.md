@@ -32,6 +32,10 @@ contracts that clients depend on, not every request model.
 | `GET` | `/api/health` | Application health, version, schema version, cached graph counts. |
 | `GET` | `/api/repo/graph` | The full graph for the active repository. |
 | `GET` | `/api/mindmap` | The frozen six-pillar mind-map projection. |
+| `GET` | `/api/harness/agents` | The nine supported agent targets and their paths. |
+| `GET` | `/api/harness/config` | Preview the files and command for one agent. |
+| `POST` | `/api/harness/apply` | Dry run by default; write only when the server flag allows it. |
+| `GET` | `/api/harness/skills` | The five skill descriptors. Bodies are Phase 4. |
 | `POST` | `/api/repo/load` | Clone and index a GitHub repository. |
 | `POST` | `/api/repo/load-demo/{demo_id}` | Load a bundled demo repository. |
 | `GET` | `/api/repo/status` | Current repository state. |
@@ -283,6 +287,156 @@ six `pillars` entries, even when a pillar has no files.
 - Never infer a symbol's parent from its name. Use `parent_id`.
 - Treat an empty pillar as valid, not an error.
 - Do not cache a payload across a repository change.
+
+---
+
+## Harness configurator (Phase 3)
+
+Generate exact MCP configuration for nine agents, preview every file and
+command, and write only when the server operator has enabled writes.
+
+The nine targets are `claude`, `cursor`, `vscode`, `codex`, `kiro`,
+`antigravity`, `windsurf`, `cline`, and `opencode`. Each target supports
+`stdio` (the default) and Streamable HTTP. The HTTP endpoint is
+`http://127.0.0.1:8765/mcp` unless `REPOSCOPE_MCP_HTTP_URL` overrides it.
+
+**Safety contract**
+
+- Preview reads files; it never writes and never calls the network.
+- `apply: true` is refused with `403` unless `REPOSCOPE_HARNESS_APPLY=1`.
+- An existing file that would change requires `force: true`; otherwise the
+  request is refused with `409` and nothing is written.
+- Every config path is project-relative. An absolute path, `..`, or a symlink
+  or junction that resolves outside the repository root is rejected with
+  `400`.
+- Global paths (for example `~/.codeium/windsurf/mcp_config.json`) are
+  display-only and are never written.
+- JSON and TOML files are merged: unrelated keys and servers survive.
+  Markdown instruction files get one delimited RepoScope section.
+- Writes are atomic: a temporary file in the target directory, then replace.
+
+### `GET /api/harness/agents`
+
+Returns the registry and the server's write flag.
+
+```json
+{
+  "agents": [
+    {
+      "id": "claude",
+      "label": "Claude Code",
+      "config_paths": [".mcp.json", "CLAUDE.md"],
+      "transport": ["stdio", "http"],
+      "default_transport": "stdio",
+      "global_preview_paths": [],
+      "docs_url": "https://docs.claude.com/en/docs/claude-code/mcp",
+      "verified_at": "2026-10-26",
+      "notes": ["Project scope is .mcp.json; the CLI needs --scope project."]
+    }
+  ],
+  "apply_enabled": false
+}
+```
+
+`config_paths` are repository-relative. `global_preview_paths` are shown to
+the user but are never written. `apply_enabled` reflects the server
+environment, not a client preference.
+
+### `GET /api/harness/config`
+
+```
+GET /api/harness/config?agent=claude&transport=stdio&root=D:\repo
+```
+
+`root` is optional only when an active local repository supplies one. It must
+be an existing absolute directory; a relative path is never interpreted
+against the server's current directory.
+
+The response is a preview:
+
+```json
+{
+  "ok": true,
+  "agent": "claude",
+  "label": "Claude Code",
+  "transport": "stdio",
+  "root": "D:\\repo",
+  "command": "claude mcp add --scope project --transport stdio reposcope -- reposcope-mcp --root D:\\repo",
+  "command_kind": "install",
+  "command_note": "Writes the project-scoped .mcp.json. Review the diff before running it.",
+  "apply_enabled": false,
+  "requires_force": false,
+  "files": [
+    {
+      "path": ".mcp.json",
+      "format": "json",
+      "content": "{...}\n",
+      "exists": false,
+      "diff": null,
+      "will_write": true
+    }
+  ],
+  "warnings": []
+}
+```
+
+- `format` is `json`, `toml`, or `markdown`.
+- `content` is the exact text that would be written.
+- `exists` is whether the target file is present.
+- `diff` is a unified diff when an existing file would change; otherwise
+  `null`.
+- `will_write` is false for an identical file.
+- `requires_force` is true when any existing file would change.
+- `warnings` reports unparseable files, lost TOML comments, legacy OpenCode
+  keys, and display-only global paths.
+
+### `POST /api/harness/apply`
+
+```json
+{
+  "agent": "claude",
+  "transport": "stdio",
+  "root": "D:\\repo",
+  "apply": false,
+  "force": false
+}
+```
+
+`apply: false` is a dry run and writes nothing. When `apply: true` is allowed,
+the response is the preview shape plus:
+
+```json
+{
+  "apply": true,
+  "applied": [".mcp.json", "CLAUDE.md"],
+  "unchanged": []
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `400` | Unknown agent, unsupported transport, invalid root, or unsafe path. |
+| `403` | `apply: true` while `REPOSCOPE_HARNESS_APPLY` is not `1`. |
+| `409` | An existing file would change and `force` is false. |
+| `422` | The request body is missing a required field. |
+
+### `GET /api/harness/skills`
+
+Returns the five skill descriptors with `content_available: false`. Phase 3
+shows what will be available; it does not write `SKILL.md` bodies, and it does
+not expose `.agents/skills/*` files. Those are Phase 4 work.
+
+### Registry deltas from Appendix E
+
+- **OpenCode** uses `mcp.<name>` with `type: local | remote`. There is no
+  `mcp.servers` key in the current schema.
+- **Windsurf/Devin** project configuration lives at
+  `.devin/mcp_config.json`; the legacy Cascade global path is display-only.
+- **Cline/Roo** writes Roo Code's project file `.roo/mcp.json`. Cline's global
+  settings path `~/.cline/data/settings/cline_mcp_settings.json` is
+  display-only.
+- **Antigravity** skills belong to Phase 4. Phase 3 writes only
+  `.agents/mcp_config.json`.
 
 ---
 

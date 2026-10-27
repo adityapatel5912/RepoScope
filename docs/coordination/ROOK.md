@@ -22,8 +22,8 @@ for the commit history.
   gate. Details in the Phase 4 section below.
 - Phase 5–14 — execution and publishing plan plus per-phase Wren prompts
   prepared on local `rook/phase-5-14-plan`, based on `main` at `839bb6e`.
-  Not pushed. Awaiting the owner's verifier and the integration-target
-  decision.
+  Wren runs all ten phases in one session, one commit per phase on
+  `experimental`; the full range is verified after Phase 14. Not pushed.
 
 ## Claims (Phase 0)
 
@@ -260,9 +260,10 @@ gate.
   The Phase 5+ integration target is **decided: `experimental`** (owner,
   2026-10-27). One phase per commit; no per-phase branch. Local `experimental`
   is fast-forwarded to include Phase 4 and the Phase 5–14 plan.
-- Phase 5–14 workflow: Wren implements each phase; an independent verifier
-  (to be introduced by the owner) runs the gate; Rook plans, writes the prompt,
-  and pushes. Wren may start Phase 5; the verifier must be named before the
-  Phase 5 gate and push.
+- Phase 5–14 workflow: Wren implements Phases 5–14 in one continuous run, one
+  commit per phase on `experimental`, and does not wait for verification
+  between phases. Rook or the owner's new agent verifies the full range after
+  Phase 14. Rook pushes `experimental` only after batch sign-off; `main` is
+  unchanged.
 - The Phase 5–14 plan and prompts are on local `rook/phase-5-14-plan`, based on
   `839bb6e`; not pushed. The plan excludes extension publishing.

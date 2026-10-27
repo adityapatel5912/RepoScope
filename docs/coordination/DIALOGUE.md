@@ -751,3 +751,21 @@ The owner set the Phase 5+ workflow:
 
 The plan and Wren prompts now reflect this decision. The verifier identity and
 the Phase 13 MCP question remain open.
+
+---
+
+## 2026-10-27 - Owner - Phase 5–14 runs as one batch
+
+The owner set the execution shape for the remaining work:
+
+- Wren implements Phases 5 through 14 in one continuous run.
+- Wren commits after every phase, one phase per commit, directly to
+  `experimental`; no per-phase branch.
+- Wren does not wait for verification between phases. The author gate after
+  each phase is the gate before continuing.
+- After Phase 14, Rook or the new independent agent verifies the full range
+  5–14, commit by commit and cumulatively.
+- Rook pushes `experimental` only after the batch sign-off. `main` is unchanged.
+
+The plan and Wren prompts now describe the batch workflow. The verifier identity
+(Rook or the new agent) must be confirmed before the batch verification.

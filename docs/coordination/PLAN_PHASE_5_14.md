@@ -1,8 +1,8 @@
 # RepoScope Phase 5–14 — execution and publishing plan
 
-**Status:** Owner-approved workflow; verifier TBD. Wren commits each phase directly to local `experimental`; Rook pushes only after verifier sign-off.
-**Baseline:** `main` at `839bb6e` (Phase 4 merged and pushed). Local `experimental` is at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`; confirm with `git log -1 --format=%H experimental`. Later phases start at the then-current `experimental` tip. `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
-**Integration target:** `experimental` (owner decision, 2026-10-27). One phase per commit; no per-phase branch.
+**Status:** Owner-approved workflow. Wren implements Phases 5–14 in one continuous run, one commit per phase on local `experimental`; verification is batched after Phase 14; Rook pushes only after sign-off.
+**Baseline:** `main` at `839bb6e` (Phase 4 merged and pushed). Local `experimental` is at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`; confirm with `git log -1 --format=%H experimental`. Later phases start at the then-current `experimental` tip. `origin/experimental` remains at `7ff5291` until Rook pushes after the batch verification.
+**Integration target:** `experimental` (owner decision, 2026-10-27). One phase per commit; no per-phase branch; verification of the full range after Phase 14.
 **Source of truth:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17. This document assigns the post-Phase-4 workflow, order, verification, and publishing scope. It does not replace any phase contract.
 **Scope exclusion:** extension publishing (Open VSX, VS Code Marketplace, VSIX publication) is out of scope for this plan.
 
@@ -16,7 +16,7 @@
 - Independent TOON rerun: 5/5 roundtrip PASS, median +39.1% token saving and +26.8% byte saving against compact JSON at five exact commits.
 - Backend gate: 509 passed, 1 skipped. Playwright: harness 5/5, journeys 16/16 with J22 excluded, mindmap 3/3.
 - Known limits carried forward: J22 is excluded locally because of its unchanged 100 ms threshold; the Windows symlink test is the single expected skip; `npm ci` reported 6 vulnerabilities (4 moderate, 2 high) that are not yet triaged; the deployed Render service still reports an older version.
-- Local `experimental` is fast-forwarded past the Phase 3 tree to include `main`'s Phase 4 tree and this plan. `origin/experimental` still points at `7ff5291` until Rook pushes after the Phase 5 sign-off.
+- Local `experimental` is fast-forwarded past the Phase 3 tree to include `main`'s Phase 4 tree and this plan. `origin/experimental` still points at `7ff5291` until Rook pushes after the Phase 5–14 batch sign-off.
 
 ---
 
@@ -24,27 +24,28 @@
 
 | Role | Responsibility |
 |---|---|
-| **Owner** | Introduces the independent verifier; approves merges, pushes, releases, tags, and credentials. |
-| **Rook** | Freezes or corrects the contract, writes the Wren prompt, reviews the verifier's evidence, integrates signed-off phases, and records merges. Rook does not edit a file Wren has claimed. |
-| **Wren** | Implements one complete phase (backend, frontend, tests, docs) directly on local `experimental` as one commit per phase, runs the author gate, and hands off. Wren never pushes, merges to `main`, tags, or publishes. |
-| **Verifier (TBD)** | A separate agent or session introduced by the owner. Runs the gate on a fresh worktree at the exact handoff commit, checks the diff and claims adversarially, and signs off or rejects in `docs/coordination/VERIFIER.md` and `DIALOGUE.md`. The verifier is never the author or the integrator for that phase. |
+| **Owner** | May name an independent verifier; approves pushes, releases, tags, and credentials. If no separate agent is named, the owner accepts Rook as the verifier for the batch. |
+| **Rook** | Freezes or corrects the contract, writes the Wren prompt, verifies the Phase 5–14 range when the owner accepts Rook as verifier, pushes after sign-off, and records the result. Rook does not edit a file Wren has claimed. |
+| **Wren** | Implements Phases 5–14 in order (backend, frontend, tests, docs) directly on local `experimental` as one commit per phase, runs the author gate after each phase, and hands off the full range. Wren never pushes, merges to `main`, tags, or publishes. |
+| **Verifier (Rook or owner's agent)** | Rook or a separate agent introduced by the owner. After Phase 14, runs the gate on a fresh detached worktree for the full commit range 5–14, checks each phase diff and claim adversarially, and signs off or rejects in `docs/coordination/VERIFIER.md` and `DIALOGUE.md`. The verifier is never Wren. |
 
-The verifier does not need to be named before Wren starts implementation, but must be named before the phase gate and push. The author and the verifier never certify their own commit.
+Verification is batched after Phase 14. Wren does not wait for external sign-off between phases. The verifier must be confirmed before the batch starts; if Rook verifies, the owner accepts Rook as the verifier for the batch and Rook may push after sign-off.
 
 ---
 
 ## 3. Non-negotiable rules
 
-1. **One phase per commit on `experimental`.** Do not create a per-phase branch. Do not mix two phases, packaging, or a refactor into one commit. Wren commits after every phase, before the handoff; the commit includes the implementation, tests, docs, CHANGELOG, and the coordination handoff. No phase is handed off with uncommitted work.
+1. **One phase per commit on `experimental`.** Do not create a per-phase branch. Do not mix two phases, packaging, or a refactor into one commit. Wren commits after every phase, before starting the next phase; the commit includes the implementation, tests, docs, CHANGELOG, and the coordination handoff. No phase is left uncommitted.
 2. **Preserve compatibility.** v1 node ids (`file:`, `func:`, `class:`) and edge meanings (`contains`, `imports`, `calls`) stay unchanged. Existing endpoint paths and keys remain; new keys are additive. Existing MCP tool names and resource URIs remain.
 3. **Deterministic evidence.** The graph, AST, git history, or a deterministic template is the source of truth. An LLM may write prose, never a fact, path, line, signature, or file set.
 4. **JSON remains the default.** TOON stays opt-in. No unverified token-saving claim ships.
 5. **No secrets.** Never read, print, commit, or send `.env` or a PAT. Agent configs contain placeholders only. No `.opencode/skills` directory is written.
 6. **No test deletion.** A failing test is fixed, or the exact environmental reason is documented. New behavior gets a unit test, an L2 contract test, and an L3 journey where a user-visible surface exists.
-7. **No push, no merge to `main`, no tag, no extension publish.** Wren commits each phase to local `experimental` and stops after the handoff. Rook pushes `experimental` only after verifier sign-off; `main` changes require separate owner approval.
+7. **No push, no merge to `main`, no tag, no extension publish.** Wren commits each phase to local `experimental` through Phase 14 and stops after the final handoff. Rook pushes `experimental` only after the batch verifier signs off 5–14; `main` changes require separate owner approval.
 8. **Real paths over plan placeholders.** The plan is authoritative for behavior, not for every suggested filename. Wren reconciles each phase against the real tree and records deviations in the handoff. The corrections in §6 are binding.
 9. **One writer per file.** Claim files in `WREN.md` before editing. If a file is claimed by another writer, stop and ask Rook.
 10. **Rollback is understood.** Every phase states how to revert it and whether any data or schema migration is involved.
+11. **Cross-phase fixes are forward-only.** If a later phase must fix earlier-phase code, the fix goes in the current phase commit and is recorded in that handoff. Never amend an earlier phase commit.
 
 ---
 
@@ -57,7 +58,7 @@ The verifier does not need to be named before Wren starts implementation, but mu
 | 3 | 13 | V2.8 | Six-engine graph-contextual security suite, scorecard, patch diffs, SARIF 2.1.0. |
 | 4 | 14 | Release train | Hardening, cross-platform verification, packaging, performance budgets, release checklist, rollback. |
 
-Run one phase at a time, in numeric order, with each phase committed directly to local `experimental`. A phase does not start until the prior phase is signed off, pushed, and the next worktree is based on the updated `experimental` tip. Release checkpoints after Phase 7 (V2.6), Phase 12 (V2.7), Phase 13 (V2.8), and Phase 14 (release train). Tags and publishes require explicit owner approval.
+Run Phases 5–14 in numeric order, with each phase committed directly to local `experimental`. Wren starts Phase N+1 immediately after Phase N is committed and its author gate is green; there is no external verification stop between phases. Batch verification after Phase 14 covers all ten commits. Release checkpoints after Phase 7 (V2.6), Phase 12 (V2.7), Phase 13 (V2.8), and Phase 14 (release train). Tags and publishes require explicit owner approval.
 
 Parallel implementation is not the default. If the owner explicitly asks for it, only disjoint files may run in parallel; citations, PR impact, and security are hard dependencies and are never parallelized across.
 
@@ -181,9 +182,9 @@ Phase 4 shipped docs that named tools and resources that did not exist. Do not r
 
 ## 7. Verification protocol
 
-### 7.1 Author gate (Wren, before handoff)
+### 7.1 Author gate (Wren, after every phase)
 
-Run from the phase worktree on `experimental` and record the exact results. Only one worktree can have `experimental` checked out; detach or remove the previous phase worktree before creating the next one.
+Run from the phase worktree on `experimental` after each phase and record the exact results in that phase's handoff. Commit the phase only when the gate is green; then continue to the next phase. Only one worktree can have `experimental` checked out; detach or remove the previous phase worktree before creating the next one.
 
 ```powershell
 python -m pytest -q
@@ -201,36 +202,37 @@ git diff --check
 
 Add `python -m pytest -q backend/tests/<phase>_tests.py` and the phase-specific benchmark or fixture commands where applicable. If the extension is touched, run its compile and tests. The Windows symlink test and J22 remain the only documented local exclusions unless a new, reproduced environmental cause is recorded.
 
-### 7.2 Independent verifier gate
+### 7.2 Batch verifier gate (after Phase 14)
 
-The verifier starts from a fresh worktree at the exact handoff commit and does not reuse Wren's working tree. The verifier:
+The verifier is Rook or an agent named by the owner. It starts from a fresh detached worktree at the final handoff SHA and does not reuse Wren's working tree. The verifier covers the full range 5–14:
 
-1. Confirms the branch (`experimental`) and commit hash, the clean status, and that no file outside the phase is touched.
-2. Runs the full author gate independently.
-3. Reviews the diff against the contract and the compatibility checklist in Appendix B of the implementation plan.
-4. Reproduces every measured claim (token counts, benchmark tables, coverage counts) from the stated commands and exact revisions.
-5. Adds adversarial fixtures for the phase's failure modes; a new finding gets a test before the fix.
-6. Checks docs against the real code: endpoint paths, field names, defaults, status codes, tool names, and resource URIs.
-7. Checks for secret exposure and `.env` access.
-8. Writes a signed verdict in `docs/coordination/VERIFIER.md` and `DIALOGUE.md`: pass, or reject with numbered findings.
+1. Confirms the base SHA, the ten phase SHAs, the final SHA, and that the range is exactly ten phase commits on `experimental` with no unrelated commits.
+2. Checks out each phase commit in order and verifies its diff against that phase's contract and the compatibility checklist in Appendix B of the implementation plan.
+3. Confirms each commit is one complete phase: implementation, tests, docs, CHANGELOG, and the coordination handoff; no later-phase files in an earlier commit.
+4. Runs the phase-specific fixtures at each phase commit and the full author gate at the final SHA. The full gate must be green on the cumulative tree.
+5. Reproduces every measured claim (token counts, benchmark tables, coverage counts) from the stated commands and exact revisions.
+6. Adds adversarial fixtures for each phase's failure modes; a new finding gets a test before the fix.
+7. Checks docs against the real code: endpoint paths, field names, defaults, status codes, tool names, and resource URIs.
+8. Checks for secret exposure, `.env` access, and leaked absolute paths across the whole range.
+9. Writes a signed verdict in `docs/coordination/VERIFIER.md` and `DIALOGUE.md`: pass the range, or reject with numbered findings grouped by phase.
 
-A rejected phase goes back to Wren on `experimental`. Wren fixes the findings, commits the fixes as new commits, re-runs the gate, and re-hands off. The verifier re-runs the full gate, not only the changed test.
+A rejected phase goes back to Wren. Wren fixes the findings with new commits on `experimental`, re-runs the affected phase gate and the full gate, and re-hands off. The verifier re-runs the full range verification, not only the changed test.
 
 ### 7.3 Integration gate (Rook)
 
-Rook integrates only after verifier sign-off:
+Rook pushes only after the batch verifier signs off the full range:
 
-- Confirm the exact SHA and the verifier's verdict.
-- The Phase 5+ target is `experimental`. Wren commits each phase directly to local `experimental`; Rook pushes `experimental` after sign-off. Do not merge to `main` or push `main` without separate owner approval.
-- Preserve the phase commit; one phase per commit. Do not squash or rewrite it.
-- Record the phase SHA and the push result in `COMS.md`, `DIALOGUE.md`, and `ROOK.md`.
-- Do not start the next phase until the push is green and the next worktree is based on the updated `experimental` tip.
+- Confirm the base SHA, the ten phase SHAs, the final SHA, and the verifier's verdict.
+- The Phase 5+ target is `experimental`. Push `experimental` after sign-off. Do not merge to `main` or push `main` without separate owner approval.
+- Preserve all ten phase commits; one phase per commit. Do not squash or rewrite them.
+- Record the range, the final SHA, and the push result in `COMS.md`, `DIALOGUE.md`, and `ROOK.md`.
+- The range is integrated only when `origin/experimental` contains the signed-off final SHA and `main` is unchanged.
 
 ---
 
 ## 8. Publishing and release workstream
 
-Phase 14 is the only phase that changes packaging or publishing. It runs after Phases 5–13 are signed off and pushed on `experimental`.
+Phase 14 is the only phase that changes packaging or publishing. It runs after Phases 5–13 are committed on `experimental`; all ten phases are verified together after Phase 14.
 
 ### In scope
 
@@ -269,8 +271,8 @@ The extension remains a separately versioned client. If it is touched by a phase
 
 ## 9. Decisions and open items
 
-1. **Verifier identity and timing.** The owner introduces the verifier. Wren may start Phase 5; the verifier must be named before the Phase 5 gate and push.
-2. **Resolved — Phase 5+ integration target.** `experimental` (owner, 2026-10-27). One phase per commit; no per-phase branch. Local `experimental` is fast-forwarded to include Phase 4 and this plan; Rook pushes it after verifier sign-off.
+1. **Verifier identity and timing.** Rook or an agent named by the owner verifies the full range 5–14 after Phase 14. Wren starts immediately; the verifier must be confirmed before batch verification and the push.
+2. **Resolved — Phase 5+ integration target.** `experimental` (owner, 2026-10-27). One phase per commit; no per-phase branch; batch verification after Phase 14. Local `experimental` is fast-forwarded to include Phase 4 and this plan; Rook pushes it after batch sign-off.
 3. **Phase 13 MCP surface.** Keep the Phase 4 surface at 13 tools and 8 resources (security over REST only), or approve `run_security_scan` as a documented 14th tool with tests and docs. Default: do not add it.
 4. **Phase 6 alias.** Preserve `/api/repo/reverse-prompt` and, only if the contract requires it, add `/api/reverse-prompt` as an alias. Default: preserve the existing path and document it.
 5. **Release names and namespaces.** Confirm the PyPI metapackage name, npm package name, tag format, and who holds the publish credentials. No credential is committed.
@@ -280,14 +282,29 @@ The extension remains a separately versioned client. If it is touched by a phase
 
 ## 10. Definition of done
 
-A phase is done only when:
+### Phase ready for the next phase
 
-- The exact handoff commit is signed off by the independent verifier.
-- The full gate is green on a clean checkout, including the phase's L2 contract test and L3 journey.
+A phase is ready to continue when:
+
+- It is one commit on `experimental` with the prescribed message.
+- Its author gate is green and recorded in the phase handoff.
 - The contract and limits are documented against the real code.
 - No existing endpoint, schema, tool, resource, or test regressed.
+- The working tree is clean and the next phase starts from that commit.
+- The phase's changes are not mixed into another phase commit.
+
+Wren does not wait for external verification between phases. A red author gate stops the run until it is fixed.
+
+### Range done (verification and integration)
+
+The Phase 5–14 range is done only when:
+
+- All ten phase commits exist on `experimental`, in order, one phase per commit.
+- The batch verifier signs off the full range and the final SHA.
+- The full gate is green at the final SHA, including each phase's L2 contract test and L3 journey.
+- Every phase contract is documented against the real code and no endpoint, schema, tool, resource, or test regressed.
 - The rollback is understood and recorded.
-- The phase is one commit on `experimental`, signed off, and pushed by Rook, with the exact SHA and push result recorded.
-- The next phase does not start until the prior push is green and the next worktree is based on the updated `experimental` tip.
+- Rook pushes `experimental`; `origin/experimental` contains the signed-off final SHA and `main` is unchanged.
+- No phase commit was squashed or rewritten.
 
 Phase 14 is done when the release artifacts install cleanly, the measured numbers are reproduced at the release commit, the rollback is rehearsed, and the owner has approved the release. Extension publishing is not part of that definition.

@@ -1,47 +1,48 @@
 # Wren — Phase 5–14 execution prompts
 
-**Status:** Ready for the owner to hand to Wren, one phase at a time. Wren commits each phase directly to local `experimental`; no per-phase branch. Rook pushes only after verifier sign-off.
-**Baseline:** local `experimental` at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`. Later phases start at the then-current `experimental` tip; confirm with `git log -1 --format=%H experimental`. `origin/experimental` remains at `7ff5291` until Rook pushes after the first verified phase.
+**Status:** Ready for Wren. Wren runs Phases 5–14 in one continuous session, one commit per phase on local `experimental`; verification is batched after Phase 14.
+**Baseline:** local `experimental` at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`. Later phases start at the then-current `experimental` tip; confirm with `git log -1 --format=%H experimental`. `origin/experimental` remains at `7ff5291` until Rook pushes after the batch verification.
 **Companion plan:** `docs/coordination/PLAN_PHASE_5_14.md`.
 **Authoritative contracts:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17.
 
 ## How to use this file
 
-1. Give Wren the **common preamble** plus **exactly one** phase block.
-2. Wren creates a fresh worktree from local **`experimental`**, implements that phase only, runs the author gate, updates the coordination files, and **commits the complete phase directly to `experimental` — one commit per phase, no phase branch**.
-3. Rook hands the exact commit to the independent verifier. The verifier runs the gate and signs off or rejects.
-4. Only after sign-off does Rook push `experimental`. Do not give Wren the next phase block until the prior phase is signed off, pushed, and the next worktree is based on the updated `experimental` tip.
-
-If the owner wants Wren to work through all phases in one session, give the common preamble and the phase index below, and require Wren to **commit after every phase to `experimental`**, stop after each handoff, and wait for the verifier's verdict before starting the next phase.
+1. Give Wren the **common preamble** and **all ten phase blocks**. Wren runs Phases 5–14 in numeric order in one session.
+2. Wren creates one worktree on local **`experimental`**, implements Phase 5, runs the author gate, updates the coordination files, and **commits Phase 5 directly to `experimental` — one commit per phase, no phase branch**. Wren then immediately starts Phase 6.
+3. Wren repeats for Phases 6–13. Each phase is one commit on `experimental`. Wren does not wait for external verification between phases.
+4. Phase 14 is the final phase. Wren commits it, stops, and hands off the full range: the base SHA before Phase 5, all ten phase SHAs, and the final SHA.
+5. Rook or the owner's independent verifier verifies the entire range 5–14, commit by commit, on a fresh detached worktree. Only after sign-off does Rook push `experimental`.
+6. `main` is not touched. A `main` merge requires separate owner approval.
 
 ### Commit policy
 
-Wren commits after every phase, before the handoff, directly to local
+Wren commits after every phase, before starting the next, directly to local
 `experimental`. One phase is one local commit containing the implementation,
 tests, docs, CHANGELOG, and the `WREN.md`/`COMS.md`/`DIALOGUE.md` handoff. Do
-not create a per-phase branch. If the verifier rejects the phase, the fixes go
-on `experimental` as new commits; never amend or rewrite the commit the
-verifier reviewed. Wren never starts the next phase with a dirty tree or with
-the previous phase uncommitted.
+not create a per-phase branch. After committing Phase N, Wren starts Phase N+1
+from that commit immediately. Wren does not stop between phases for a verifier;
+verification is batched after Phase 14. If a phase's author gate fails, fix it
+before committing that phase; never carry a red gate or uncommitted work into
+the next phase. If the batch verifier rejects a phase, the fixes go on
+`experimental` as new commits; never amend or rewrite the reviewed commit.
 
 ---
 
 ## Common preamble (include with every phase)
 
 ```text
-You are Wren, the implementation agent for RepoScope. You implement exactly ONE
-phase per handoff. The workflow is: Wren implements, an independent verifier
-introduced by the owner verifies on a fresh worktree, and Rook pushes only
-after sign-off. You do not push, merge to main, tag, publish, or self-certify.
+You are Wren, the implementation agent for RepoScope. You implement Phases 5
+through 14 in order in one continuous run, one commit per phase. Rook or the
+owner's independent verifier verifies the whole range after Phase 14. You do
+not push, merge to main, tag, publish, or self-certify.
 
 Baseline: local experimental at the current Phase 5-14 plan tip (Phase 4 plus
-this plan), fast-forwarded from 7ff5291. Later phases start at the then-current
-experimental tip; confirm with `git log -1 --format=%H experimental` before
-starting. origin/experimental remains at 7ff5291 until Rook pushes after the
-first verified phase.
+this plan), fast-forwarded from 7ff5291. Confirm with
+`git log -1 --format=%H experimental` before starting. origin/experimental
+remains at 7ff5291 until Rook pushes after the batch verification.
 
 Authoritative contract: docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md sections 8-17,
-plus the phase block below. docs/coordination/PLAN_PHASE_5_14.md section 6
+plus the phase blocks below. docs/coordination/PLAN_PHASE_5_14.md section 6
 contains binding corrections where the plan's suggested paths differ from the
 real tree.
 
@@ -53,24 +54,35 @@ Setup:
    git worktree add "D:\Aditya\Hackathon Projects\RepoScope-wren-phaseN" experimental
 2. Do NOT create a per-phase branch. Commit directly to experimental.
 3. Claim every file you will edit in docs/coordination/WREN.md before editing.
-4. Implement the phase completely: backend, frontend, tests, docs, CHANGELOG.
+4. Implement the current phase completely: backend, frontend, tests, docs,
+   CHANGELOG.
 5. Run the author gate and record the exact commands and results.
-6. Update WREN.md, COMS.md, and DIALOGUE.md with the five-part handoff:
-   branch/commit; files and claims released; commands/results; limits/skips;
-   next open decision.
-7. Commit after every phase directly to experimental. Stage and commit the
-   complete phase — code, tests, docs, CHANGELOG, and the coordination handoff
-   — with the prescribed message. One phase = one commit. Never carry
-   uncommitted work into the next phase. Do not amend or rewrite history.
-8. Stop. Do not push, merge to main, tag, or publish.
+6. Update WREN.md, COMS.md, and DIALOGUE.md with the five-part handoff for the
+   phase: branch/commit; files and claims released; commands/results;
+   limits/skips; next open decision.
+7. Commit the phase directly to experimental. Stage and commit the complete
+   phase — code, tests, docs, CHANGELOG, and the coordination handoff — with the
+   prescribed message. One phase = one commit. Do not amend or rewrite history.
+8. Continue immediately to the next phase from that commit. Do not wait for
+   external verification between phases.
+9. Repeat steps 4-8 through Phase 14, committing each phase separately and in
+   order.
+10. After Phase 14, stop and hand off the full range: the base SHA before
+    Phase 5, the ten phase SHAs, and the final SHA. Do not push.
 
 Rules:
 - One phase per commit. Commit to local experimental; do not create a per-phase
-  branch. No later-phase files, no packaging, no extension publishing.
-- Commit after every phase before handoff. A phase is not handed off until the
-  phase commit exists and `git status` is clean. If the verifier rejects it,
-  commit the fixes as new commits on experimental; never amend the reviewed
-  commit.
+  branch. No later-phase files in an earlier phase, no packaging before Phase
+  14, no extension publishing.
+- Commit after every phase before starting the next. A phase is not done until
+  the phase commit exists and `git status` is clean. Never carry a red gate or
+  uncommitted work into the next phase.
+- Verification is batched after Phase 14. Do not stop between phases for a
+  verifier. If the batch verifier rejects a phase, fix it with new commits on
+  experimental; never amend or rewrite the reviewed commit.
+- If a later phase requires a fix to earlier-phase code, include the fix in the
+  current phase commit and record it in that phase's handoff. Never amend an
+  earlier phase commit.
 - Preserve v1 node ids and edge meanings, existing endpoint paths and keys, and
   existing MCP tool names and resource URIs. New keys and endpoints are additive.
 - JSON remains the default; TOON stays opt-in; never ship an unverified token
@@ -86,8 +98,8 @@ Rules:
 - If the plan and the code disagree on a path, preserve the real endpoint and
   record the deviation. If a contract is ambiguous, stop and ask Rook in
   DIALOGUE.md. Do not invent a path.
-- Keep the working tree clean at handoff. No untracked build output, no secrets,
-  no generated screenshots outside docs/screenshots/v2/<phase>/.
+- Keep the working tree clean at each phase commit. No untracked build output,
+  no secrets, no generated screenshots outside docs/screenshots/v2/<phase>/.
 ```
 
 ### Author gate (record all results)
@@ -186,7 +198,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(citations): verify and snap AST citations
 
-Stop after the handoff. Do not start Phase 6.
+Then continue to Phase 6. Do not push.
 ```
 
 ---
@@ -251,7 +263,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(reverse-prompt): compile four deterministic blueprint modes
 
-Stop after the handoff. Do not start Phase 7.
+Then continue to Phase 7. Do not push.
 ```
 
 ---
@@ -317,7 +329,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(scaffold): generate executable multi-file starter kits
 
-Stop after the handoff. Do not start Phase 8.
+Then continue to Phase 8. Do not push.
 ```
 
 ---
@@ -380,7 +392,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(tour): add four deterministic guided tracks
 
-Stop after the handoff. Do not start Phase 9.
+Then continue to Phase 9. Do not push.
 ```
 
 ---
@@ -443,7 +455,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(onboarding): build a verified topological curriculum
 
-Stop after the handoff. Do not start Phase 10.
+Then continue to Phase 10. Do not push.
 ```
 
 ---
@@ -509,7 +521,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(metrics): add churn, hotspots, bus factor, and history compare
 
-Stop after the handoff. Do not start Phase 11.
+Then continue to Phase 11. Do not push.
 ```
 
 ---
@@ -578,7 +590,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(pr-impact): analyze symbol-level contract breaks without a file cap
 
-Stop after the handoff. Do not start Phase 12.
+Then continue to Phase 12. Do not push.
 ```
 
 ---
@@ -634,7 +646,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(impact): add a three-hop explainable impact simulator
 
-Stop after the handoff. Do not start Phase 13.
+Then continue to Phase 13. Do not push.
 ```
 
 ---
@@ -721,7 +733,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): feat(security): add six graph-contextual security engines
 
-Stop after the handoff. Do not start Phase 14.
+Then continue to Phase 14. Do not push.
 ```
 
 ---
@@ -732,7 +744,7 @@ Stop after the handoff. Do not start Phase 14.
 Implement Phase 14, hardening, packaging, and release.
 
 Goal: make the release reproducible without adding feature scope. This phase
-runs only after Phases 5-13 are signed off and pushed on experimental.
+runs only after Phases 5-13 are committed on experimental.
 
 Real surfaces at 839bb6e:
 - pyproject.toml is the Python package definition; backend/version.py is new.
@@ -792,7 +804,7 @@ Acceptance gate:
 
 Commit to local experimental (one commit, no phase branch): chore(release): harden, package, and verify the v2.5–v2.8 train
 
-Stop after the handoff. This is the final phase; no next phase starts.
+Stop after the handoff. This is the final phase; hand off the full range 5-14 for batch verification.
 ```
 
 ---
@@ -811,8 +823,12 @@ Every phase handoff in `WREN.md`, `COMS.md`, and `DIALOGUE.md` must contain:
 4. **Limits and skips:** every skipped test or unsupported environment with the
    reason.
 5. **Next open decision:** the one thing Rook or the verifier must decide before
-   the next phase.
+   the batch verification.
 
 A handoff without all five parts is incomplete. The phase commit is mandatory
-before the handoff; a handoff with uncommitted changes is rejected. Wren stops
-after posting it.
+before starting the next phase; a handoff with uncommitted changes is rejected.
+
+After Phase 14, add one final range summary to `WREN.md`, `COMS.md`, and
+`DIALOGUE.md` with the base SHA before Phase 5, the ten phase SHAs in order, the
+final SHA, the aggregate gate results, and any cross-phase limits. Then stop and
+wait for the batch verifier. Do not push.

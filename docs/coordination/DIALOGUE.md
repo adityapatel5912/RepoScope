@@ -579,3 +579,61 @@ Wren creates `D:\Aditya\Hackathon Projects\RepoScope-wren-phase4` from local
 `WREN.md`/`COMS.md`/`DIALOGUE.md`, and stops without pushing. Rook then
 creates a fresh verification worktree and runs the full gate. Merge requires
 owner approval.
+
+---
+
+## 2026-10-27 — Wren — Handoff 006 to Rook (Phase 4 complete)
+
+Phase 4 implementation of token-compact context, MCP surface expansion, and skill library is complete and fully verified.
+
+### 1. Branch & Commit
+- **Branch**: `wren/phase-4-context`
+- **Implementation Commit**: `bb4b268` (`feat(context): add skeleton, context packs, TOON flag, and MCP tools`)
+- **Base Commit**: `rook/phase-4-context` (`5b881b4`), base `main` (`7ff5291`).
+
+### 2. Files Changed & Released Claims
+- `backend/context_compressor.py`: AST skeleton, deterministic context pack, budget accounting (500..200000 tokens), SHA-256 delta hash, lazy TOON adapter (`REPOSCOPE_TOON=0` kill-switch).
+- `backend/skill_library.py`: Canonical definitions of 5 agent skills (`blast-radius-guard`, `zero-grep-architect`, `pr-contract-shield`, `onboarding-navigator`, `dead-code-surgeon`), frontmatter and section validation.
+- 10 checked-in `SKILL.md` copies under `.claude/skills/<id>/SKILL.md` and `.agents/skills/<id>/SKILL.md`. (No `.opencode` copy).
+- `backend/api/routers/context.py` & `backend/api/__init__.py`: `GET /api/context/pack` with query params `paths`, `format`, `detail`, `budget`, `since_hash`, and delta hash headers.
+- `backend/mcp_server/tools.py` & `server.py`: Added 5 deterministic tools (`get_mindmap_hierarchy`, `get_ast_skeleton`, `get_context_pack`, `diff_interface_contracts`, `get_ranked_reading_path`) and 3 resources (`reposcope://mindmap`, `reposcope://api-routes`, `reposcope://context-pack`). Total MCP surface: exactly 13 tools and 8 resources. Existing tools and URIs unchanged.
+- `backend/harness_generator.py` & `backend/api/routers/harness.py`: `list_skills()` returns canonical markdown `content` with `content_available: true`. `build_preview()` appends 5 skills for Claude and Antigravity (7 files total). Other 7 agent targets receive no skill files. Force and path-safety checks intact.
+- `frontend/src/api/client.ts` & `frontend/src/components/harness/SkillsSection.tsx`: Added `content` to `HarnessSkill`, replaced teaser text, updated badges to `Ready`, added per-card `Preview SKILL.md` toggle with `data-testid="harness-skill-body-<id>"` and overflow-safe scrolling.
+- `benchmarks/toon_benchmark.py`: Benchmark runner measuring compact JSON vs TOON over real Git repositories.
+- `docs/TOON_BENCHMARK.md`: Empirical benchmark report across 5 real repositories with exact commits; no 85% claim.
+- `docs/MCP.md`: Complete reference for 13 tools and 8 resources.
+- `docs/API.md`, `docs/AGENT_INTEGRATION.md`, `docs/FEATURES.md`, `README.md`, `CHANGELOG.md`: Updated tool counts (13 tools, 8 resources), context pack documentation, shipped skills matrix, and unreleased changelog.
+- `pyproject.toml` & `.github/workflows/qa.yml`: Added `context_compressor` and `skill_library` modules, `[project.optional-dependencies].toon = ["toon-format>=1.2,<2"]`, and CI pip install steps.
+- Test suites: `backend/tests/test_context_compressor.py` (12 tests), `backend/tests/test_context_api.py` (7 tests), `backend/tests/test_skill_library.py` (7 tests), `backend/tests/test_mcp_v25.py` (8 tests), plus updated `test_mcp_server.py`, `test_harness_generator.py`, `test_harness_api.py`, and `frontend/tests/e2e/harness.spec.ts`.
+
+### 3. Commands Run & Gate Verification
+- `python -m pytest -q`: **508 passed, 1 skipped** in 67.85s (Windows symlink test is expected skip).
+- `python -m compileall -q backend`: clean (0 errors).
+- `python -m pip check`: clean (`No broken requirements found`).
+- `npm --prefix frontend run build`: built in 43.01s (clean).
+- `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: clean (0 errors).
+- `npx playwright test tests/e2e/harness.spec.ts`: **5/5 passed** (1.9m).
+- `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: **16/16 passed** (3.7m).
+- `npx playwright test tests/e2e/mindmap.spec.ts`: **3/3 passed** (40.7s).
+- `git diff --check`: clean (0 whitespace/conflict errors).
+
+### 4. Measured TOON Benchmark Table
+- Environment: Windows 11 Pro (AMD64), Python 3.14.6, `toon-format` 1.2.0, `budget=8000`, `detail=skeleton`.
+- Corpus:
+  - `requests` (`3c7baaa05ab4aa49cc819ce3a819d260de19c157`): 7,855 -> 4,796 tokens (**+38.94%** saving, roundtrip PASS)
+  - `flask` (`d086db856be187255b8ec61ef409357393020f32`): 7,696 -> 4,664 tokens (**+39.40%** saving, roundtrip PASS)
+  - `httpx` (`b5addb64f0161ff6bfe94c124ef76f6a1fba5254`): 8,078 -> 4,931 tokens (**+38.96%** saving, roundtrip PASS)
+  - `express` (`1c6f1b0fe4000977b9a7b4f34097e4d527dd9824`): 7,106 -> 4,702 tokens (**+33.83%** saving, roundtrip PASS)
+  - `got` (`05b4476913da39a47dd8e20d29e250f28b0a6dca`): 5,332 -> 3,088 tokens (**+42.09%** saving, roundtrip PASS)
+- **Median Token Saving**: **+39.0%** (38.96%) over compact JSON.
+- **Median Byte Saving**: **+26.6%** (26.65%).
+- **Roundtrip**: 5/5 passed (100% loss-free representation).
+- **Decision**: Compact JSON remains the default; TOON is opt-in; no unverified 85% claim.
+
+### 5. Known Limits & Skips
+- J22 journey test excluded: pre-existing synthetic 50,000-node scale stress test runs ~103–148 ms vs 100 ms budget on this Windows machine.
+- Windows symlink test skipped in `test_harness_generator.py` (requires Developer Mode / elevated privilege on Windows).
+- `dead-code-surgeon` caveat: explicitly documents "Static reachability is an estimate, not proof of dead code."
+
+### 6. Next Open Decision
+- Ready for Rook to create a fresh verification worktree, run the full gate, review the diff, and request owner authorization to merge.

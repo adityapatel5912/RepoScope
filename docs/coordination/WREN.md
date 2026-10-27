@@ -198,3 +198,96 @@ touch `experimental` or `main`.
   5. Server writes disabled by default (`apply_enabled: false` in QA/default mode without `REPOSCOPE_HARNESS_APPLY=1`), verified by test asserting the Write button is disabled.
 - **Contract check:**
   - The frozen `/api/harness/*` contract from Rook was completely deterministic and sufficient. No backend modifications were required.
+
+
+---
+
+## Phase 4 — token-compact context, MCP surface, and skills
+
+### Assignment
+End-to-end execution of Phase 4 per `docs/coordination/WREN_PROMPT_PHASE_4.md`.
+- `backend/context_compressor.py`: AST skeleton, deterministic context pack, budget accounting, SHA-256 delta hash, lazy TOON adapter.
+- `backend/skill_library.py` plus ten checked-in SKILL.md copies under `.claude/skills/<id>/` and `.agents/skills/<id>/`.
+- `GET /api/context/pack` in `backend/api/routers/context.py` and router mount in `backend/api/__init__.py`.
+- Five new MCP tools and three new MCP resources in `backend/mcp_server/tools.py` and `server.py`.
+- Harness preview/apply support for skill files in `backend/harness_generator.py`.
+- Frontend Skills panel update and harness browser journey in `frontend/tests/e2e/harness.spec.ts`.
+- Measured TOON benchmark and documentation updates.
+
+### Claims
+
+| File | Status | Notes |
+|---|---|---|
+| `backend/context_compressor.py` | released | AST skeleton, context pack, hash, TOON adapter |
+| `backend/skill_library.py` | released | Canonical skill bodies and validation |
+| `.claude/skills/<id>/SKILL.md` (5 files) | released | Checked-in skill copies |
+| `.agents/skills/<id>/SKILL.md` (5 files) | released | Checked-in skill copies |
+| `backend/api/routers/context.py` | released | `GET /api/context/pack` endpoint |
+| `backend/api/__init__.py` | released | Mount context router |
+| `backend/mcp_server/tools.py` | released | 5 new tools + api_routes helper |
+| `backend/mcp_server/server.py` | released | MCP tool wrappers and 3 resources |
+| `backend/harness_generator.py` | released | Skill file preview/apply for Claude and Antigravity |
+| `frontend/src/api/client.ts` | released | HarnessSkill content property |
+| `frontend/src/components/harness/SkillsSection.tsx` | released | Ready badge and SKILL.md preview |
+| `frontend/tests/e2e/harness.spec.ts` | released | Skills preview tests |
+| `benchmarks/toon_benchmark.py` | released | TOON corpus benchmark runner |
+| `docs/MCP.md` | released | Complete MCP reference |
+| `docs/TOON_BENCHMARK.md` | released | Measured benchmark results |
+| `docs/API.md`, `docs/AGENT_INTEGRATION.md`, `docs/FEATURES.md`, `README.md`, `CHANGELOG.md` | released | Documentation updates |
+| `pyproject.toml`, `.github/workflows/qa.yml` | released | Module and optional dependency updates |
+| `backend/tests/test_context_compressor.py` | released | Context compressor tests |
+| `backend/tests/test_context_api.py` | released | Context API tests |
+| `backend/tests/test_skill_library.py` | released | Skill library tests |
+| `backend/tests/test_mcp_v25.py` | released | MCP v25 tests |
+| `backend/tests/test_mcp_server.py` | released | Update expected tools/resources |
+| `backend/tests/test_harness_generator.py`, `test_harness_api.py` | released | Harness generator/API skill tests |
+
+### Baseline verification
+- `python -m pytest -q`: 473 passed, 1 skipped.
+- `python -m compileall -q backend`: clean.
+- `python -m pip check`: clean.
+- `npm --prefix frontend run build`: pass.
+- `npx playwright test tests/e2e/harness.spec.ts`: 5/5 passed.
+
+### Handoff Details
+
+1. **Branch & Commit**:
+   - Branch: `wren/phase-4-context`
+   - Implementation commit: `bb4b268` (`feat(context): add skeleton, context packs, TOON flag, and MCP tools`)
+   - Base commit: `rook/phase-4-context` (`5b881b4`), base `main` (`7ff5291`).
+
+2. **Files Changed & Claims Released**:
+   - All 23 claimed files released (see table above).
+   - 10 checked-in `SKILL.md` files (5 in `.claude/skills/`, 5 in `.agents/skills/`).
+   - Final MCP surface: exactly 13 tools and 8 resources.
+   - TOON compression documented without 85% claim.
+
+3. **Commands Run & Gate Results**:
+   - `python -m pytest -q`: **508 passed, 1 skipped** in 67.85s (Windows symlink test is expected skip).
+   - `python -m compileall -q backend`: clean (0 errors).
+   - `python -m pip check`: clean (`No broken requirements found`).
+   - `npm --prefix frontend run build`: built in 43.01s (clean).
+   - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: clean (0 errors).
+   - `npx playwright test tests/e2e/harness.spec.ts`: **5/5 passed** (1.9m).
+   - `npx playwright test tests/e2e/journeys.spec.ts --grep-invert "J22"`: **16/16 passed** (3.7m).
+   - `npx playwright test tests/e2e/mindmap.spec.ts`: **3/3 passed** (40.7s).
+   - `git diff --check`: clean (0 whitespace/conflict errors).
+
+4. **Measured TOON Benchmark Results**:
+   - Corpus: 5 real open-source repositories (`requests` @ `3c7baaa`, `flask` @ `d086db8`, `httpx` @ `b5addb6`, `express` @ `1c6f1b0`, `got` @ `05b4476`).
+   - `requests`: 7,855 -> 4,796 tokens (**+38.94%** saving, roundtrip PASS).
+   - `flask`: 7,696 -> 4,664 tokens (**+39.40%** saving, roundtrip PASS).
+   - `httpx`: 8,078 -> 4,931 tokens (**+38.96%** saving, roundtrip PASS).
+   - `express`: 7,106 -> 4,702 tokens (**+33.83%** saving, roundtrip PASS).
+   - `got`: 5,332 -> 3,088 tokens (**+42.09%** saving, roundtrip PASS).
+   - **Median Token Saving**: **+39.0%** (38.96%) over compact JSON.
+   - **Median Byte Saving**: **+26.6%** (26.65%).
+   - **Roundtrip Equality**: 5/5 PASS (100% loss-free representation).
+   - Decision: Compact JSON default; TOON opt-in; no unverified 85% claim.
+
+5. **Known Limits & Skips**:
+   - J22 journey test excluded: pre-existing synthetic 50,000-node scale stress test runs ~103–148 ms vs 100 ms budget on this Windows machine.
+   - Windows symlink test skipped in `test_harness_generator.py` (requires elevated privileges/Developer Mode on Windows).
+
+6. **Next Open Decision**:
+   - Phase 4 implementation is complete and ready for Rook to create a verification worktree, review the diff, run the gate, and request owner authorization to merge.

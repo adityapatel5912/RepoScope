@@ -11,11 +11,11 @@ Git commits, tests, and the frozen contracts are the source of truth.
 | Phase | 4 - token-compact context, MCP surface, and skills |
 | Release | V2.5 |
 | Planning branch | `rook/phase-4-context` (local, unpushed) |
-| Implementation branch | `wren/phase-4-context` (to be created) |
+| Implementation branch | `wren/phase-4-context` |
 | Implementation worktree | `D:\Aditya\Hackathon Projects\RepoScope-wren-phase4` |
 | Base | `main` at `7ff5291` (Phase 3 merged) |
 | Contract status | frozen |
-| Implementation status | `planned` |
+| Implementation status | `handed-off` |
 | Review status | `not-started` |
 | Merge status | `blocked on owner approval` |
 
@@ -24,13 +24,13 @@ Git commits, tests, and the frozen contracts are the source of truth.
 | Area | Owner | Status |
 |---|---|---|
 | Planning documents, contract, prompt | Rook | `done` |
-| `backend/context_compressor.py` | Wren | `planned` |
-| `backend/skill_library.py` and ten checked-in `SKILL.md` copies | Wren | `planned` |
-| `backend/api/routers/context.py` and router mount | Wren | `planned` |
-| `backend/mcp_server/tools.py` and `server.py` Phase 4 surface | Wren | `planned` |
-| `backend/harness_generator.py` skill preview/apply | Wren | `planned` |
-| Frontend `SkillsSection` and browser journey | Wren | `planned` |
-| TOON benchmark and measured documentation | Wren | `planned` |
+| `backend/context_compressor.py` | Wren | `done` |
+| `backend/skill_library.py` and ten checked-in `SKILL.md` copies | Wren | `done` |
+| `backend/api/routers/context.py` and router mount | Wren | `done` |
+| `backend/mcp_server/tools.py` and `server.py` Phase 4 surface | Wren | `done` |
+| `backend/harness_generator.py` skill preview/apply | Wren | `done` |
+| Frontend `SkillsSection` and browser journey | Wren | `done` |
+| TOON benchmark and measured documentation | Wren | `done` |
 | Full test gate, diff review, merge | Rook | `not-started` |
 | `main` / `experimental` | Owner only | `blocked` |
 

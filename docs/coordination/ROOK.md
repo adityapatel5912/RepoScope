@@ -11,10 +11,10 @@ for the commit history.
   contract. **Complete and frozen.**
 - Phase 2 — vertical six-pillar mind map. **Complete and merged into `main`
   at `ff4ac6a`; CI green (`40339282947`).**
-- Phase 3 — nine-agent harness configurator. **Complete; merged into
-  `experimental` and awaiting owner testing.** Backend `69b9620`, handoff docs
-  `5d1f3f0`, UI `4a8a5de`; the review fixes and final gate are recorded in the
-  Phase 3 section below and in `DIALOGUE.md`.
+- Phase 3 — nine-agent harness configurator. **Complete; merged into `main`
+  and `experimental`.** Backend `69b9620`, handoff docs `5d1f3f0`, UI
+  `4a8a5de`; the review fixes and final gate are recorded in the Phase 3
+  section below and in `DIALOGUE.md`.
 
 ## Claims (Phase 0)
 
@@ -156,14 +156,15 @@ Status: accepted at Wren's amended head `478376d`; merge follows.
   Wren's single implementation commit. `main` stays untouched until the user
   tests `experimental`.
 
-### Phase 3 (complete; merged into experimental)
+### Phase 3 (complete; merged into main and experimental)
 
 Status: complete. Rook's frozen backend is `69b9620`; the handoff docs are
 `5d1f3f0`; Wren's UI is `4a8a5de`. Rook reviewed the UI, fixed the findings
 below, ran the independent gate, squashed the three commits and fixes into one
 Phase 3 commit, and merged it into local `experimental` with `--no-ff`.
-The owner authorized pushing `experimental` on 2026-10-27. `main` remains
-untouched until the owner tests `experimental` and explicitly approves main.
+The owner authorized pushing `experimental` on 2026-10-27, then authorized the
+main merge and branch cleanup. `experimental` was merged into `main` with
+`--no-ff` at `4d39537`; both branches now carry the same Phase 3 tree.
 
 - Scope: the nine-agent harness generator from plan §6, the `HarnessModal`
   UI, `docs/AGENT_INTEGRATION.md`, five evidence screenshots, and the L3
@@ -194,7 +195,7 @@ untouched until the owner tests `experimental` and explicitly approves main.
 
 - None for Phase 2. The mind-map contract is frozen; Wren consumes it without
   editing backend graph code.
-- Phase 3 integration is complete on `experimental`; the owner is testing it
-  next. Main waits for explicit approval after that test.
+- Phase 3 is merged into `main` and `experimental`; only those two branches
+  remain.
 - Phase 3 registry deltas are resolved; Wren's verification is the input,
   Rook's contract is the authority.

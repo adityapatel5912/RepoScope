@@ -10,7 +10,7 @@ Phase 2 completed and merged into `main` at `ff4ac6a` (CI green
 `40339282947`).
 
 Phase 3 — nine-agent harness configurator. **Complete; reviewed and merged
-into `experimental` by Rook.** The final UI commit is `4a8a5de`; Rook added the
+into `experimental` and `main` by Rook.** The final UI commit is `4a8a5de`; Rook added the
 review fixes, the force-gate assertion, and H05, then squashed the backend,
 handoff docs, UI, and fixes into one Phase 3 commit. The self-contained prompt
 is `docs/coordination/WREN_PROMPT_PHASE_3.md`.

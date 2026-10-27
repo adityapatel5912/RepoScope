@@ -516,4 +516,15 @@ J22 remains excluded because of its unchanged 100 ms threshold and the recorded 
 
 ### Integration
 
-The backend commit `69b9620`, handoff docs `5d1f3f0`, Wren's UI commit `4a8a5de`, and the review fixes above were squashed into one Phase 3 commit and merged into local `experimental` with `--no-ff`. The owner authorized pushing `experimental` on 2026-10-27. `main` remains untouched until the owner tests `experimental` and explicitly authorizes the main merge.
+The backend commit `69b9620`, handoff docs `5d1f3f0`, Wren's UI commit `4a8a5de`, and the review fixes above were squashed into one Phase 3 commit and merged into local `experimental` with `--no-ff`. The owner authorized pushing `experimental` on 2026-10-27. `main` remained untouched until the owner authorized the main merge.
+
+---
+
+## 2026-10-27 — Rook — Phase 3 merged into main
+
+The owner authorized the main merge and branch cleanup. `experimental` was
+merged into `main` with `--no-ff` at `4d39537`, and both branches now carry
+the same Phase 3 tree. The local feature branches `rook/phase-3-harness`,
+`rook/phase-3-integration`, `wren/phase-3-harness`, and `nine_agent_harness_ui`
+were deleted. The remote already contained only `main` and `experimental`; the existing
+tags were left in place.

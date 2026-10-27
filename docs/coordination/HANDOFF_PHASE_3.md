@@ -7,9 +7,8 @@
 **Your branch:** `wren/phase-3-harness` in a separate worktree, based on Rook's announced backend commit  
 **Status:** **complete.** This file is the historical assignment. The backend
 is `69b9620`, Wren's final UI commit is `4a8a5de`, and Rook reviewed, fixed,
-squashed, and merged Phase 3 into `experimental`. See `DIALOGUE.md` for the
-final gate and the owner-authorized `experimental` push; `main` remains
-untouched until owner testing and explicit approval.
+squashed, and merged Phase 3 into `experimental` and `main`. See `DIALOGUE.md`
+for the final gate, the owner-authorized pushes, and the branch cleanup.
 
 ---
 

@@ -1,6 +1,6 @@
 # RepoScope V2.5–V2.8 — Implementation Plan
 
-**Status:** Approved - Phase 0-3 complete; Phase 3 is merged into `experimental` and awaiting owner testing before `main`.
+**Status:** Approved - Phase 0-3 complete; Phase 3 is merged into `main` and `experimental`.
 **Source draft:** [`RepoScope_V2.5_AI_Expansion_Plan.md`](../RepoScope_V2.5_AI_Expansion_Plan.md) (preserved unchanged).
 **Target repository:** this repository, `adityapatel5912/RepoScope`. The plan does **not** migrate to `RepoScope-V2`.
 **Integration branch:** `experimental`. `main` is untouched until the owner tests `experimental` and merges it.
@@ -673,7 +673,7 @@ Hide the mode switch behind `localStorage` / a feature flag and leave `MindMapVi
 **Depends on:** Phase 1 (stable MCP tool names) and Phase 2 (a place to surface the modal)
 **Risk:** medium — wrong configs are worse than no configs
 **Owner:** Wren (registry research, fixture validation, UI); Rook (API contract, generator, apply safety, tests, merge)
-**Status (2026-10-27):** complete. Backend `69b9620`, handoff docs `5d1f3f0`, and UI `4a8a5de` were reviewed, squashed into one Phase 3 commit, and merged into `experimental`. The owner authorized pushing `experimental`; `main` waits for owner testing and explicit approval.
+**Status (2026-10-27):** complete. Backend `69b9620`, handoff docs `5d1f3f0`, and UI `4a8a5de` were reviewed, squashed into one Phase 3 commit, and merged into `experimental`. The owner authorized pushing `experimental`, then authorized the main merge; `main` was merged at `4d39537` and both branches carry the same Phase 3 tree.
 
 ### Goal
 

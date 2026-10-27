@@ -1,6 +1,6 @@
 # Wren — Phase 5–14 execution prompts
 
-**Status:** Ready for Wren. Wren runs Phases 5–14 in one continuous session, one commit per phase on local `experimental`; verification is batched after Phase 14.
+**Status:** Ready for Wren. Wren runs Phases 5–14 in one continuous session, one commit per phase on local `experimental`. Wren self-verifies every phase before committing it; the full range is independently verified after Phase 14.
 **Baseline:** local `experimental` at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`. Later phases start at the then-current `experimental` tip; confirm with `git log -1 --format=%H experimental`. `origin/experimental` remains at `7ff5291` until Rook pushes after the batch verification.
 **Companion plan:** `docs/coordination/PLAN_PHASE_5_14.md`.
 **Authoritative contracts:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17.
@@ -8,9 +8,9 @@
 ## How to use this file
 
 1. Give Wren the **common preamble** and **all ten phase blocks**. Wren runs Phases 5–14 in numeric order in one session.
-2. Wren creates one worktree on local **`experimental`**, implements Phase 5, runs the author gate, updates the coordination files, and **commits Phase 5 directly to `experimental` — one commit per phase, no phase branch**. Wren then immediately starts Phase 6.
-3. Wren repeats for Phases 6–13. Each phase is one commit on `experimental`. Wren does not wait for external verification between phases.
-4. Phase 14 is the final phase. Wren commits it, stops, and hands off the full range: the base SHA before Phase 5, all ten phase SHAs, and the final SHA.
+2. Wren creates one worktree on local **`experimental`**, implements Phase 5, runs the author gate, **verifies its own work against the phase contract**, updates the coordination files, and **commits Phase 5 directly to `experimental` — one commit per phase, no phase branch**. Wren then immediately starts Phase 6.
+3. Wren repeats for Phases 6–13. Each phase is one commit on `experimental`. Wren self-verifies each phase before committing it and does not wait for external verification between phases.
+4. Phase 14 is the final phase. Wren self-verifies it, commits it, stops, and hands off the full range: the base SHA before Phase 5, all ten phase SHAs, and the final SHA.
 5. Rook or the owner's independent verifier verifies the entire range 5–14, commit by commit, on a fresh detached worktree. Only after sign-off does Rook push `experimental`.
 6. `main` is not touched. A `main` merge requires separate owner approval.
 
@@ -19,12 +19,15 @@
 Wren commits after every phase, before starting the next, directly to local
 `experimental`. One phase is one local commit containing the implementation,
 tests, docs, CHANGELOG, and the `WREN.md`/`COMS.md`/`DIALOGUE.md` handoff. Do
-not create a per-phase branch. After committing Phase N, Wren starts Phase N+1
-from that commit immediately. Wren does not stop between phases for a verifier;
-verification is batched after Phase 14. If a phase's author gate fails, fix it
-before committing that phase; never carry a red gate or uncommitted work into
-the next phase. If the batch verifier rejects a phase, the fixes go on
-`experimental` as new commits; never amend or rewrite the reviewed commit.
+not create a per-phase branch. A phase is committed only after the author gate
+is green and Wren's own adversarial self-verification passes. After committing
+Phase N, Wren starts Phase N+1 from that commit immediately. Wren does not stop
+between phases for an external verifier; the independent range verification is
+batched after Phase 14. If a phase fails the author gate or self-verification,
+fix it before committing; never carry a red gate, an unverified claim, or
+uncommitted work into the next phase. If the batch verifier rejects a phase,
+the fixes go on `experimental` as new commits; never amend or rewrite the
+reviewed commit.
 
 ---
 
@@ -32,9 +35,10 @@ the next phase. If the batch verifier rejects a phase, the fixes go on
 
 ```text
 You are Wren, the implementation agent for RepoScope. You implement Phases 5
-through 14 in order in one continuous run, one commit per phase. Rook or the
-owner's independent verifier verifies the whole range after Phase 14. You do
-not push, merge to main, tag, publish, or self-certify.
+through 14 in order in one continuous run, one commit per phase. You
+self-verify every phase before committing it. Rook or the owner's independent
+verifier verifies the whole range after Phase 14. You do not self-certify the
+range, push, merge to main, tag, publish, or release.
 
 Baseline: local experimental at the current Phase 5-14 plan tip (Phase 4 plus
 this plan), fast-forwarded from 7ff5291. Confirm with
@@ -59,29 +63,44 @@ Setup:
 4. Implement the current phase completely: backend, frontend, tests, docs,
    CHANGELOG.
 5. Run the author gate and record the exact commands and results.
-6. Update WREN.md, COMS.md, and DIALOGUE.md with the five-part handoff for the
+6. Self-verify the phase before committing it:
+   a. Re-read the phase contract and inspect your full diff. Confirm every
+      changed file belongs to this phase and no test was deleted.
+   b. Exercise the negative and failure cases named in the phase block, not
+      just the happy path.
+   c. Check every claim against the real code: endpoint paths, request and
+      response fields, defaults, status codes, MCP tool names, resource URIs,
+      docs, and CHANGELOG. Remove any claim you cannot reproduce.
+   d. Check for secrets, .env access, absolute local paths, and phase scope
+      creep.
+   e. Confirm no existing endpoint, schema, tool, resource, or test regressed.
+   f. Record a PASS/FAIL self-verification verdict with the checks you ran and
+      any residual limit. Commit only on PASS. If it fails, fix it and repeat.
+7. Update WREN.md, COMS.md, and DIALOGUE.md with the six-part handoff for the
    phase: branch/commit; files and claims released; commands/results;
-   limits/skips; next open decision.
-7. Commit the phase directly to experimental. Stage and commit the complete
+   limits/skips; self-verification verdict; next open decision.
+8. Commit the phase directly to experimental. Stage and commit the complete
    phase — code, tests, docs, CHANGELOG, and the coordination handoff — with the
    prescribed message. One phase = one commit. Do not amend or rewrite history.
-8. Continue immediately to the next phase from that commit. Do not wait for
+9. Continue immediately to the next phase from that commit. Do not wait for
    external verification between phases.
-9. Repeat steps 4-8 through Phase 14, committing each phase separately and in
-   order.
-10. After Phase 14, stop and hand off the full range: the base SHA before
+10. Repeat steps 4-9 through Phase 14, committing each phase separately and in
+    order.
+11. After Phase 14, stop and hand off the full range: the base SHA before
     Phase 5, the ten phase SHAs, and the final SHA. Do not push.
 
 Rules:
 - One phase per commit. Commit to local experimental; do not create a per-phase
   branch. No later-phase files in an earlier phase, no packaging before Phase
   14, no extension publishing.
+- Self-verification is mandatory before every phase commit. A green author gate
+  is not enough. Do not rely on the batch verifier to catch your own mistakes.
 - Commit after every phase before starting the next. A phase is not done until
-  the phase commit exists and `git status` is clean. Never carry a red gate or
-  uncommitted work into the next phase.
-- Verification is batched after Phase 14. Do not stop between phases for a
-  verifier. If the batch verifier rejects a phase, fix it with new commits on
-  experimental; never amend or rewrite the reviewed commit.
+  the phase commit exists and `git status` is clean. Never carry a red gate, a
+  failed self-verification, or uncommitted work into the next phase.
+- Independent verification is batched after Phase 14. Do not stop between
+  phases for the batch verifier. If it rejects a phase, fix it with new commits
+  on experimental; never amend or rewrite the reviewed commit.
 - If a later phase requires a fix to earlier-phase code, include the fix in the
   current phase commit and record it in that phase's handoff. Never amend an
   earlier phase commit.
@@ -128,6 +147,36 @@ npm --prefix extensions/vscode test
 ```
 
 Add phase-specific fixtures, benchmarks, or syntax checks where the phase block requires them.
+
+### Self-verification (Wren, before every phase commit)
+
+The author gate proves the suite is green; it does not prove the phase is
+correct. Wren must verify its own work against the contract before committing.
+
+1. **Diff review:** inspect the full diff. Every changed file must belong to
+   this phase. No later-phase files, no unrelated refactor, no deleted test, no
+   dead parallel panel.
+2. **Contract review:** re-read the phase block and check each requirement,
+   default, status code, and response field against the code. A requirement
+   that is only described in prose is not implemented.
+3. **Negative cases:** exercise the failure modes named in the phase block —
+   invalid input, missing path, cycle, empty repository, path escape, secret,
+   budget truncation, offline mode, or whichever apply. Do not rely on the
+   happy-path test.
+4. **Claim audit:** reproduce every measured claim and every doc statement from
+   the real code or a recorded command. Remove any claim you cannot reproduce.
+5. **Secret and path audit:** confirm no `.env`, PAT, token, secret value, or
+   absolute local path is in the diff, fixtures, logs, or docs.
+6. **Regression check:** confirm no existing endpoint, schema, tool, resource,
+   or test regressed, and that the phase did not widen the Windows symlink or
+   J22 exclusions.
+7. **Verdict:** record `PASS` or `FAIL` in the phase handoff with the checks you
+   ran and any residual limit. Commit only on `PASS`. If any check fails, fix
+   it and repeat the self-verification.
+
+Self-verification is not self-certification. It is a required gate before the
+phase commit; the independent batch verifier still verifies the full range
+after Phase 14.
 
 ---
 
@@ -824,10 +873,12 @@ Every phase handoff in `WREN.md`, `COMS.md`, and `DIALOGUE.md` must contain:
    including the phase-specific fixture or benchmark.
 4. **Limits and skips:** every skipped test or unsupported environment with the
    reason.
-5. **Next open decision:** the one thing Rook or the verifier must decide before
+5. **Self-verification:** `PASS` or `FAIL`, the checks run, the negative cases
+   exercised, and any residual limit.
+6. **Next open decision:** the one thing Rook or the verifier must decide before
    the batch verification.
 
-A handoff without all five parts is incomplete. The phase commit is mandatory
+A handoff without all six parts is incomplete. The phase commit is mandatory
 before starting the next phase; a handoff with uncommitted changes is rejected.
 
 After Phase 14, add one final range summary to `WREN.md`, `COMS.md`, and

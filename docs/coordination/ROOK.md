@@ -261,9 +261,9 @@ gate.
   2026-10-27). One phase per commit; no per-phase branch. Local `experimental`
   is fast-forwarded to include Phase 4 and the Phase 5–14 plan.
 - Phase 5–14 workflow: Wren implements Phases 5–14 in one continuous run, one
-  commit per phase on `experimental`, and does not wait for verification
-  between phases. Rook or the owner's new agent verifies the full range after
-  Phase 14. Rook pushes `experimental` only after batch sign-off; `main` is
-  unchanged.
+  commit per phase on `experimental`. Wren self-verifies every phase before
+  committing it and does not wait for external verification between phases.
+  Rook or the owner's new agent verifies the full range after Phase 14. Rook
+  pushes `experimental` only after batch sign-off; `main` is unchanged.
 - The Phase 5–14 plan and prompts are on local `rook/phase-5-14-plan`, based on
   `839bb6e`; not pushed. The plan excludes extension publishing.

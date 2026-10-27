@@ -1,6 +1,6 @@
 # RepoScope Phase 5–14 — execution and publishing plan
 
-**Status:** Owner-approved workflow. Wren implements Phases 5–14 in one continuous run, one commit per phase on local `experimental`; verification is batched after Phase 14; Rook pushes only after sign-off.
+**Status:** Owner-approved workflow. Wren implements Phases 5–14 in one continuous run, one commit per phase on local `experimental`, and self-verifies each phase before committing; the full range is independently verified after Phase 14; Rook pushes only after sign-off.
 **Baseline:** `main` at `839bb6e` (Phase 4 merged and pushed). Local `experimental` is at the current Phase 5–14 plan tip (Phase 4 plus this plan), fast-forwarded from `7ff5291`; confirm with `git log -1 --format=%H experimental`. Later phases start at the then-current `experimental` tip. `origin/experimental` remains at `7ff5291` until Rook pushes after the batch verification.
 **Integration target:** `experimental` (owner decision, 2026-10-27). One phase per commit; no per-phase branch; verification of the full range after Phase 14.
 **Source of truth:** `docs/IMPLEMENTATION_PLAN_V2.5_V2.8.md` §§8–17. This document assigns the post-Phase-4 workflow, order, verification, and publishing scope. It does not replace any phase contract.
@@ -26,7 +26,7 @@
 |---|---|
 | **Owner** | May name an independent verifier; approves pushes, releases, tags, and credentials. If no separate agent is named, the owner accepts Rook as the verifier for the batch. |
 | **Rook** | Freezes or corrects the contract, writes the Wren prompt, verifies the Phase 5–14 range when the owner accepts Rook as verifier, pushes after sign-off, and records the result. Rook does not edit a file Wren has claimed. |
-| **Wren** | Implements Phases 5–14 in order (backend, frontend, tests, docs) directly on local `experimental` as one commit per phase, runs the author gate after each phase, and hands off the full range. Wren never pushes, merges to `main`, tags, or publishes. |
+| **Wren** | Implements Phases 5–14 in order (backend, frontend, tests, docs) directly on local `experimental` as one commit per phase, runs the author gate and its own adversarial self-verification after each phase, and hands off the full range. Wren never pushes, merges to `main`, tags, or publishes. |
 | **Verifier (Rook or owner's agent)** | Rook or a separate agent introduced by the owner. After Phase 14, runs the gate on a fresh detached worktree for the full commit range 5–14, checks each phase diff and claim adversarially, and signs off or rejects in `docs/coordination/VERIFIER.md` and `DIALOGUE.md`. The verifier is never Wren. |
 
 Verification is batched after Phase 14. Wren does not wait for external sign-off between phases. The verifier must be confirmed before the batch starts; if Rook verifies, the owner accepts Rook as the verifier for the batch and Rook may push after sign-off.
@@ -46,6 +46,7 @@ Verification is batched after Phase 14. Wren does not wait for external sign-off
 9. **One writer per file.** Claim files in `WREN.md` before editing. If a file is claimed by another writer, stop and ask Rook.
 10. **Rollback is understood.** Every phase states how to revert it and whether any data or schema migration is involved.
 11. **Cross-phase fixes are forward-only.** If a later phase must fix earlier-phase code, the fix goes in the current phase commit and is recorded in that handoff. Never amend an earlier phase commit.
+12. **Self-verification is mandatory.** Wren must verify its own phase against the contract before committing it. A green author gate is not enough. Do not rely on the batch verifier to catch the author's mistakes.
 
 ---
 
@@ -58,7 +59,7 @@ Verification is batched after Phase 14. Wren does not wait for external sign-off
 | 3 | 13 | V2.8 | Six-engine graph-contextual security suite, scorecard, patch diffs, SARIF 2.1.0. |
 | 4 | 14 | Release train | Hardening, cross-platform verification, packaging, performance budgets, release checklist, rollback. |
 
-Run Phases 5–14 in numeric order, with each phase committed directly to local `experimental`. Wren starts Phase N+1 immediately after Phase N is committed and its author gate is green; there is no external verification stop between phases. Batch verification after Phase 14 covers all ten commits. Release checkpoints after Phase 7 (V2.6), Phase 12 (V2.7), Phase 13 (V2.8), and Phase 14 (release train). Tags and publishes require explicit owner approval.
+Run Phases 5–14 in numeric order, with each phase committed directly to local `experimental`. Wren starts Phase N+1 immediately after Phase N is committed and its author gate and self-verification pass; there is no external verification stop between phases. Batch verification after Phase 14 covers all ten commits. Release checkpoints after Phase 7 (V2.6), Phase 12 (V2.7), Phase 13 (V2.8), and Phase 14 (release train). Tags and publishes require explicit owner approval.
 
 Parallel implementation is not the default. If the owner explicitly asks for it, only disjoint files may run in parallel; citations, PR impact, and security are hard dependencies and are never parallelized across.
 
@@ -202,7 +203,21 @@ git diff --check
 
 Add `python -m pytest -q backend/tests/<phase>_tests.py` and the phase-specific benchmark or fixture commands where applicable. If the extension is touched, run its compile and tests. The Windows symlink test and J22 remain the only documented local exclusions unless a new, reproduced environmental cause is recorded.
 
-### 7.2 Batch verifier gate (after Phase 14)
+### 7.2 Self-verification gate (Wren, after the author gate, before each phase commit)
+
+A green author gate is necessary but not sufficient. Before committing a phase, Wren must verify its own work against the phase contract:
+
+1. Inspect the full diff: every changed file belongs to the phase. No later-phase files, no unrelated refactor, no deleted test, no dead parallel panel.
+2. Re-read the phase block and check each requirement, default, status code, response field, tool name, resource URI, and documentation claim against the real code.
+3. Exercise the phase's negative and failure cases, not just the happy path: invalid input, missing path, cycle, empty repository, path escape, secret, budget truncation, offline mode, or whichever apply.
+4. Reproduce every measured claim from a recorded command; remove any claim that cannot be reproduced.
+5. Check for `.env`, PATs, secret values, and absolute local paths in the diff, fixtures, logs, and docs.
+6. Confirm no existing endpoint, schema, tool, resource, or test regressed, and that the Windows symlink and J22 exclusions were not widened.
+7. Record `PASS` or `FAIL`, the checks run, the negative cases exercised, and any residual limit in the phase handoff. Commit only on `PASS`; fix and repeat on `FAIL`.
+
+This is Wren's verification of its own work. It does not replace the independent batch verification after Phase 14.
+
+### 7.3 Batch verifier gate (after Phase 14)
 
 The verifier is Rook or an agent named by the owner. It starts from a fresh detached worktree at the final handoff SHA and does not reuse Wren's working tree. The verifier covers the full range 5–14:
 
@@ -218,7 +233,7 @@ The verifier is Rook or an agent named by the owner. It starts from a fresh deta
 
 A rejected phase goes back to Wren. Wren fixes the findings with new commits on `experimental`, re-runs the affected phase gate and the full gate, and re-hands off. The verifier re-runs the full range verification, not only the changed test.
 
-### 7.3 Integration gate (Rook)
+### 7.4 Integration gate (Rook)
 
 Rook pushes only after the batch verifier signs off the full range:
 
@@ -288,12 +303,13 @@ A phase is ready to continue when:
 
 - It is one commit on `experimental` with the prescribed message.
 - Its author gate is green and recorded in the phase handoff.
+- Its self-verification verdict is `PASS`, with the checks and negative cases recorded in the handoff.
 - The contract and limits are documented against the real code.
 - No existing endpoint, schema, tool, resource, or test regressed.
 - The working tree is clean and the next phase starts from that commit.
 - The phase's changes are not mixed into another phase commit.
 
-Wren does not wait for external verification between phases. A red author gate stops the run until it is fixed.
+Wren does not wait for external verification between phases. A red author gate or a failed self-verification stops the run until it is fixed.
 
 ### Range done (verification and integration)
 

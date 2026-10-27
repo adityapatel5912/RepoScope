@@ -769,3 +769,21 @@ The owner set the execution shape for the remaining work:
 
 The plan and Wren prompts now describe the batch workflow. The verifier identity
 (Rook or the new agent) must be confirmed before the batch verification.
+
+---
+
+## 2026-10-27 - Owner - Wren must verify its own work
+
+The owner requires Wren to verify its own work before each phase commit, not
+just run the author gate and rely on the later batch verifier.
+
+- Every phase gets a self-verification pass: diff review, contract review,
+  negative/failure cases, claim audit, secret and path audit, regression check,
+  and a recorded `PASS`/`FAIL` verdict.
+- Wren commits only after `PASS`; a failed self-verification is fixed before the
+  commit and before the next phase.
+- The batch verifier (Rook or the owner's new agent) still verifies the full
+  range 5–14 after Phase 14. Self-verification does not replace it.
+
+The plan and Wren prompts now include the self-verification gate and a six-part
+phase handoff.

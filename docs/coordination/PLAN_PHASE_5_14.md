@@ -184,7 +184,7 @@ Phase 4 shipped docs that named tools and resources that did not exist. Do not r
 
 ### 7.1 Author gate (Wren, after every phase)
 
-Run from the phase worktree on `experimental` after each phase and record the exact results in that phase's handoff. Commit the phase only when the gate is green; then continue to the next phase. Only one worktree can have `experimental` checked out; detach or remove the previous phase worktree before creating the next one.
+Run from the phase worktree on `experimental` after each phase and record the exact results in that phase's handoff. Commit the phase only when the gate is green; then continue to the next phase. Wren uses one worktree for the whole run; the batch verifier uses a separate detached worktree. Only one worktree can have `experimental` checked out.
 
 ```powershell
 python -m pytest -q

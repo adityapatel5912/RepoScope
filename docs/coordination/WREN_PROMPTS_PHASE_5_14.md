@@ -50,9 +50,11 @@ Setup:
 0. Run `git worktree list`. Only one worktree can have experimental checked
    out. If an older worktree holds it, detach that worktree with
    `git -C <path> switch --detach` before adding yours.
-1. Create a fresh worktree on local experimental:
-   git worktree add "D:\Aditya\Hackathon Projects\RepoScope-wren-phaseN" experimental
-2. Do NOT create a per-phase branch. Commit directly to experimental.
+1. Create one fresh worktree on local experimental and use it for all ten
+   phases:
+   git worktree add "D:\Aditya\Hackathon Projects\RepoScope-wren-phase5-14" experimental
+2. Do NOT create a per-phase branch or a worktree per phase. Commit directly to
+   experimental.
 3. Claim every file you will edit in docs/coordination/WREN.md before editing.
 4. Implement the current phase completely: backend, frontend, tests, docs,
    CHANGELOG.

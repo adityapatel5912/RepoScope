@@ -1866,6 +1866,7 @@ function GraphInner({
         prompt={reversePrompt ?? ""}
         onClose={() => setReversePrompt(null)}
         onScaffold={() => void runScaffold()}
+        selectedNodeId={selected?.id}
       />
 
       {/* Scaffold modal */}

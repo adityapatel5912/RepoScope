@@ -398,3 +398,56 @@ Implement Phase 5, Verified chat citations directly on local `experimental`.
 6. **Next Open Decision:**
    - Owner explicitly requested: "Stop after Phase - 5 and push also through the PAT in .env".
    - Per non-negotiable security rules: Never read, print, commit, or expose `.env` or a PAT. No secret credentials are read or printed. The commit is created directly on `experimental`. External push is held for owner/verifier authorization without credential exposure.
+---
+
+## 2026-10-28 — Wren — Phase 6 handoff (Four-mode reverse-prompt compiler)
+
+### Six-part handoff
+
+1. **Branch & Commit:**
+   - Target: `experimental` (direct commit).
+   - Commit message: `feat(reverse-prompt): compile four deterministic blueprint modes`.
+   - Release: V2.6.
+
+2. **Files Changed & Claims Released:**
+   - `backend/reverse_prompt_compiler.py`: Deterministic four-mode reverse prompt compiler:
+     - `compute_topological_build_order` with Tarjan's SCC cycle detection (`find_sccs`).
+     - `extract_2hop_closure` computing target node and its 2-hop interface closure.
+     - `detect_stack` inspecting languages, frameworks, test runners, and env keys.
+     - Four modes: `rebuild`, `feature`, `spec` (`CLAUDE.md`, `AGENTS.md`, `llms.txt`, `.kiro/specs/*`), `context` (token-budgeted skeleton context pack with deterministic estimation).
+   - `backend/main.py`: Updated `POST /api/repo/reverse-prompt` to accept optional `ReversePromptReq` and added additive documented alias `POST /api/reverse-prompt`. Preserves backward-compatible `{prompt: "..."}` response format.
+   - `backend/tests/test_reverse_prompt.py`: 13 test cases covering determinism, topological sort with cycle groups, rebuild mode, 2-hop closure, invalid target handling, spec mode bundle templates, context mode budget clamping, and L2 contract tests for both endpoint paths.
+   - `frontend/src/api/features.ts`: Updated `ReversePrompt` interface and `generateReversePrompt(opts)` to support optional `mode`, `target_node_id`, `budget`, and `format`.
+   - `frontend/src/components/ReversePromptModal.tsx`: Added four mode tabs (`Context`, `Rebuild`, `Feature`, `Spec`), token badge, file count badge, spec mode file sub-tabs, copy to clipboard, and markdown downloads.
+   - `frontend/src/components/GraphView.tsx`: Passed `selectedNodeId={selected?.id}` to `ReversePromptModal`.
+   - `frontend/tests/e2e/reverse-prompt.spec.ts`: Playwright L3 journey verifying modal opening, mode switching across all 4 modes, badges, file switching, copy, and download with zero console errors.
+   - `CHANGELOG.md` & `docs/API.md`: Documented Phase 6 compiler contracts and routes.
+
+3. **Commands Run & Gate Results:**
+   - `python -m pytest -q backend/tests/test_reverse_prompt.py`: 13 passed.
+   - `python -m pytest -q`: 536 passed, 1 skipped.
+   - `python -m compileall -q backend`: 0 errors.
+   - `python -m pip check`: clean.
+   - `npm --prefix frontend run build`: clean.
+   - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: 0 errors.
+   - `npx playwright test tests/e2e/reverse-prompt.spec.ts`: 1 passed.
+   - `npx playwright test tests/e2e/citations.spec.ts`: 1 passed.
+   - `npx playwright test tests/e2e/mindmap.spec.ts`: 3 passed.
+   - `git diff --check`: clean (0 errors, no trailing whitespace).
+
+4. **Limits & Skips:**
+   - Windows symlink test skipped in `test_harness_generator.py` (requires elevated privileges/Developer Mode on Windows).
+   - J22 journey test excluded per documented baseline.
+
+5. **Self-Verification Verdict:**
+   - **PASS**.
+     - Determinism: byte-identical output across repeated calls for identical graph inputs.
+     - Build order is topological and cyclic dependencies are surfaced with warning alerts.
+     - Feature slices isolate 2-hop interface closure without unrelated files.
+     - Spec bundle outputs `CLAUDE.md`, `AGENTS.md`, `llms.txt`, and `.kiro/specs/*` without timestamps or random IDs.
+     - Token counter matches context pack estimation within 2%.
+     - Backward compatibility preserved: legacy callers expecting `{prompt: "..."}` receive `prompt` matching `content`.
+     - Zero secrets, `.env`, or PAT references in diff or tests.
+
+6. **Next Open Decision:**
+   - Proceed to Phase 7: `feat(scaffold): generate executable multi-file starter kits`.

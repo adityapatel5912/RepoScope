@@ -168,8 +168,21 @@ export function generatePRImpact(repoUrl: string, prNumber: number): Promise<PRI
 
 // ── Reverse Build Prompt (GitReverse) ─────────────────────────────────────
 
+export interface ReversePromptFile {
+  path: string;
+  content: string;
+}
+
 export interface ReversePrompt {
   prompt: string;
+  ok?: boolean;
+  mode?: string;
+  content?: string;
+  files?: ReversePromptFile[];
+  tokens?: number;
+  format?: string;
+  source?: { nodes: number; edges: number; root: string };
+  warnings?: string[];
 }
 
 function isReversePrompt(d: unknown): d is ReversePrompt {
@@ -180,8 +193,15 @@ function isReversePrompt(d: unknown): d is ReversePrompt {
   );
 }
 
-export function generateReversePrompt(): Promise<ReversePrompt> {
-  return postJson("/api/repo/reverse-prompt", {}, isReversePrompt, LLM_TIMEOUT_MS);
+export interface ReversePromptOptions {
+  mode?: "context" | "rebuild" | "feature" | "spec" | string;
+  target_node_id?: string;
+  budget?: number;
+  format?: string;
+}
+
+export function generateReversePrompt(opts?: ReversePromptOptions): Promise<ReversePrompt> {
+  return postJson("/api/repo/reverse-prompt", opts ?? {}, isReversePrompt, LLM_TIMEOUT_MS);
 }
 
 // ── Scaffold (CodeCrafters-style starter from the loaded repo) ────────────

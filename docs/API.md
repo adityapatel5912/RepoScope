@@ -683,3 +683,53 @@ Chat streaming yields a final `citations` event before `done`:
 event: citations
 data: {"type": "citations", "citations": [...]}
 ```
+---
+
+## Reverse-Prompt Compiler (Phase 6, V2.6)
+
+### `POST /api/repo/reverse-prompt` and `POST /api/reverse-prompt`
+
+Deterministic four-mode blueprint compiler that emits agent-ready build prompts and specifications directly from the AST knowledge graph without requiring an external LLM.
+
+**Request body (JSON, optional):**
+```json
+{
+  "mode": "rebuild",
+  "target_node_id": "file:backend/main.py",
+  "budget": 8000,
+  "format": "json"
+}
+```
+
+- `mode`: `"context"` (default), `"rebuild"`, `"feature"`, or `"spec"`.
+- `target_node_id`: Target node for `"feature"` mode (defaults to first available symbol or file).
+- `budget`: Token budget for `"context"` mode (clamped between 500 and 200,000; default 8,000).
+- `format`: Output format (`"json"` default; `"toon"` opt-in if supported).
+
+**Response (200 OK):**
+```json
+{
+  "ok": true,
+  "mode": "rebuild",
+  "content": "# System Rebuild Blueprint: ...",
+  "prompt": "# System Rebuild Blueprint: ...",
+  "files": [
+    {
+      "path": "BLUEPRINT.md",
+      "content": "# System Rebuild Blueprint: ..."
+    }
+  ],
+  "tokens": 2450,
+  "format": "json",
+  "source": {
+    "nodes": 24,
+    "edges": 25,
+    "root": "my-repo"
+  },
+  "warnings": []
+}
+```
+
+- Backward compatibility: `prompt` string is identical to `content` for legacy callers expecting `{"prompt": "..."}`.
+- Deterministic: identical graph inputs produce byte-identical outputs with zero random IDs or timestamps.
+- `POST /api/reverse-prompt` is an additive alias for `POST /api/repo/reverse-prompt`.

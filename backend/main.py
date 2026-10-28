@@ -37,6 +37,7 @@ from onboarding import build_onboarding
 from pr_impact import build_pr_impact, fetch_pr, post_pr_comment
 from repo_loader import load_repo
 from repo_tracker import diff_changes, load_state, mark_checked
+from reverse_prompt_compiler import ReversePromptCompiler
 from runtime_config import ask_llm
 from security_scanner import (
     check_dependency_cves, detect_breaking_commit, scan_pr_patch, scan_repo_files,
@@ -280,6 +281,12 @@ class ScanReq(BaseModel):
     repo_url: str | None = None
     pr_number: int | None = None
     include_taint: bool = True
+
+class ReversePromptReq(BaseModel):
+    mode: Optional[str] = "context"
+    target_node_id: Optional[str] = None
+    budget: Optional[int] = None
+    format: Optional[str] = "json"
 
 
 # ── SSE helpers ────────────────────────────────────────────────────────────
@@ -742,50 +749,49 @@ def _entry_file_blocks(graph: dict, local_path: str, max_files: int = 2) -> tupl
 
 
 @app.post("/api/repo/reverse-prompt")
+@app.post("/api/reverse-prompt")
 async def reverse_prompt(
+    req: Optional[ReversePromptReq] = None,
     x_ai_provider: Optional[str] = Header(None),
     x_ai_key: Optional[str] = Header(None),
     x_ai_model: Optional[str] = Header(None),
     x_ai_base_url: Optional[str] = Header(None),
 ):
-    """Generate a single agent-ready prompt that would rebuild this repo."""
+    """Generate a reverse build prompt across four deterministic modes:
+    rebuild, feature, spec, and context (default).
+    """
     req_id = str(uuid.uuid4())[:8]
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    if req is None:
+        req = ReversePromptReq()
+
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
         raise HTTPException(400, "No repo loaded. Load a repo first.")
+
     try:
         graph = await asyncio.to_thread(build_graph_from_repo, local_path)
-        files = sorted({
-            n.get("label", "")
-            for n in graph.get("nodes", [])
-            if n.get("type") == "file" and n.get("label")
-        })
-        readme = state.get("readme", "")[:2500]
-        user_prompt = (
-            "Repository to reverse-engineer:\n\n"
-            f"SUMMARY: {graph.get('summary', 'no summary')}\n\n"
-            f"FILES ({len(files)}):\n" + "\n".join(files[:200]) + "\n\n"
-            f"README (excerpt):\n{readme}"
+        compiler = ReversePromptCompiler(graph, local_path)
+        result = await asyncio.to_thread(
+            compiler.compile,
+            mode=req.mode or "context",
+            target_node_id=req.target_node_id,
+            budget=req.budget,
+            format_type=req.format or "json",
         )
-        text = await asyncio.to_thread(ask_llm, REVERSE_SYSTEM_PROMPT, user_prompt, "", provider)
-        # Strip any markdown fences the model may have added
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
-            if cleaned.rstrip().endswith("```"):
-                cleaned = cleaned.rstrip()[:-3]
-        cleaned = cleaned.strip()
-        if not cleaned:
-            raise HTTPException(502, "Model returned an empty build prompt")
-        log.info("[%s] reverse-prompt OK %d chars from %d files", req_id, len(cleaned), len(files))
-        return {"prompt": cleaned}
+        log.info(
+            "[%s] reverse-prompt OK mode=%s tokens=%d files=%d",
+            req_id,
+            result.get("mode"),
+            result.get("tokens", 0),
+            len(result.get("files", [])),
+        )
+        return result
     except HTTPException:
         raise
     except Exception as e:
         log.error("[%s] reverse-prompt FAILED: %s", req_id, e)
-        raise HTTPException(500, "Failed to generate build prompt. Is an LLM key configured?")
+        raise HTTPException(500, f"Failed to generate reverse prompt: {e}")
 
 
 @app.post("/api/scaffold")

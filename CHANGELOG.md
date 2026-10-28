@@ -9,6 +9,25 @@ on a separate marketplace.
 
 ### Added
 
+- **Four-mode reverse-prompt compiler (Phase 6, V2.6).**
+  Replaced the single generic reverse-prompt with a deterministic compiler emitting
+  four blueprint modes directly from the knowledge graph:
+  - `rebuild`: stack detection, topological build order via Tarjan's SCC cycle
+    detection, API route surface, data models/schemas, environment configuration keys,
+    and verification test commands.
+  - `feature`: target node and self-contained 2-hop interface closure with contract
+    signatures, isolating the target slice from unrelated files.
+  - `spec`: multi-file blueprint bundle generating deterministic templates for
+    `CLAUDE.md`, `AGENTS.md`, `llms.txt`, and `.kiro/specs/` (`architecture.md`,
+    `requirements.md`, `design.md`, `tasks.md`).
+  - `context`: token-budgeted skeleton context pack with deterministic token estimation
+    matching the context compressor within 2%.
+  Preserves backward compatibility on `POST /api/repo/reverse-prompt` (`prompt` matches `content`),
+  and adds `POST /api/reverse-prompt` as an additive documented alias. Extended
+  `frontend/src/components/ReversePromptModal.tsx` with dynamic mode switching tabs,
+  token and file count badges, multi-file spec browser tabs, copy-to-clipboard, and
+  markdown file downloads.
+
 - **Verified chat citations (Phase 5, V2.6).**
   Deterministic AST verification for code citations emitted in chat responses.
   Every citation is checked against the repository index and file disk content;

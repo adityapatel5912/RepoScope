@@ -9,6 +9,19 @@ on a separate marketplace.
 
 ### Added
 
+- **Topological student onboarding curriculum and graph-graded challenges (Phase 9, V2.7).**
+  Deterministic 4-tier onboarding curriculum derived from Tarjan's Strongly Connected Components (SCC)
+  condensation and topological DAG layering:
+  - Partitions repository modules into 4 progressive tiers: Foundations & Leaf Utilities (Tier 1),
+    Core Domain Models & Schemas (Tier 2), Application Services & Handlers (Tier 3), and Public APIs &
+    System Entrypoints (Tier 4).
+  - Graph-graded interactive challenges verify student comprehension directly against AST dependencies
+    via `POST /api/onboard/verify-challenge`, providing instant targeted feedback and unlocking next tiers.
+  - Dedicated curriculum surface via `GET /api/onboard/curriculum` and backward-compatible extensions
+    to `POST /api/onboard`.
+  - Frontend visual tier cards with lock/unlock indicators, interactive challenge solvers, and persistent
+    progress tracking in `localStorage`.
+
 - **Four deterministic guided tour tracks and universal chat action cards (Phase 8, V2.7).**
   Four deterministic code exploration tracks derived from the knowledge graph:
   - `request_lifecycle`: Traces the path from public HTTP entrypoints down to handlers and models.

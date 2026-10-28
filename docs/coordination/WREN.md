@@ -536,3 +536,36 @@ Implement Phase 5, Verified chat citations directly on local `experimental`.
      - CodeTour .tour export compatible with VS Code CodeTour extension.
      - Action cards trigger direct navigation to tours, onboarding, security, etc. from chat.
      - Visual shots captured: tour_tracks_panel.png, chat_tour_action_card.png.
+
+
+## Phase 9 — Topological Student Onboarding & Graph-Graded Challenges (V2.7)
+
+1. **Commit & Scope:**
+   - Branch: experimental
+   - Scope: Tarjan SCC condensation, 4-tier topological curriculum, graph-graded challenges with immediate AST feedback, lock/unlock mechanics, and persistent progress tracking.
+
+2. **Files Created/Modified:**
+   - backend/onboarding.py: Implemented tarjan_scc, condense_dag, compute_topological_layers, build_topological_curriculum, and verify_curriculum_challenge; updated build_onboarding with curriculum payload.
+   - backend/main.py: Added ChallengeVerifyReq, GET /api/onboard/curriculum, POST /api/onboard/verify-challenge, and safe provider fallback in onboard.
+   - backend/tests/test_onboarding_tiers.py: 4 comprehensive tests covering Tarjan condensation, tier stratification, and challenge verification.
+   - frontend/src/api/features.ts: Added OnboardTier, OnboardChallenge, OnboardCurriculum, ChallengeVerifyResult, getOnboardCurriculum, verifyChallenge.
+   - frontend/src/components/OnboardingPath.tsx: Rendered 4-tier cards with lock/unlock indicators, interactive challenge solver with AST graph verification, and localStorage progress tracking.
+   - frontend/tests/e2e/onboarding.spec.ts: L3 Playwright test verifying 4 tiers, answering challenge, verification feedback, and unlock flow.
+
+3. **Commands Run & Gate Results:**
+   - python -m pytest backend/tests/test_onboarding_tiers.py: 4 passed.
+   - python -m pytest backend/tests/test_feature_2_onboard.py: 4 passed.
+   - python -m pytest -q: 555 passed, 1 skipped (0 failures).
+   - python -m compileall -q backend: 0 errors.
+   - python -m pip check: clean.
+   - npm --prefix frontend run build: clean (built in 22.40s).
+   - npx tsc --noEmit: 0 errors.
+   - npx playwright test tests/e2e/onboarding.spec.ts: 1 passed (12.6s).
+   - git diff --check: clean.
+
+4. **Self-Verification Verdict:**
+   - PASS.
+     - Tarjan SCC condensation produces strictly acyclic DAG with 4 progressive tiers.
+     - Graph-graded challenges verify answers directly against AST dependencies.
+     - Progress persists across sessions via localStorage.
+     - Visual shot captured: onboarding_tiers_panel.png.

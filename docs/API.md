@@ -49,6 +49,8 @@ contracts that clients depend on, not every request model.
 | `GET` | `/api/tour/export` | Export CodeTour `.tour` formatted JSON. |
 | `POST` | `/api/impact/analyze` | Blast radius and impact narrative. |
 | `POST` | `/api/onboard` | Student Mode path, quizzes, and Good First Issues. |
+| `GET` | `/api/onboard/curriculum` | Topological 4-tier onboarding curriculum with DAG metadata. |
+| `POST` | `/api/onboard/verify-challenge` | Graph-graded verification of tier challenges. |
 
 Analysis routers live under `/api/analysis` and `/api/arch`; local mode uses
 `/api/local/*`. See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete route

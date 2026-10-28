@@ -33,7 +33,11 @@ from json_utils import extract_json_object, salvage_truncated_json
 from key_rotator import OPENROUTER_ROTATOR, GROQ_ROTATOR, NVIDIA_ROTATOR, GITHUB_ROTATOR
 from mcp_client import query_github
 from orchestrator import build_context
-from onboarding import build_onboarding
+from onboarding import (
+    build_onboarding,
+    build_topological_curriculum,
+    verify_curriculum_challenge,
+)
 from pr_impact import build_pr_impact, fetch_pr, post_pr_comment
 from repo_loader import load_repo
 from repo_tracker import diff_changes, load_state, mark_checked
@@ -277,6 +281,11 @@ class PRImpactReq(BaseModel):
 
 class OnboardReq(BaseModel):
     repo_url: str | None = None
+
+class ChallengeVerifyReq(BaseModel):
+    tier: int
+    challenge_id: str
+    answer: str
 
 class TTSReq(BaseModel):
     text: str
@@ -1096,7 +1105,10 @@ async def onboard(
     low-traffic bottom rows (Rows 4-5)."""
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] onboard url=%s", req_id, req.repo_url)
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    try:
+        provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    except Exception:
+        provider = None
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
@@ -1115,6 +1127,35 @@ async def onboard(
     except Exception as e:
         log.error("[%s] onboard FAILED: %s", req_id, e)
         raise HTTPException(500, "Failed to build the onboarding path. Check backend logs.")
+
+
+@app.get("/api/onboard/curriculum")
+async def onboard_curriculum():
+    """Topological student onboarding curriculum partitioned into 4 DAG-ordered tiers."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+    if not graph.get("nodes"):
+        raise HTTPException(400, "Graph is empty — reload the repository.")
+    curriculum = await asyncio.to_thread(build_topological_curriculum, graph)
+    curriculum["repo"] = state.get("repo")
+    return curriculum
+
+
+@app.post("/api/onboard/verify-challenge")
+async def verify_onboard_challenge(req: ChallengeVerifyReq):
+    """Verify student challenge answer against the topological curriculum."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+    if not graph.get("nodes"):
+        raise HTTPException(400, "Graph is empty — reload the repository.")
+    curriculum = await asyncio.to_thread(build_topological_curriculum, graph)
+    return verify_curriculum_challenge(curriculum, req.tier, req.challenge_id, req.answer)
 
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}

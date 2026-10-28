@@ -300,11 +300,60 @@ export interface GoodFirstIssue {
   hint: string;
 }
 
+export interface OnboardChallenge {
+  id: string;
+  title: string;
+  prompt: string;
+  options: string[];
+  answer_index: number;
+  explanation: string;
+  kind?: string;
+}
+
+export interface OnboardTierFile {
+  path: string;
+  label?: string;
+  role: string;
+  in_degree?: number;
+  out_degree?: number;
+  scc_group?: string[];
+  why?: string;
+}
+
+export interface OnboardTier {
+  tier: number;
+  name: string;
+  badge: string;
+  description: string;
+  prerequisites: number[];
+  files: OnboardTierFile[];
+  challenges: OnboardChallenge[];
+}
+
+export interface OnboardCurriculum {
+  ok: boolean;
+  repo?: string | null;
+  total_tiers: number;
+  scc_count: number;
+  dag_edges: number;
+  tiers: OnboardTier[];
+}
+
+export interface ChallengeVerifyResult {
+  ok: boolean;
+  correct: boolean;
+  feedback: string;
+  next_tier: number;
+  unlocked: boolean;
+}
+
 export interface Onboarding {
   ok?: boolean;
   repo?: string | null;
   levels: OnboardLevel[];
   good_first_issues: GoodFirstIssue[];
+  curriculum?: OnboardCurriculum;
+  tiers?: OnboardTier[];
 }
 
 function isOnboarding(d: unknown): d is Onboarding {
@@ -319,6 +368,31 @@ function isOnboarding(d: unknown): d is Onboarding {
 
 export function generateOnboarding(): Promise<Onboarding> {
   return postJson("/api/onboard", {}, isOnboarding, LLM_TIMEOUT_MS);
+}
+
+export async function getOnboardCurriculum(): Promise<OnboardCurriculum> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JSON_TIMEOUT_MS);
+  return fetch("/api/onboard/curriculum", { signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+    .then(async (r) => {
+      if (!r.ok) throw new Error("Failed to load onboarding curriculum");
+      return r.json();
+    });
+}
+
+export function verifyChallenge(
+  tier: number,
+  challenge_id: string,
+  answer: string,
+): Promise<ChallengeVerifyResult> {
+  return postJson(
+    "/api/onboard/verify-challenge",
+    { tier, challenge_id, answer },
+    (d): d is ChallengeVerifyResult => {
+      return typeof d === "object" && d !== null && "correct" in (d as any);
+    },
+  );
 }
 
 // ── Security Scan (Breaking Change + Secret + CVE) ────────────────────────

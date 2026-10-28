@@ -279,6 +279,7 @@ class PRImpactReq(BaseModel):
     pr_number: int
     github_token: str | None = None
     post_comment: bool = False
+    format: Optional[str] = "json"
 
 class OnboardReq(BaseModel):
     repo_url: str | None = None
@@ -1081,6 +1082,18 @@ async def impact_pr(
         result["ok"] = True
         log.info("[%s] impact/pr OK risk=%s files=%s", req_id,
                  result["risk_level"], result["files_analyzed"])
+
+        if getattr(req, "format", "json") == "sarif":
+            sarif_doc = result.get("sarif_doc")
+            if not sarif_doc:
+                from sarif import to_sarif
+                sarif_doc = to_sarif(result.get("sarif", []))
+            return Response(
+                content=json.dumps(sarif_doc, indent=2),
+                media_type="application/sarif+json",
+                headers={"Content-Disposition": f'attachment; filename="reposcope-pr-{req.pr_number}.sarif"'},
+            )
+
         return result
     except HTTPException:
         raise
@@ -1090,6 +1103,15 @@ async def impact_pr(
     except Exception as e:
         log.error("[%s] impact/pr FAILED: %s", req_id, e)
         raise HTTPException(500, "Failed to analyze PR impact. Check backend logs.")
+
+
+@app.post("/api/pr/report", operation_id="api_pr_report_summary")
+async def pr_report(
+    req: PRImpactReq,
+    x_session_id: str = Header(None),
+):
+    """PR Bot report endpoint returning symbol-level contract breaks and markdown comment."""
+    return await impact_pr(req, x_session_id)
 
 
 @app.post("/api/onboard")

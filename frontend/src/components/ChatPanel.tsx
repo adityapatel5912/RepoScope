@@ -9,7 +9,7 @@ import CitationPill from "./CitationPill";
 import { toast } from "./Toasts";
 import {
   Send, Copy, Check, Mic, MicOff, User, Map, GraduationCap,
-  Radio, GitBranch, ShieldAlert, Zap, Wand2,
+  Radio, GitBranch, ShieldAlert, Zap, Wand2, GitPullRequest,
 } from "lucide-react";
 
 interface Message {
@@ -310,6 +310,8 @@ function renderActionIcon(kind: string) {
       return <Radio size={12} className="text-accent-cyan" />;
     case "impact":
       return <GitBranch size={12} className="text-accent-rose" />;
+    case "pr_impact":
+      return <GitPullRequest size={12} className="text-accent-cyan" />;
     case "security":
       return <ShieldAlert size={12} className="text-accent-rose" />;
     case "scaffold":

@@ -191,13 +191,14 @@ export interface CitationItem {
 }
 
 export interface ChatAction {
-  kind: "tour" | "onboarding" | "metrics" | "impact" | "security" | "scaffold" | "reverse_prompt" | string;
+  kind: "tour" | "onboarding" | "metrics" | "impact" | "pr_impact" | "security" | "scaffold" | "reverse_prompt" | string;
   title: string;
   description?: string;
   track?: string;
   level?: number;
   view?: string;
   target?: string;
+  pr_number?: number;
   icon?: string;
 }
 

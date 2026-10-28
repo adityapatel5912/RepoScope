@@ -122,4 +122,16 @@ def detect_chat_actions(
             "icon": "wand",
         })
 
+    # 8. PR Impact intent
+    pr_match = re.search(r"\bpr\s*#?(\d+)\b|\bpull\s*request\s*#?(\d+)\b", msg)
+    if pr_match or "pr impact" in msg or "pull request impact" in msg:
+        pr_num = int(pr_match.group(1) or pr_match.group(2)) if pr_match else None
+        actions.append({
+            "kind": "pr_impact",
+            "pr_number": pr_num,
+            "title": f"Inspect Symbol Diffs{' for PR #' + str(pr_num) if pr_num else ''}",
+            "description": "Analyze symbol-level contract breaks, API route changes, and test gaps.",
+            "icon": "git-pull-request",
+        })
+
     return actions

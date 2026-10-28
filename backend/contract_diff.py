@@ -631,6 +631,64 @@ def diff_contracts(
     return findings
 
 
+def diff_routes(old_source: str, new_source: str, file: str) -> list[Finding]:
+    """Detect removed, modified, or altered API route endpoints across Python and JS/TS."""
+    findings: list[Finding] = []
+    suffix = Path(file).suffix.lower()
+    try:
+        from symbol_resolver import scan_routes
+        old_routes = scan_routes(old_source, file, suffix)
+        new_routes = scan_routes(new_source, file, suffix)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Route diff failed for %s: %s", file, exc)
+        return []
+
+    if not old_routes and not new_routes:
+        return []
+
+    new_map = {}
+    for r in new_routes:
+        m = (r.get("methods") or [r.get("method", "GET")])[0].upper()
+        p = str(r.get("path") or "")
+        new_map[f"{m} {p}"] = r
+
+    for old_r in old_routes:
+        m = (old_r.get("methods") or [old_r.get("method", "GET")])[0].upper()
+        p = str(old_r.get("path") or "")
+        key = f"{m} {p}"
+        if key not in new_map:
+            # Check if same handler was repurposed with different route
+            altered = False
+            for new_key, new_r in new_map.items():
+                if new_r.get("handler") and new_r.get("handler") == old_r.get("handler"):
+                    findings.append(Finding(
+                        kind="altered-route",
+                        symbol=key,
+                        file=file,
+                        line=new_r.get("line") or old_r.get("line") or 1,
+                        severity="BREAKING",
+                        message=(
+                            f"API Route `{key}` was altered to `{new_key}` for handler `{old_r.get('handler')}` — "
+                            f"external and client callers will break"
+                        ),
+                        guidance="Keep previous route path as an alias or deprecate via headers before changing.",
+                    ))
+                    altered = True
+                    break
+            if not altered:
+                findings.append(Finding(
+                    kind="removed-route",
+                    symbol=key,
+                    file=file,
+                    line=old_r.get("line") or 1,
+                    severity="BREAKING",
+                    message=f"API Route `{key}` was removed — frontend and API clients targeting it will fail",
+                    guidance="Deprecate route with HTTP headers before removing, or provide backward-compatible redirection.",
+                ))
+
+    return findings
+
+
 def diff_sources(old_source: str, new_source: str, file: str) -> list[Finding]:
     """
     Compare two versions of a file.
@@ -640,7 +698,9 @@ def diff_sources(old_source: str, new_source: str, file: str) -> list[Finding]:
     """
     old_contracts = extract_contracts(old_source.encode("utf-8"), file)
     new_contracts = extract_contracts(new_source.encode("utf-8"), file)
-    return diff_contracts(old_contracts, new_contracts, file)
+    findings = diff_contracts(old_contracts, new_contracts, file)
+    findings.extend(diff_routes(old_source, new_source, file))
+    return findings
 
 
 def sources_from_patch(patch: str) -> tuple[str, str]:
@@ -677,11 +737,12 @@ def find_consumers(
     symbol: str,
 ) -> list[str]:
     """
-    The files that ACTUALLY consume a symbol in a file.
+    The files that ACTUALLY consume a symbol or route in a file.
 
-    Not "every file in the directory" — the files whose import edges or
-    call edges reach this symbol. A finding that names thirty files when
-    three are affected is noise, and noise is why bots get muted.
+    Resolves callers across both backend and frontend:
+    - Direct symbol calls (`calls` edges)
+    - Cross-stack REST/WS client calls (`api_calls` edges)
+    - Module imports (`imports` edges)
     """
     if not graph:
         return []
@@ -693,34 +754,40 @@ def find_consumers(
         node["id"] for node in nodes
         if node.get("file") == file and node.get("label") == symbol
     }
-    if not target_ids:
-        return []
 
     consumers: set[str] = set()
 
-    # Call edges: something calls this symbol.
+    # 1. Call edges: something calls this symbol directly
+    if target_ids:
+        for edge in edges:
+            if edge.get("type") == "calls" and edge.get("target") in target_ids:
+                source = next(
+                    (n for n in nodes if n["id"] == edge.get("source")), None,
+                )
+                if source is not None and source.get("file"):
+                    consumers.add(str(source["file"]))
+
+    # 2. Cross-stack API-call edges (e.g. frontend fetch/axios calling backend routes)
+    route_path = symbol.split()[-1] if "/" in symbol else None
     for edge in edges:
-        if edge.get("type") != "calls":
-            continue
-        if edge.get("target") in target_ids:
+        if edge.get("type") == "api_calls":
+            ev = edge.get("evidence") or {}
+            ev_path = str(ev.get("path") or "")
+            target_matches = edge.get("target") in target_ids if target_ids else False
+            if target_matches or (route_path and ev_path and (route_path in ev_path or ev_path in route_path)):
+                source = next((n for n in nodes if n["id"] == edge.get("source")), None)
+                if source is not None and source.get("file"):
+                    consumers.add(str(source["file"]))
+
+    # 3. Import edges: something imports the file that defines it
+    file_id = f"file:{file}"
+    for edge in edges:
+        if edge.get("type") == "imports" and (edge.get("target") == file_id or (target_ids and edge.get("target") in target_ids)):
             source = next(
                 (n for n in nodes if n["id"] == edge.get("source")), None,
             )
             if source is not None and source.get("file"):
                 consumers.add(str(source["file"]))
-
-    # Import edges: something imports the file that defines it. That is
-    # a weaker signal — the file may not use the symbol — but it is the
-    # file that has to be looked at.
-    file_id = f"file:{file}"
-    for edge in edges:
-        if edge.get("type") != "imports" or edge.get("target") != file_id:
-            continue
-        source = next(
-            (n for n in nodes if n["id"] == edge.get("source")), None,
-        )
-        if source is not None and source.get("file"):
-            consumers.add(str(source["file"]))
 
     consumers.discard(file)
     return sorted(consumers)

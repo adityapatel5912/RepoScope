@@ -149,10 +149,31 @@ export interface PRImpactFile {
   transitive: number;
 }
 
+export interface ContractFinding {
+  kind: string;
+  symbol: string;
+  file: string;
+  line: number;
+  severity: "error" | "warning" | "note" | "BREAKING" | "INFO" | string;
+  title?: string;
+  detail?: string;
+  message?: string;
+  consumers?: string[];
+  guidance?: string;
+}
+
+export interface TestGap {
+  symbol?: string | null;
+  file: string;
+  line?: number;
+  detail: string;
+}
+
 export interface PRImpact {
   ok?: boolean;
   pr_number: number;
   pr_title: string;
+  pr_state?: string;
   risk_score: number;
   risk_level: Impact["risk_level"];
   affected_files: PRImpactFile[];
@@ -161,6 +182,14 @@ export interface PRImpact {
   direct_total: number;
   transitive_total: number;
   suggested_tests: string[];
+  test_gaps?: TestGap[];
+  symbol_findings?: ContractFinding[];
+  architecture_impact?: {
+    findings: ContractFinding[];
+    cycles: unknown[];
+    summary?: { breaking: number; boundary: number; contracts: number };
+  };
+  sarif_doc?: Record<string, unknown>;
   comment: string;
   comment_posted?: boolean;
 }
@@ -175,10 +204,10 @@ function isPRImpact(d: unknown): d is PRImpact {
   );
 }
 
-export function generatePRImpact(repoUrl: string, prNumber: number): Promise<PRImpact> {
+export function generatePRImpact(repoUrl: string, prNumber: number, format: "json" | "sarif" = "json"): Promise<PRImpact> {
   return postJson(
     "/api/impact/pr",
-    { repo_url: repoUrl, pr_number: prNumber },
+    { repo_url: repoUrl, pr_number: prNumber, format },
     isPRImpact,
     LLM_TIMEOUT_MS, // clone + graph build can take a while on cold starts
   );

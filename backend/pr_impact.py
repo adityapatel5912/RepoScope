@@ -22,7 +22,7 @@ from impact_analyzer import compute_blast_radius
 log = logging.getLogger("reposcope.pr_impact")
 
 GITHUB_API = "https://api.github.com"
-MAX_FILES_ANALYZED = 25   # per-PR cap so a 100-file PR can't stall the API
+MAX_FILES_ANALYZED = 500   # High ceiling allowing complete PR analysis without 25-file truncation
 MAX_MERMAID_NODES = 14    # comment-size cap for the mermaid diagram
 
 
@@ -150,6 +150,11 @@ def build_pr_impact(graph: dict, meta: dict, files: list[dict],
     )
 
     missing_tests = _missing_tests(graph, per_file)
+    test_gaps = detect_test_gaps(graph, contract_findings, per_file)
+    sarif_results = _sarif_results(impact, risk_score, missing_tests)
+    from sarif import to_sarif
+    sarif_doc = to_sarif(sarif_results)
+
     gate = merge_gate(
         impact,
         risk_score,
@@ -177,6 +182,8 @@ def build_pr_impact(graph: dict, meta: dict, files: list[dict],
         "direct_total": len(direct_ids),
         "transitive_total": len(transitive_ids),
         "suggested_tests": tests[:8],
+        "test_gaps": test_gaps,
+        "symbol_findings": [f.to_dict() for f in contract_findings],
         "mermaid": _mermaid(direct_ids, transitive_ids, _label),
         "architecture_impact": impact,
         "merge_gate": gate,
@@ -184,9 +191,63 @@ def build_pr_impact(graph: dict, meta: dict, files: list[dict],
         "badges": render_svg_badges(
             risk_score, risk_level, savings.get("reduction_pct") if savings else None,
         ),
-        "sarif": _sarif_results(impact, risk_score, missing_tests),
+        "sarif": sarif_results,
+        "sarif_doc": sarif_doc,
         "comment": comment,
     }
+
+
+def detect_test_gaps(graph: dict, findings: list, per_file: list[dict]) -> list[dict]:
+    """Identify modified symbols and files that have zero incoming test edges."""
+    if not graph:
+        return []
+    nodes = graph.get("nodes", []) or []
+    edges = graph.get("edges", []) or []
+
+    test_node_ids = {
+        n["id"] for n in nodes
+        if "test" in str(n.get("file") or n.get("label", "")).lower()
+        or "spec" in str(n.get("file") or n.get("label", "")).lower()
+    }
+
+    tested_targets = set()
+    for edge in edges:
+        if edge.get("source") in test_node_ids:
+            tested_targets.add(edge.get("target"))
+
+    gaps = []
+    seen = set()
+
+    for f in findings:
+        file = f.file if hasattr(f, "file") else f.get("file", "")
+        symbol = f.symbol if hasattr(f, "symbol") else f.get("symbol", "")
+        line = f.line if hasattr(f, "line") else f.get("line", 1)
+        sym_ids = {n["id"] for n in nodes if n.get("file") == file and n.get("label") == symbol}
+        file_id = f"file:{file}"
+
+        has_test = any(sid in tested_targets for sid in sym_ids) or (file_id in tested_targets)
+        if not has_test and (file, symbol) not in seen:
+            seen.add((file, symbol))
+            gaps.append({
+                "symbol": symbol,
+                "file": file,
+                "line": line,
+                "detail": f"Modified symbol `{symbol}` has 0 incoming test edges in the dependency graph.",
+            })
+
+    for item in per_file:
+        fname = item.get("file", "")
+        file_id = f"file:{fname}"
+        if file_id not in tested_targets and fname not in seen and not ("test" in fname.lower() or "spec" in fname.lower()):
+            seen.add(fname)
+            gaps.append({
+                "symbol": None,
+                "file": fname,
+                "line": 1,
+                "detail": f"Changed module `{fname}` has no associated test files.",
+            })
+
+    return gaps
 
 
 def _contract_findings(files: list[dict]) -> list:

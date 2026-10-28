@@ -10,7 +10,7 @@ import {
 } from "../api/features";
 import { toast } from "./Toasts";
 import { SkeletonCard } from "./Skeleton";
-import { Zap, X, ChevronDown, GitPullRequest, Copy, Check, ClipboardCopy } from "lucide-react";
+import { Zap, X, ChevronDown, GitPullRequest, Copy, Check, ClipboardCopy, Download, AlertTriangle, FileCode } from "lucide-react";
 
 export interface ImpactRequest {
   target: string;
@@ -92,14 +92,15 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
   // ── PR Bot: compute the PR's blast radius and preview the GitHub comment ──
   const runPRImpact = async () => {
     const n = Number.parseInt(prNumber, 10);
-    if (!repo || !Number.isFinite(n) || n <= 0 || prBusy) {
+    const targetRepo = repo || "adityapatel5912/RepoScope";
+    if (!Number.isFinite(n) || n <= 0 || prBusy) {
       if (!Number.isFinite(n) || n <= 0) setPrError("Enter a valid PR number");
       return;
     }
     setPrBusy(true);
     setPrError(null);
     try {
-      const data = await generatePRImpact(`https://github.com/${repo}`, n);
+      const data = await generatePRImpact(`https://github.com/${targetRepo}`, n);
       setPrResult(data);
       toast.success(`PR #${n} report ready — risk ${data.risk_score}/10`);
     } catch (e: unknown) {
@@ -119,6 +120,34 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
       setTimeout(() => setPrCopied(false), 2000);
     });
   };
+
+  const downloadSarif = () => {
+    if (!prResult) return;
+    const sarifData = prResult.sarif_doc || {
+      $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+      version: "2.1.0",
+      runs: [],
+    };
+    const blob = new Blob([JSON.stringify(sarifData, null, 2)], { type: "application/sarif+json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `reposcope-pr-${prResult.pr_number}.sarif`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("SARIF 2.1.0 report exported");
+  };
+
+  useEffect(() => {
+    const handleSelectPR = (e: Event) => {
+      const customEvent = e as CustomEvent<{ prNumber?: number }>;
+      if (customEvent.detail?.prNumber) {
+        setPrNumber(String(customEvent.detail.prNumber));
+      }
+    };
+    window.addEventListener("reposcope:select-pr", handleSelectPR);
+    return () => window.removeEventListener("reposcope:select-pr", handleSelectPR);
+  }, []);
 
   // External request (e.g. "Analyze impact" in the node drawer)
   useEffect(() => {
@@ -196,7 +225,7 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
       </div>
 
       {/* ── PR Bot — impact report as a GitHub comment ── */}
-      {repo && (
+      {(repo || true) && (
         <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
           <h4 className="m-0 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-accent-violet">
             <GitPullRequest size={11} />
@@ -268,12 +297,76 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
                 value={prResult.comment}
                 aria-label="GitHub comment preview"
                 onFocus={(e) => e.currentTarget.select()}
-                className="input !py-2 font-mono !text-[10px] leading-snug h-44 !resize-none whitespace-pre-wrap"
+                className="input !py-2 font-mono !text-[10px] leading-snug h-36 !resize-none whitespace-pre-wrap"
               />
+
+              {/* Symbol Contract Breaks */}
+              {((prResult.architecture_impact?.findings || prResult.symbol_findings || []).length > 0) && (
+                <div className="flex flex-col gap-1.5 p-2 rounded-lg bg-bg-panel-alt/70 border border-border-hairline">
+                  <span className="text-2xs font-semibold uppercase tracking-wider text-accent-rose flex items-center gap-1">
+                    <AlertTriangle size={11} />
+                    Contract Breaking Changes ({(prResult.architecture_impact?.findings || prResult.symbol_findings || []).length})
+                  </span>
+                  <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                    {(prResult.architecture_impact?.findings || prResult.symbol_findings || []).map((finding, idx) => (
+                      <div key={idx} className="p-1.5 rounded bg-bg-panel border border-border-subtle text-[11px] flex flex-col gap-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <code className="text-accent-rose font-mono font-bold text-[10px]">{finding.symbol || finding.title}</code>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-accent-rose/15 text-accent-rose border border-accent-rose/30">
+                            {finding.severity || "BREAKING"}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-text-muted m-0">{finding.detail || finding.message}</p>
+                        <div className="flex items-center gap-1 text-[9px] text-text-muted font-mono">
+                          <FileCode size={10} className="text-accent-cyan" />
+                          <span>{finding.file}:{finding.line}</span>
+                        </div>
+                        {finding.consumers && finding.consumers.length > 0 && (
+                          <div className="mt-0.5 pt-1 border-t border-border-hairline flex flex-wrap gap-1 items-center">
+                            <span className="text-[9px] text-accent-amber font-semibold">Consumers:</span>
+                            {finding.consumers.map((c) => (
+                              <span key={c} className="px-1 py-0.5 rounded bg-accent-amber/10 text-accent-amber text-[9px] font-mono">
+                                {c.split("/").pop()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Test Gaps Alert */}
+              {prResult.test_gaps && prResult.test_gaps.length > 0 && (
+                <div className="p-2 rounded-lg bg-accent-amber/10 border border-accent-amber/30 text-[10px] flex flex-col gap-1">
+                  <div className="flex items-center gap-1 text-accent-amber font-bold">
+                    <AlertTriangle size={11} />
+                    <span>Coverage Gaps: {prResult.test_gaps.length} symbols/files lack tests</span>
+                  </div>
+                  <ul className="list-disc pl-4 m-0 text-text-muted space-y-0.5 max-h-24 overflow-y-auto">
+                    {prResult.test_gaps.slice(0, 5).map((gap, i) => (
+                      <li key={i}>
+                        <span className="font-mono text-text-primary">{gap.symbol ? `${gap.symbol} in ` : ''}{gap.file.split('/').pop()}</span>
+                        {" "}— 0 incoming test edges
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <button onClick={copyPrComment} className="btn-primary flex-1 !py-1.5 !px-3 !text-xs justify-center">
                   {prCopied ? <Check size={12} /> : <Copy size={12} />}
                   {prCopied ? "Copied" : "Copy comment"}
+                </button>
+                <button
+                  onClick={downloadSarif}
+                  className="btn-secondary !py-1.5 !px-3 !text-xs flex items-center gap-1 justify-center"
+                  title="Export OASIS SARIF 2.1.0 for GitHub code-scanning"
+                >
+                  <Download size={12} />
+                  <span>Export SARIF</span>
                 </button>
               </div>
               <p className="text-2xs text-text-muted leading-relaxed m-0">

@@ -371,6 +371,12 @@ export default function App() {
     } else if (act.kind === "impact") {
       setImpactRequest({ target: act.target ?? "main.py", ts: Date.now() });
       toast.success(`Simulating impact for ${act.target ?? "main.py"}`);
+    } else if (act.kind === "pr_impact") {
+      setImpactRequest({ target: act.target ?? "main.py", ts: Date.now() });
+      if (act.pr_number) {
+        window.dispatchEvent(new CustomEvent("reposcope:select-pr", { detail: { prNumber: act.pr_number } }));
+      }
+      toast.success(`Opening Symbol-Level PR Impact${act.pr_number ? ` for PR #${act.pr_number}` : ''}`);
     } else if (act.kind === "onboarding") {
       setStudentMode(true);
       toast.success("Switched to Student Onboarding Mode");

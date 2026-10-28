@@ -12,8 +12,8 @@
 
 RepoScope builds a high-fidelity **Tree-sitter polyglot code graph** from a local workspace or remote GitHub repository, serving a single shared knowledge index across four unified interfaces:
 
-1. **The Interactive Architecture Canvas**: D3 Force directed graph, hierarchical collapsible MindMap V2, interactive blast radius simulator, and multi-track architectural tour player.
-2. **The Terminal CLI (`reposcope`, `reposcope-ai`)**: Zero-upload local live file watcher, instant graph indexer, inter-procedural security auditor, and MCP server.
+1. **The Interactive Architecture Canvas**: React Flow dependency graph, hierarchical collapsible MindMap V2, explainable 3-hop blast radius simulator, and multi-track architectural tour player.
+2. **The Terminal CLI (`reposcope`, `reposcope-ai`)**: Zero-upload local live file watcher, instant graph indexer, inter-procedural security auditor, and MCP server runner.
 3. **The Model Context Protocol (MCP) Server (`reposcope-mcp`, `npx reposcope-mcp`)**: Native tools and resources providing real-time code graph intelligence directly to Claude Desktop, Cursor, OpenCode, and autonomous agents.
 4. **The Editor Extension (VS Code, Cursor, VSCodium)**: Live Activity Bar architecture mini-map, CodeLens caller counts, and status-bar blast radius risk gauges.
 
@@ -32,10 +32,10 @@ RepoScope resolves this at the compiler level. By parsing code into an interconn
 ```mermaid
 graph TD
     subgraph Core ["RepoScope Core Engine (v2.8.0)"]
-        TreeSitter["Polyglot Tree-Sitter Parsers\n(Python, TS/JS, Go, Rust)"] --> GraphStore["Memory/Disk Graph Store\n(.reposcope/index)"]
-        GraphStore --> GraphAnalysis["Graph Analytics Engine\n(PageRank, SCC, Tarjan)"]
-        GraphStore --> TaintEngine["Inter-Procedural Taint Engine\n(Cross-File Flow & CWE Tracking)"]
-        GraphStore --> ImpactSim["Explainable 3-Hop Impact Simulator\n(Structural + Semantic + Historical)"]
+        TreeSitter["Polyglot Tree-Sitter Parsers (Python, TS/JS, Go, Rust)"] --> GraphStore["Memory/Disk Graph Store (.reposcope/index)"]
+        GraphStore --> GraphAnalysis["Graph Analytics Engine (PageRank, SCC, Tarjan)"]
+        GraphStore --> TaintEngine["Inter-Procedural Taint Engine (Cross-File Flow & CWE Tracking)"]
+        GraphStore --> ImpactSim["Explainable 3-Hop Impact Simulator (Structural + Semantic + Historical)"]
     end
 
     subgraph APIs ["FastAPI Layer (backend/main.py)"]
@@ -50,10 +50,10 @@ graph TD
     end
 
     subgraph Frontends ["Unified Consumer Surfaces"]
-        ReactUI["Vite + React 18 Canvas UI\n(D3 Force, Hierarchical MindMap)"]
-        VSCodeExt["VS Code Extension\n(reposcope-2.8.0.vsix)"]
-        NPX_MCP["Node NPX Runner\n(npx reposcope-mcp)"]
-        CLI["Python Typer CLI\n(reposcope, reposcope-ai)"]
+        ReactUI["Vite + React 18 Canvas UI (React Flow, D3 Hierarchy)"]
+        VSCodeExt["VS Code Extension (reposcope-2.8.0.vsix)"]
+        NPX_MCP["Node NPX Runner (npx reposcope-mcp)"]
+        CLI["Python Typer CLI (reposcope, reposcope-ai)"]
     end
 
     Core --> APIs
@@ -64,11 +64,10 @@ Every surface reads the **exact same index**. A human inspecting a blast radius 
 
 ---
 
-## Core Capabilities & Deep Dive
+## Comprehensive Feature Matrix (V1.0 - V2.8)
 
-### 1. Six-Engine Graph-Contextual Security Suite
-RepoScope combines deep AST pattern matching with inter-procedural taint flow analysis into an offline, zero-hallucination security audit engine:
-
+### 1. Six-Engine Graph-Contextual Security Suite (V2.8)
+Combines deep AST pattern matching with inter-procedural taint flow analysis into an offline, zero-hallucination security audit engine:
 - **Engine 1: Cross-File Taint Engine**: Tracks tainted input sources (`request.args`, `request.json()`, `sys.argv`) across module imports and function calls into dangerous execution sinks (`subprocess.Popen`, `cursor.execute`, `eval`).
 - **Engine 2: High-Entropy Secret Hunter**: Scans code and configs for credentials, private keys, and API tokens using Shannon entropy scoring ($H \ge 4.2$). Enforces strict `<redacted>` masking in memory, logs, and API payloads.
 - **Engine 3: Offline Dependency CVE Scanner**: Scans manifest files (`pyproject.toml`, `requirements.txt`, `package.json`) against a curated local CVE database (FastAPI, aiohttp, cryptography, requests, etc.) without external network dependencies.
@@ -78,7 +77,7 @@ RepoScope combines deep AST pattern matching with inter-procedural taint flow an
 - **Automated Remediation**: Generates non-destructive, AST syntax-verified Unified Diff patches.
 - **OASIS SARIF 2.1.0 Export**: Full compliance for CI/CD pipelines, GitHub Code Scanning, and automated compliance gates.
 
-### 2. Explainable 3-Hop Blast Radius Simulator
+### 2. Explainable 3-Hop Blast Radius Simulator (V2.8)
 Predicts the cascading blast radius of proposed edits before writing a single line of code:
 - **Hop 1 (Direct Dependents)**: Direct imports and immediate callers.
 - **Hop 2 (Transitive Consumers)**: Second-order callers, services, and upstream managers.
@@ -87,124 +86,111 @@ Predicts the cascading blast radius of proposed edits before writing a single li
   $$\text{CoChangeWeight}(u, v) = \frac{\text{Commits}(u \cap v)}{\sqrt{\text{Commits}(u) \cdot \text{Commits}(v)}}$$
 - **Impacted Test Discovery**: Automatically identifies test suites covering the affected blast radius subgraph.
 
-### 3. Symbol-Level PR Impact & Contract Diff
+### 3. Symbol-Level PR Impact & Contract Diff (V2.7)
 Goes beyond line diffs to detect semantic contract breaks across commits:
 - **Tree-sitter Symbol Differencing**: Identifies deleted, renamed, or signature-modified functions, methods, and classes.
 - **Breaking Change Detection**: Flags added mandatory parameters, changed return types, and removed public interface exports.
 - **Automated GitHub PR Commenter**: Generates structured markdown summaries with risk tiers and symbol call chains directly on pull requests.
 
-### 4. Hotspots, Bus Factor & Churn Time Machine
+### 4. Hotspots, Bus Factor & Churn Time Machine (V2.7)
 Correlates code graph topology with Git commit history to surface architectural risks before they cause production outages:
 - **Risk Score Formula**:
   $$\text{Risk}(v) = \text{PageRank}(v) \times \ln(1 + \text{Churn}(v)) \times \frac{1}{\text{BusFactor}(v)}$$
 - **Bus Factor Entropy**: Computes effective contributor count via Shannon diversity entropy:
   $$\text{BusFactor}(v) = \exp\left(-\sum_{i=1}^{k} p_i \ln p_i\right)$$
-- **Git Churn Time Machine**: Compares git revisions to highlight newly introduced coupling spikes and architectural drift.
+- **Git Churn Time Machine**: Compares git revisions (`HEAD~10..HEAD`) to highlight newly introduced coupling spikes and architectural drift.
 
-### 5. Topological Onboarding & Interactive Code Katas
+### 5. Topological Student Onboarding & Interactive Code Katas (V2.7)
 Converts the code graph into an optimal reading and learning order based on directed acyclic graph (DAG) dependencies:
 - **Kahn's Topological Sorting**: Eliminates circular confusion by structuring files into logical tiers:
   - **Tier 1 (Foundations)**: Leaf primitives, data models, schemas, and pure utility functions.
   - **Tier 2 (Core Business Logic)**: Intermediate domain services consuming Tier 1 primitives.
   - **Tier 3 (Application Boundary)**: Controllers, HTTP routers, and CLI entry points.
-- **Interactive Katas**: Self-evaluating architectural quizzes and code challenges validating repository understanding.
+  - **Tier 4 (Architecture & State)**: State management, application composition root, and lifecycle hooks.
+- **Interactive Katas**: Self-evaluating architectural quizzes and code challenges with instant AST syntax verification badges (`✓ Correct!`).
 
-### 6. Architectural Guided Tours & Universal Chat Action Cards
-- **Curated Tour Tracks**: Step-by-step interactive walkthroughs across key subsystems (e.g., "Request Lifecycle", "Data Ingestion Pipeline", "Authentication & Security").
+### 6. Architectural Guided Tours & Universal Chat Action Cards (V2.7)
+- **Curated Tour Tracks**: Step-by-step interactive walkthroughs across key subsystems (`Request Lifecycle`, `Data Flow`, `Blast Radius`, `Onboarding Guide`).
 - **Voice Narration**: Integrated Web Speech API and ElevenLabs TTS synthesis for hands-free codebase audio guides.
 - **Universal Chat Action Cards**: Context-aware intent detection in chat conversations emitting one-click interactive action cards (`[Launch Tour]`, `[Open Security Audit]`, `[Download SARIF]`, `[Run Simulator]`).
+- **VS Code `.tour` Export**: Standard CodeTour JSON export compatibility.
 
-### 7. Interactive Architecture Scaffolder
+### 7. Interactive Architecture Scaffolder (V2.6)
 - **Deterministic Starter Kits**: Generates standard production architectures (Clean Architecture, Ports & Adapters, Modular Monolith, Microservice Core).
-- **Non-Destructive Generation**: Generates typed boilerplate, architecture `README.md` documentation, and build manifests with visual previews and copy-paste terminal commands.
+- **Non-Destructive Generation**: Generates typed boilerplate, architecture `README.md` documentation, and build manifests with visual previews and copy-paste terminal commands (`npx reposcope-mcp scaffold`).
 
-### 8. Reverse Prompt Compiler
+### 8. Four-Mode Reverse Prompt Compiler (V2.6)
 Compiles repository subgraphs into dense, high-signal prompt templates for AI coding agents:
 - `context`: Comprehensive topological overview with structural dependencies.
 - `rebuild`: Green-field reproduction specification detailing interfaces and invariants.
 - `spec`: Formal API contracts and schemas for test-driven development.
-- `feature`: Targeted context slice designed for ticket implementation without context window bloat.
+- `feature`: Targeted context slice with deterministic 2-Hop Interface Closures without context window bloat.
 
-### 9. MindMap V2 Collapsible Hierarchy
+### 9. Hierarchical MindMap V2 (V2.5)
 Dynamic D3 hierarchical tree layout offering instant structural clarity:
 - Seamless switching between Horizontal (Left-to-Right) and Vertical (Top-to-Bottom) layouts.
 - Dynamic subtree expanding, collapsing, and directory-level clustering.
 - Real-time search highlighting matching files and modules across deep directory nests.
 
-### 10. Verified Chat Citations
+### 10. Verified Chat Citations & Anti-Hallucination Guard (V2.5)
 - Streams conversational answers with AST-verified file, symbol, and line-range citation pills.
-- Interactive hover tooltips displaying instant code previews, line ranges, and direct navigation links into the visualizer canvas and local editor.
+- Verified citations receive green checkmarks and hover tooltips showing exact code ranges and confidence scores.
+- Unverified/hallucinated symbols are flagged with warning badges to protect developer trust.
+
+### 11. Multi-Mode Interactive Architecture Graph (V2.0)
+- **Grouped by Module**: Large-repository view where top-level modules become cards with file drawers.
+- **Architecture Clusters**: Color-coded categorization by layer (Client/UI, Backend/API, Storage/Data, External/Integrations, Compute/Workers).
+- **Flat Inspection**: Every file and symbol node rendered with interactive pan, zoom, and search.
+- **Git Churn Heatmap Overlay**: Real-time git commit activity heat signal overlaid onto topological nodes.
+- **Small Repository View**: Full connectivity pyramid with PageRank centrality ranking.
+
+### 12. Nine-Agent MCP Harness Configurator (V2.0)
+Seamless one-click integration modal configuring RepoScope MCP across 9 major AI coding environments:
+- **Claude Code** (`.mcp.json`)
+- **Cursor** (`.cursor/mcp.json`)
+- **VS Code** (`.vscode/mcp.json`)
+- **Codex CLI** (`.codex/config.toml`)
+- **Kiro** (`.kiro/settings/mcp.json`)
+- **Antigravity** (`.agents/mcp_config.json`)
+- **Windsurf** (`.devin/mcp_config.json`)
+- **Cline** (`.roo/mcp.json`)
+- **OpenCode** (`opencode.json`)
+
+### 13. In-Browser Local Folder Preview (V2.0)
+- Zero-upload directory inspection using Tree-sitter compiled to WebAssembly (WASM).
+- Runs directly inside the browser using `window.showDirectoryPicker` with zero server communication.
+
+### 14. BYOK Multi-Provider Engine (V1.0 - V2.0)
+- Secure, memory-only key management for Groq, NVIDIA NIM, OpenAI, Anthropic, and OpenRouter.
+- Multi-key rotation and zero disk persistence for high-security environments.
 
 ---
 
-## Quick Start
+## What the Graph Contains
 
-### Option 1: Local Mode CLI (Zero-Upload & 100% Offline)
+RepoScope parses Python, TypeScript, TSX, JavaScript, Go, and Rust with Tree-sitter. It builds:
 
-```bash
-# Clone and install in editable mode
-git clone https://github.com/adityapatel5912/RepoScope.git
-cd RepoScope
-pip install -e .
+- **File nodes** for every indexed file in the workspace;
+- **Symbol nodes** for functions, methods, classes, and interfaces;
+- **`imports` edges** resolved against a module index, including relative and alias imports;
+- **`calls` edges** resolved across files where the parser can see the target;
+- **`contains` edges** between a file and its symbols;
+- **`inherits` edges** between object-oriented classes and base classes;
+- **`instantiates` edges** between factory functions and created objects.
 
-# Launch RepoScope on any repository
-cd /path/to/target/repo
-reposcope run .
-```
-
-Open [http://127.0.0.1:4100](http://127.0.0.1:4100). The CLI starts the live file watcher, builds the graph index, and serves the UI. Edit any file in your editor, and the graph updates live without refreshing.
-
-### Option 2: Model Context Protocol (MCP) Server
-
-Connect RepoScope's code graph directly to Claude Desktop, Cursor, or OpenCode:
-
-```bash
-# Via Python runtime
-reposcope-mcp --root /path/to/target/repo
-
-# Or zero-install Node runner
-npx reposcope-mcp --root /path/to/target/repo
-```
-
-**Claude Desktop Configuration (`claude_desktop_config.json`):**
-```json
-{
-  "mcpServers": {
-    "reposcope": {
-      "command": "npx",
-      "args": ["reposcope-mcp", "--root", "/absolute/path/to/repo"]
-    }
-  }
-}
-```
-
-### Option 3: Terminal Security Audit
-
-Run the 6-engine security audit directly in your CI/CD pipeline or terminal:
-```bash
-# Human-readable vulnerability summary:
-reposcope security .
-
-# OASIS SARIF 2.1.0 output:
-reposcope security . --sarif > results.sarif
-```
-
-### Option 4: VS Code Extension
-
-Install the packaged VSIX extension artifact directly into VS Code or Cursor:
-```bash
-code --install-extension extensions/vscode/reposcope-2.8.0.vsix
-# or for Cursor:
-cursor --install-extension extensions/vscode/reposcope-2.8.0.vsix
-```
-
-Provides live CodeLens caller counts, status bar blast radius risk gauges, and an in-editor mini-map connected to your local RepoScope daemon.
+On top of the graph:
+- **PageRank centrality** ranks the structural importance of every file;
+- **Dependency cycles** are identified with Tarjan strongly connected components (SCC);
+- **Unreachable symbols** are calculated via static reachability analysis;
+- **Git churn** feeds the hotspot and bus factor overlays;
+- **Architecture rules** live in `.reposcope.yml` and are checked per import;
+- **Blast radius** is evaluated via reverse breadth-first search (BFS).
 
 ---
 
 ## Measured Context Savings
 
-Traditional AI coding assistants waste 90–99% of their context window reading unrelated files. RepoScope's graph-ranked topological pruning reduces context payloads by up to **99.8%**:
+Traditional AI coding assistants waste 90-99% of their context window reading unrelated files. RepoScope's graph-ranked topological pruning reduces context payloads by up to **99.8%**:
 
 | Repository | Total Files | Graph Nodes | Raw Context | RepoScope Map | Token Reduction |
 |---|---:|---:|---:|---:|---:|
@@ -218,7 +204,7 @@ Traditional AI coding assistants waste 90–99% of their context window reading 
 
 ## Visual Feature Gallery
 
-The following visual gallery showcases key surfaces of RepoScope v2.8.0, captured across our Playwright validation battery at **2x Retina resolution** (`deviceScaleFactor: 2`) with strict component-focused framing. For the complete high-resolution visual index, see [`docs/SHOTS_GALLERY.md`](docs/SHOTS_GALLERY.md).
+The following gallery showcases all **14 component-focused visual verification assets** of RepoScope v2.8.0, captured across our Playwright validation battery at **2x Retina resolution** (`deviceScaleFactor: 2`). For the complete catalog, see [`docs/SHOTS_GALLERY.md`](docs/SHOTS_GALLERY.md).
 
 ### 1. Interactive Architecture Graph Canvas
 Dynamic visualizer rendering symbol-level nodes, import edges, architectural layer categorizations (Client/UI, Backend/API, Storage/Data, External/Integrations, Compute/Workers), and a real-time React Flow mini-map.
@@ -278,7 +264,7 @@ Contextual action buttons embedded directly into the conversational assistant st
 ### 12. Executable Clean Architecture Scaffolder
 Scaffolds standard production architectures (Clean Architecture, Ports & Adapters, Modular Monolith) with live file tree inspection, boilerplate code preview, and CLI execution commands.
 
-![Scaffolder Modal](docs/screenshots/v2/gallery/scaffold_modal_code.png)
+![Scaffold Modal](docs/screenshots/v2/gallery/scaffold_modal_code.png)
 
 ### 13. Four-Mode Reverse Prompt Compiler (Feature Slice)
 Compiles repository subgraphs into 4 deterministic prompting modalities (`context`, `rebuild`, `spec`, and `feature`) for AI coding agents. Slices deterministic 2-Hop Interface Closures with contract tables and token budget estimation.
@@ -292,15 +278,134 @@ Collapsible D3 hierarchy providing dynamic Left-to-Right and Top-to-Bottom struc
 
 ---
 
+## Quick Start Guide
+
+### Option 1: Local Mode CLI (Zero-Upload & 100% Offline)
+
+```bash
+# Clone and install in editable mode
+git clone https://github.com/adityapatel5912/RepoScope.git
+cd RepoScope
+pip install -e .
+
+# Launch RepoScope on any repository
+cd /path/to/target/repo
+reposcope run .
+```
+
+Open [http://127.0.0.1:4100](http://127.0.0.1:4100). The CLI starts the live file watcher, builds the graph index, and serves the UI. Edit any file in your editor, and the graph updates live without refreshing.
+
+Other CLI commands:
+```bash
+reposcope index .                 # write the index, do not start a server
+reposcope index . --format sqlite # alternate store format
+reposcope mcp .                   # serve the index over MCP (stdio)
+reposcope security .              # terminal security audit
+reposcope security . --sarif      # export OASIS SARIF 2.1.0 to stdout
+```
+
+### Option 2: Full-Stack Development (GitHub Loading, Chat, PR Bot)
+
+```bash
+git clone https://github.com/adityapatel5912/RepoScope.git
+cd RepoScope
+cp .env.example .env
+# Add at least one LLM key to .env.
+
+pip install -e ".[dev]"
+
+# Terminal 1: Backend
+cd backend
+uvicorn main:app --reload --port 8000
+
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+### Option 3: Model Context Protocol (MCP) Server
+
+Connect RepoScope's code graph directly to Claude Desktop, Cursor, or OpenCode:
+
+```bash
+# Via Python runtime
+reposcope-mcp --root /path/to/target/repo
+
+# Or zero-install Node runner
+npx reposcope-mcp --root /path/to/target/repo
+
+# Streamable HTTP instead of stdio
+reposcope-mcp --root /path/to/target/repo --http --port 8765
+```
+
+**Claude Desktop Configuration (`claude_desktop_config.json`):**
+```json
+{
+  "mcpServers": {
+    "reposcope": {
+      "command": "npx",
+      "args": ["reposcope-mcp", "--root", "/absolute/path/to/repo"]
+    }
+  }
+}
+```
+
+### Option 4: VS Code / Cursor Extension
+
+Install the packaged VSIX extension artifact directly into VS Code or Cursor:
+```bash
+code --install-extension extensions/vscode/reposcope-2.8.0.vsix
+# or for Cursor:
+cursor --install-extension extensions/vscode/reposcope-2.8.0.vsix
+```
+
+Provides live CodeLens caller counts, status bar blast radius risk gauges, and an in-editor mini-map connected to your local RepoScope daemon.
+
+---
+
+## Configuration & Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `OPENROUTER_API_KEYS` | Yes* | Primary LLM; comma-separate for rotation |
+| `GROQ_API_KEYS` | Yes* | Secondary LLM; comma-separate |
+| `NVIDIA_API_KEYS` | Fallback | Tertiary LLM; comma-separate |
+| `Models_OPENROUTER` / `Models_GROQ` / `Models_NVIDIA` | No | Model overrides |
+| `Base_URL_OPENROUTER` / `Base_URL_GROQ` / `Base_URL_NVIDIA` | No | OpenAI-compatible endpoints |
+| `GITHUB_TOKENS` | Optional | Raises GitHub API limits; comma-separate |
+| `OVSX_TOKEN` | Publish only | Open VSX publisher token; keep in gitignored `.env` |
+
+\* At least one provider key is required for LLM-backed features (chat, tours, narrative). The graph visualizer, local mode, CLI, security engine, and MCP server run 100% offline without any keys.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 18, Vite 6, TypeScript (strict), React Flow, D3.js, Tailwind CSS, Lucide |
+| **Backend** | Python 3.11+, FastAPI 0.115, SSE, httpx, GitPython, NetworkX, Uvicorn |
+| **Parsing** | Tree-sitter: Python, TypeScript, TSX, JavaScript, Go, Rust |
+| **Graph Algorithms** | PageRank centrality, Tarjan SCC cycles, Kahn DAG topological sort, reverse-BFS blast radius |
+| **LLM & Voice** | OpenRouter → Groq → NVIDIA NIM rotation, Web Speech API, ElevenLabs TTS |
+| **MCP** | Official Python MCP SDK, stdio + Streamable HTTP transport |
+| **Extension** | VS Code Extension API, WebviewViewProvider, CodeLens, status bar |
+| **Deployment** | Render (API), Vercel (frontend), Open VSX (extension) |
+
+---
+
 ## Documentation Index
 
 | Document | Purpose |
 |---|---|
 | [**Hackathon Submission**](docs/HACKATHON_SUBMISSION.md) | Devpost submission story (Inspiration, What it does, How we built it, Challenges, Roadmap). |
-| [**Architectural Walkthrough**](docs/WALKTHROUGH_V2.7_V2.8.md) | Comprehensive master walkthrough covering all V2.7 and V2.8 milestones (Phases 5–14A). |
-| [**Visual Verification Gallery**](docs/SHOTS_GALLERY.md) | Catalog of all 32 high-resolution UI and feature screenshots. |
+| [**Architectural Walkthrough**](docs/WALKTHROUGH_V2.7_V2.8.md) | Comprehensive master walkthrough covering all V2.7 and V2.8 milestones (Phases 5-14A). |
+| [**Visual Verification Gallery**](docs/SHOTS_GALLERY.md) | Catalog of all 14 high-resolution 2x Retina UI and feature screenshots. |
 | [**API Specification**](docs/API.md) | Complete OpenAPI / FastAPI endpoint contracts, schemas, and payloads. |
-| [**MCP Documentation**](docs/MCP.md) | Reference for all 13 Model Context Protocol tools and 8 resources. |
+| [**MCP Documentation**](docs/MCP.md) | Reference for Model Context Protocol tools and resources. |
 | [**Architecture Guide**](docs/ARCHITECTURE.md) | Deep dive into parsers, graph builder, memory layouts, and event streams. |
 | [**Contributing Guide**](CONTRIBUTING.md) | Local environment setup, test instructions, and contribution workflow. |
 | [**Code of Conduct**](CODE_OF_CONDUCT.md) | Community pledge, standards, and reporting guidelines. |
@@ -310,3 +415,13 @@ Collapsible D3 hierarchy providing dynamic Left-to-Right and Top-to-Bottom struc
 ## License
 
 RepoScope is **source-available**, not OSI Open Source. You may read, run, modify, and use it in your own projects, including internal business projects. You may not republish, distribute, sublicense, sell, or otherwise commercially exploit RepoScope or a modified version without prior written permission from the copyright holder. See [LICENSE](LICENSE) for complete terms.
+
+Earlier releases were published under MIT, and those grants cannot be revoked. That includes the currently published Open VSX extension **2.0.1** and the existing `reposcope-2.0.1.vsix`, which predate this license change.
+
+---
+
+## Acknowledgments
+
+- Graph visual aesthetic inspired by **GitDiagram**.
+- Reverse-prompt compilation idea inspired by **GitReverse**.
+- Repository tree parsing format inspired by **Gitingest**.

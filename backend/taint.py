@@ -108,11 +108,24 @@ class Flow:
     severity: str
     message: str
     via: list[str] = field(default_factory=list)
+    source_file: str = ""
+    sink_file: str = ""
+    propagators: list[dict] = field(default_factory=list)
+    engine: str = "cross_file_taint"
+    cwe: str = "CWE-20"
 
     def to_flag(self) -> dict:
         """The shape `/api/security/scan` already knows how to render."""
+        src_file = self.source_file or self.file
+        snk_file = self.sink_file or self.file
+        props = self.propagators or [
+            {"file": self.file, "line": self.source_line, "symbol": v, "via": v}
+            for v in self.via
+        ]
         return {
             "type": "TAINT",
+            "engine": self.engine,
+            "cwe": self.cwe,
             "severity": self.severity,
             "file": self.file,
             "line": self.sink_line,
@@ -123,8 +136,35 @@ class Flow:
             ),
             "source": self.source,
             "source_line": self.source_line,
+            "source_file": src_file,
+            "sink": self.sink,
+            "sink_line": self.sink_line,
+            "sink_file": snk_file,
             "via": self.via,
+            "propagators": props,
+            "trace": {
+                "source_file": src_file,
+                "source_line": self.source_line,
+                "source_label": self.source,
+                "propagators": props,
+                "sink_file": snk_file,
+                "sink_line": self.sink_line,
+                "sink_label": self.sink,
+            },
+            "patch_available": True,
         }
+
+
+@dataclass
+class FuncSummary:
+    file: str
+    name: str
+    line: int
+    params: list[str]
+    param_sinks: dict[int, tuple[str, int]] = field(default_factory=dict)
+    param_returns: set[int] = field(default_factory=set)
+    ambient_return: Taint | None = None
+
 
 
 def _matches(dotted: str, prefix: str) -> bool:
@@ -236,12 +276,14 @@ class _PyAnalyzer:
         funcs: dict[str, _PyFunc],
         seen: set[tuple],
         param_sources: dict[str, dict[int, Taint]],
+        external_funcs: dict[str, FuncSummary] | None = None,
     ):
         self.rel = rel
         self.flows = flows
         self.funcs = funcs
         self.seen = seen
         self.param_sources = param_sources
+        self.external_funcs = external_funcs or {}
         self.tainted: dict[str, Taint] = {}
         self.return_taint: Taint | None = None
         self.calls: list[tuple[str, list[Taint], int]] = []
@@ -391,6 +433,54 @@ class _PyAnalyzer:
                 return callee.return_taint
             return None
 
+        # Cross-file taint propagation across modules
+        ext_callee = (
+            self.external_funcs.get(dotted) or self.external_funcs.get(last)
+            if self.external_funcs
+            else None
+        )
+        if ext_callee is not None and ext_callee.file != self.rel:
+            for idx, arg in enumerate(args):
+                arg_t = self.expr(arg)
+                if arg_t and idx in ext_callee.param_sinks:
+                    sink_name, sink_line = ext_callee.param_sinks[idx]
+                    sev = _severity_for_sink(sink_name)
+                    param_name = (
+                        ext_callee.params[idx]
+                        if idx < len(ext_callee.params)
+                        else f"arg{idx}"
+                    )
+                    prop_trace = [
+                        {"file": self.rel, "line": node.lineno, "symbol": ext_callee.name, "via": param_name},
+                        {"file": ext_callee.file, "line": ext_callee.line, "symbol": ext_callee.name, "via": param_name},
+                    ]
+                    key = (self.rel, arg_t.label, arg_t.line, sink_name, sink_line)
+                    if key not in self.seen:
+                        self.seen.add(key)
+                        self.flows.append(Flow(
+                            file=self.rel,
+                            source=arg_t.label,
+                            source_line=arg_t.line,
+                            sink=sink_name,
+                            sink_line=sink_line,
+                            severity=sev,
+                            message=(
+                                f"{arg_t.label} in {self.rel}:{arg_t.line} propagates cross-file into "
+                                f"sink {sink_name}() in {ext_callee.file}:{sink_line} via {ext_callee.name}()"
+                            ),
+                            via=[*arg_t.via, ext_callee.name],
+                            source_file=self.rel,
+                            sink_file=ext_callee.file,
+                            propagators=prop_trace,
+                            engine="cross_file_taint",
+                        ))
+            for idx, arg in enumerate(args):
+                arg_t = self.expr(arg)
+                if arg_t and idx in ext_callee.param_returns:
+                    return Taint(arg_t.label, arg_t.line, (*arg_t.via, ext_callee.name))
+            if ext_callee.ambient_return is not None:
+                return ext_callee.ambient_return
+
         # An unknown call that receives tainted data returns tainted data.
         # This is the conservative choice: a wrapper must not silently
         # launder taint just because it lives in another file.
@@ -494,7 +584,49 @@ class _PyAnalyzer:
                 self.tainted[name] = Taint(taint.label, taint.line, (*taint.via, name))
 
 
-def analyze_python(source: str, rel: str) -> list[Flow]:
+def summarize_py_source(source: str, rel: str) -> dict[str, FuncSummary]:
+    """Extract inter-procedural summaries for functions in a Python source file."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return {}
+    summaries: dict[str, FuncSummary] = {}
+    candidates = [
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for node in candidates:
+        params = _py_params(node)
+        summary = FuncSummary(file=rel, name=node.name, line=node.lineno, params=params)
+        for idx, p in enumerate(params):
+            test_flows: list[Flow] = []
+            test_analyzer = _PyAnalyzer(rel, test_flows, {}, set(), {})
+            test_analyzer.tainted = {p: Taint(f"param:{idx}", node.lineno, (p,))}
+            test_analyzer.block(node.body)
+            for f in test_flows:
+                if f.source == f"param:{idx}":
+                    summary.param_sinks[idx] = (f.sink, f.sink_line)
+            if test_analyzer.return_taint and test_analyzer.return_taint.label == f"param:{idx}":
+                summary.param_returns.add(idx)
+
+        ambient_flows: list[Flow] = []
+        ambient_analyzer = _PyAnalyzer(rel, ambient_flows, {}, set(), {})
+        ambient_analyzer.block(node.body)
+        if ambient_analyzer.return_taint and not ambient_analyzer.return_taint.label.startswith("param:"):
+            summary.ambient_return = ambient_analyzer.return_taint
+
+        summaries[node.name] = summary
+        mod_prefix = Path(rel).stem
+        summaries[f"{mod_prefix}.{node.name}"] = summary
+
+    return summaries
+
+
+def analyze_python(
+    source: str,
+    rel: str,
+    external_funcs: dict[str, FuncSummary] | None = None,
+) -> list[Flow]:
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError):
@@ -520,11 +652,12 @@ def analyze_python(source: str, rel: str) -> list[Flow]:
     param_sources: dict[str, dict[int, Taint]] = {name: {} for name in funcs}
 
     # Three passes: sources in callees, then return summaries, then callers
-    # that consume those summaries. Three is enough for any intra-file
-    # call chain this lightweight engine claims to follow.
+    # that consume those summaries.
     for _ in range(3):
         for name, func in funcs.items():
-            analyzer = _PyAnalyzer(rel, flows, funcs, seen, param_sources)
+            analyzer = _PyAnalyzer(
+                rel, flows, funcs, seen, param_sources, external_funcs=external_funcs
+            )
             analyzer.tainted = {
                 func.params[index]: taint
                 for index, taint in param_sources.get(name, {}).items()
@@ -540,7 +673,9 @@ def analyze_python(source: str, rel: str) -> list[Flow]:
                     if index < len(callee.params):
                         param_sources[callee_name].setdefault(index, taint)
 
-        module_analyzer = _PyAnalyzer(rel, flows, funcs, seen, param_sources)
+        module_analyzer = _PyAnalyzer(
+            rel, flows, funcs, seen, param_sources, external_funcs=external_funcs
+        )
         module_analyzer.block(tree.body)
 
     return flows
@@ -983,13 +1118,17 @@ def analyze_javascript(source: bytes, rel: str) -> list[Flow]:
 
 # ── Repository scan ────────────────────────────────────────────────────────
 
-def analyze_source(source: str | bytes, rel: str) -> list[Flow]:
+def analyze_source(
+    source: str | bytes,
+    rel: str,
+    external_funcs: dict[str, FuncSummary] | None = None,
+) -> list[Flow]:
     """Analyze one file's contents. Unknown languages return []."""
     suffix = Path(rel).suffix.lower()
     try:
         if suffix == ".py":
             text = source.decode("utf-8", "replace") if isinstance(source, bytes) else source
-            return analyze_python(text, rel)
+            return analyze_python(text, rel, external_funcs=external_funcs)
         if suffix in {".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"}:
             data = source.encode("utf-8") if isinstance(source, str) else source
             return analyze_javascript(data, rel)
@@ -1002,13 +1141,18 @@ def scan_repository(root: str | Path) -> list[dict]:
     """
     Scan a repository tree and return taint flags, highest severity first.
 
-    Bounded in both files and bytes so a security scan cannot become a
-    denial-of-service on a huge monorepo.
+    Engine 1: Cross-file taint propagation.
+    Performs two-pass analysis: first gathers function summaries across modules,
+    then executes cross-file taint flow tracking into critical execution sinks.
     """
     root_path = Path(root)
     flags: list[dict] = []
     seen: set[tuple] = set()
     files = 0
+
+    # Pass 1: Gather file sources and function summaries for cross-file linkage
+    file_sources: list[tuple[str, bytes]] = []
+    global_summaries: dict[str, FuncSummary] = {}
 
     for path in root_path.rglob("*"):
         if files >= MAX_FILES:
@@ -1027,7 +1171,14 @@ def scan_repository(root: str | Path) -> list[dict]:
         except OSError:
             continue
         files += 1
-        for flow in analyze_source(source, rel):
+        file_sources.append((rel, source))
+        if path.suffix.lower() == ".py":
+            text = source.decode("utf-8", "replace")
+            global_summaries.update(summarize_py_source(text, rel))
+
+    # Pass 2: Analyze each file with cross-file context
+    for rel, source in file_sources:
+        for flow in analyze_source(source, rel, external_funcs=global_summaries):
             key = (flow.file, flow.source_line, flow.sink, flow.sink_line)
             if key in seen:
                 continue

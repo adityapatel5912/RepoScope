@@ -21,7 +21,7 @@ from typing import Optional
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ai_byok import PROVIDERS, resolve_provider
 from byok_manager import get_user_token, set_user_token
@@ -46,8 +46,10 @@ from reverse_prompt_compiler import ReversePromptCompiler
 from scaffolder import Scaffolder
 from runtime_config import ask_llm
 from security_scanner import (
-    check_dependency_cves, detect_breaking_commit, scan_pr_patch, scan_repo_files,
+    check_dependency_cves, detect_breaking_commit, generate_security_patch,
+    scan_pr_patch, scan_repo_files,
 )
+from sarif import flags_to_sarif
 from taint import scan_repository as scan_taint
 from tour_generator import build_tour
 from tts_service import synthesize
@@ -1312,12 +1314,26 @@ async def security_scan(
     unique.sort(key=lambda f: (_SEVERITY_ORDER.get(f["severity"], 9), f["type"], f["file"]))
 
     summary = {
-        "SECRET": sum(1 for f in unique if f["type"] == "SECRET"),
-        "BREAKING": sum(1 for f in unique if f["type"] == "BREAKING"),
-        "CVE": sum(1 for f in unique if f["type"] == "CVE"),
-        "TAINT": sum(1 for f in unique if f["type"] == "TAINT"),
-        "critical": sum(1 for f in unique if f["severity"] == "critical"),
-        "high": sum(1 for f in unique if f["severity"] == "high"),
+        "by_engine": {
+            "cross_file_taint": sum(1 for f in unique if f.get("engine") == "cross_file_taint" or f.get("type") == "TAINT"),
+            "secrets_entropy": sum(1 for f in unique if f.get("engine") == "secrets_entropy" or f.get("type") == "SECRET"),
+            "dependency_cve": sum(1 for f in unique if f.get("engine") == "dependency_cve" or f.get("type") == "CVE"),
+            "injection_sinks": sum(1 for f in unique if f.get("engine") == "injection_sinks" or f.get("type") == "INJECTION"),
+            "insecure_config": sum(1 for f in unique if f.get("engine") == "insecure_config" or f.get("type") == "CONFIG"),
+            "auth_bypass": sum(1 for f in unique if f.get("engine") == "auth_bypass" or f.get("type") == "AUTH_BYPASS"),
+            "breaking": sum(1 for f in unique if f.get("engine") == "breaking" or f.get("type") == "BREAKING"),
+        },
+        "SECRET": sum(1 for f in unique if f.get("type") == "SECRET"),
+        "BREAKING": sum(1 for f in unique if f.get("type") == "BREAKING"),
+        "CVE": sum(1 for f in unique if f.get("type") == "CVE"),
+        "TAINT": sum(1 for f in unique if f.get("type") == "TAINT"),
+        "INJECTION": sum(1 for f in unique if f.get("engine") == "injection_sinks" or f.get("type") == "INJECTION"),
+        "CONFIG": sum(1 for f in unique if f.get("engine") == "insecure_config" or f.get("type") == "CONFIG"),
+        "AUTH_BYPASS": sum(1 for f in unique if f.get("engine") == "auth_bypass" or f.get("type") == "AUTH_BYPASS"),
+        "critical": sum(1 for f in unique if f.get("severity") == "critical"),
+        "high": sum(1 for f in unique if f.get("severity") == "high"),
+        "medium": sum(1 for f in unique if f.get("severity") == "medium"),
+        "low": sum(1 for f in unique if f.get("severity") == "low"),
     }
 
     log.info("[%s] security/scan OK flags=%d", req_id, len(unique))
@@ -1330,6 +1346,67 @@ async def security_scan(
         "total_flags": len(unique),
         "summary": summary,
     }
+
+
+class SecurityPatchReq(BaseModel):
+    file: str
+    line: int = 1
+    engine: str = "injection_sinks"
+    detail: str = ""
+    type: Optional[str] = None
+    source: Optional[str] = None
+
+
+@app.post("/api/security/patch")
+async def security_patch_endpoint(req: SecurityPatchReq):
+    """Generate non-destructive suggested unified diff remediation patch."""
+    state = load_state()
+    local_path = state.get("local_path")
+    res = generate_security_patch(
+        file=req.file,
+        line=req.line,
+        engine=req.engine or (req.type or "injection_sinks"),
+        detail=req.detail,
+        source=req.source,
+        repo_root=local_path,
+    )
+    return res
+
+
+@app.get("/api/security/sarif")
+async def security_sarif_export_get():
+    """Export compliant OASIS SARIF 2.1.0 document for the current repository scan."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repository loaded.")
+    flags = await asyncio.to_thread(scan_repo_files, local_path)
+    try:
+        taint_flags = await asyncio.to_thread(scan_taint, local_path)
+        flags.extend(taint_flags)
+    except Exception:
+        pass
+    sarif_doc = flags_to_sarif(flags)
+    return JSONResponse(
+        content=sarif_doc,
+        media_type="application/sarif+json",
+        headers={"Content-Disposition": 'attachment; filename="reposcope-security.sarif"'},
+    )
+
+
+class SarifExportReq(BaseModel):
+    flags: list[dict] = Field(default_factory=list)
+
+
+@app.post("/api/security/sarif")
+async def security_sarif_export_post(req: SarifExportReq):
+    """Format finding dictionaries into compliant OASIS SARIF 2.1.0 document."""
+    sarif_doc = flags_to_sarif(req.flags)
+    return JSONResponse(
+        content=sarif_doc,
+        media_type="application/sarif+json",
+        headers={"Content-Disposition": 'attachment; filename="reposcope-security.sarif"'},
+    )
 
 
 @app.post("/api/security/taint")

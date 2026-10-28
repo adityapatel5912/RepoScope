@@ -153,6 +153,43 @@ async function postJson<T>(
   return data as T;
 }
 
+async function getJson<T>(
+  path: string,
+  validate: (d: unknown) => boolean,
+  timeoutMs = JSON_TIMEOUT_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let r: Response;
+  try {
+    r = await fetch(path, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Session-Id": SESSION_ID,
+        ...aiHeaders(),
+      },
+      signal: controller.signal,
+    });
+  } catch (e: unknown) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: apiErrorHint(r) }));
+    throw new Error(err.detail ?? apiErrorHint(r));
+  }
+  const data: unknown = await r.json();
+  if (!validate(data)) {
+    throw new Error("Unexpected response from server");
+  }
+  return data as T;
+}
+
 export function generateTour(optsOrTopic: string | TourOptions): Promise<Tour> {
   const body = typeof optsOrTopic === "string" ? { topic: optsOrTopic } : optsOrTopic;
   return postJson("/api/tour/generate", body, isTour, LLM_TIMEOUT_MS);
@@ -550,28 +587,67 @@ export async function getIncidents(limit = 50): Promise<IncidentTimeline> {
 
 // ── Security Scan (Breaking Change + Secret + CVE) ────────────────────────
 
+export interface SecurityTracePropagator {
+  file: string;
+  line: number;
+  symbol: string;
+  via: string;
+}
+
+export interface SecurityTrace {
+  source_file: string;
+  source_line: number;
+  source_label: string;
+  propagators: SecurityTracePropagator[];
+  sink_file: string;
+  sink_line: number;
+  sink_label: string;
+}
+
 export interface SecurityFlag {
-  type: "SECRET" | "BREAKING" | "CVE";
+  type: "SECRET" | "BREAKING" | "CVE" | "TAINT" | "INJECTION" | "CONFIG" | "AUTH_BYPASS" | string;
   severity: "critical" | "high" | "medium" | "low";
   file: string;
   line: number;
   detail: string;
   suggestion: string;
+  engine?: "cross_file_taint" | "secrets_entropy" | "dependency_cve" | "injection_sinks" | "insecure_config" | "auth_bypass" | "breaking" | string;
+  cwe?: string;
+  trace?: SecurityTrace;
+  patch_available?: boolean;
 }
 
 export interface SecurityScan {
   ok?: boolean;
   repo: string | null;
-  scanned: { repo_files: boolean; pr: number | null; commits: number };
+  scanned: { repo_files: boolean; pr: number | null; commits: number; taint_flows?: number };
   flags: SecurityFlag[];
   total_flags: number;
   summary: {
+    by_engine?: Record<string, number>;
     SECRET: number;
     BREAKING: number;
     CVE: number;
+    TAINT?: number;
+    INJECTION?: number;
+    CONFIG?: number;
+    AUTH_BYPASS?: number;
     critical: number;
     high: number;
+    medium?: number;
+    low?: number;
   };
+}
+
+export interface SecurityPatch {
+  ok: boolean;
+  file: string;
+  line: number;
+  engine: string;
+  diff: string;
+  syntax_valid: boolean;
+  explanation: string;
+  error?: string;
 }
 
 function isSecurityScan(d: unknown): d is SecurityScan {
@@ -587,6 +663,28 @@ function isSecurityScan(d: unknown): d is SecurityScan {
 export function securityScan(): Promise<SecurityScan> {
   return postJson("/api/security/scan", {}, isSecurityScan, 120_000);
 }
+
+export function fetchSecurityPatch(req: {
+  file: string;
+  line: number;
+  engine?: string;
+  detail: string;
+  type?: string;
+}): Promise<SecurityPatch> {
+  return postJson(
+    "/api/security/patch",
+    req,
+    (d): d is SecurityPatch => typeof d === "object" && d !== null && "ok" in d,
+  );
+}
+
+export function fetchSecuritySarif(): Promise<Record<string, unknown>> {
+  return getJson(
+    "/api/security/sarif",
+    (d: unknown): d is Record<string, unknown> => typeof d === "object" && d !== null && "$schema" in d,
+  );
+}
+
 
 // ── Voice Code Tours (server TTS via OpenRouter audio models) ─────────────
 

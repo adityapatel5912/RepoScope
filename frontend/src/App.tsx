@@ -385,7 +385,13 @@ export default function App() {
       toast.success("Switched to Repository Metrics & Churn");
     } else if (act.kind === "security") {
       setMode("incident");
-      toast.success("Switched to Security & Incident Triage");
+      if ((act as any).action === "sarif") {
+        window.dispatchEvent(new CustomEvent("reposcope:export-sarif"));
+        toast.success("Exporting OASIS SARIF 2.1.0 Report");
+      } else {
+        window.dispatchEvent(new CustomEvent("reposcope:open-security-tab"));
+        toast.success("Switched to 6-Engine Security Suite");
+      }
     } else if (act.kind === "scaffold") {
       window.dispatchEvent(new CustomEvent("reposcope:open-scaffold"));
     } else if (act.kind === "reverse_prompt") {

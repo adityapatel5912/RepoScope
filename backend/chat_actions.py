@@ -96,12 +96,20 @@ def detect_chat_actions(
         })
 
     # 5. Security & Taint Scan intent
-    if any(k in msg for k in ("security", "vulnerability", "cve", "taint", "injection", "secret", "audit", "cwe")):
+    if any(k in msg for k in ("security", "vulnerability", "cve", "taint", "injection", "secret", "audit", "cwe", "sarif")):
         actions.append({
             "kind": "security",
-            "title": "Run 6-Engine Security Suite",
-            "description": "Scan for cross-file taint, hardcoded secrets, injection sinks & offline CVEs.",
+            "action": "scan",
+            "title": "Open Security Audit Dashboard",
+            "description": "Inspect 6-engine findings: cross-file taint, high-entropy secrets, injection sinks & offline CVEs.",
             "icon": "shield-alert",
+        })
+        actions.append({
+            "kind": "security",
+            "action": "sarif",
+            "title": "Download SARIF 2.1.0 Report",
+            "description": "Export OASIS SARIF report for GitHub Code Scanning and security pipelines.",
+            "icon": "file-text",
         })
 
     # 6. Scaffold & Starter Kit intent

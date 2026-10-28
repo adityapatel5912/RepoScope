@@ -395,6 +395,101 @@ export function verifyChallenge(
   );
 }
 
+// ── Metrics, Hotspots, Bus Factor & Time Machine ────────────────────────────
+
+export interface HotspotFile {
+  path: string;
+  commits: number;
+  lines_added: number;
+  lines_deleted: number;
+  churn_score: number;
+  complexity: number;
+  hotspot_score: number;
+  primary_author: string;
+  author_share: number;
+  bus_factor_risk: boolean;
+  risk_level: "critical" | "high" | "medium" | "low";
+  quadrant: "critical" | "debt" | "active" | "stable";
+}
+
+export interface HotspotsReport {
+  ok: boolean;
+  total_files: number;
+  high_risk_hotspots: HotspotFile[];
+  bus_factor_warnings: HotspotFile[];
+  quadrant_summary: {
+    critical: number;
+    debt: number;
+    active: number;
+    stable: number;
+  };
+  files: HotspotFile[];
+}
+
+export interface CompareResult {
+  ok: boolean;
+  ref_a: string;
+  ref_b: string;
+  added_files: string[];
+  removed_files: string[];
+  modified_files: string[];
+  summary: string;
+  architectural_drift: string[];
+}
+
+export interface IncidentRecord {
+  id: string;
+  timestamp: string;
+  event_type: string;
+  category: string;
+  severity: "critical" | "high" | "medium" | "low";
+  triage: string;
+  details: Record<string, unknown>;
+}
+
+export interface IncidentTimeline {
+  ok: boolean;
+  total: number;
+  incidents: IncidentRecord[];
+}
+
+export async function getHotspots(limit = 100): Promise<HotspotsReport> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JSON_TIMEOUT_MS);
+  return fetch(`/api/metrics/hotspots?limit=${limit}`, { signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+    .then(async (r) => {
+      if (!r.ok) throw new Error("Failed to load hotspots metrics");
+      return r.json();
+    });
+}
+
+export async function compareRefs(refA = "HEAD~10", refB = "HEAD"): Promise<CompareResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JSON_TIMEOUT_MS);
+  return fetch(
+    `/api/metrics/compare?ref_a=${encodeURIComponent(refA)}&ref_b=${encodeURIComponent(refB)}`,
+    { signal: controller.signal },
+  )
+    .finally(() => clearTimeout(timer))
+    .then(async (r) => {
+      if (!r.ok) throw new Error("Failed to compare revisions");
+      return r.json();
+    });
+}
+
+export async function getIncidents(limit = 50): Promise<IncidentTimeline> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JSON_TIMEOUT_MS);
+  return fetch(`/api/tracking/incidents?limit=${limit}`, { signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+    .then(async (r) => {
+      if (!r.ok) throw new Error("Failed to load incident timeline");
+      return r.json();
+    });
+}
+
+
 // ── Security Scan (Breaking Change + Secret + CVE) ────────────────────────
 
 export interface SecurityFlag {

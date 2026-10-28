@@ -102,20 +102,11 @@ export default function SecurityPanel({ trackingData, repo }: Props) {
         ))}
       </div>
 
-      {/* ── Tracking tab (existing feature, wrapped) ── */}
+      {/* ── Tracking tab (Hotspots, Time Machine, Incidents & Feed) ── */}
       {tab === "tracking" && (
-        trackingData ? (
-          // Cancel the card padding so TrackingPanel keeps its native
-          // edge-to-edge look with the bottom border.
-          <div className="-mx-4 -my-4">
-            <TrackingPanel data={trackingData} />
-          </div>
-        ) : (
-          <p className="text-[11px] text-text-muted leading-relaxed m-0">
-            Switch the mode above to <span className="font-semibold">Track</span> and
-            ask a question — new commits, PRs, issues, and releases appear here.
-          </p>
-        )
+        <div className="-mx-4 -my-4">
+          <TrackingPanel data={trackingData as any} />
+        </div>
       )}
 
       {/* ── Security tab ── */}

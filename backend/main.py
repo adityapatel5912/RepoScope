@@ -38,9 +38,10 @@ from onboarding import (
     build_topological_curriculum,
     verify_curriculum_challenge,
 )
+from git_history import compute_hotspots, compare_refs, collect_churn
 from pr_impact import build_pr_impact, fetch_pr, post_pr_comment
 from repo_loader import load_repo
-from repo_tracker import diff_changes, load_state, mark_checked
+from repo_tracker import diff_changes, load_state, mark_checked, get_incidents, record_incident
 from reverse_prompt_compiler import ReversePromptCompiler
 from scaffolder import Scaffolder
 from runtime_config import ask_llm
@@ -1156,6 +1157,35 @@ async def verify_onboard_challenge(req: ChallengeVerifyReq):
         raise HTTPException(400, "Graph is empty — reload the repository.")
     curriculum = await asyncio.to_thread(build_topological_curriculum, graph)
     return verify_curriculum_challenge(curriculum, req.tier, req.challenge_id, req.answer)
+
+
+@app.get("/api/metrics/hotspots")
+async def metrics_hotspots(limit: int = 100):
+    """Bounded churn, AST complexity, hotspot quadrant classification, and bus factor risks."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    report = await asyncio.to_thread(compute_hotspots, local_path, limit)
+    return report
+
+
+@app.get("/api/metrics/compare")
+async def metrics_compare(ref_a: str = "HEAD~10", ref_b: str = "HEAD"):
+    """Time Machine: compare two commits/branches for file diffs and architectural drift."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    diff = await asyncio.to_thread(compare_refs, local_path, ref_a, ref_b)
+    return diff
+
+
+@app.get("/api/tracking/incidents")
+async def tracking_incidents(limit: int = 50):
+    """Retrieve structured incident triage timeline."""
+    incidents = get_incidents(limit)
+    return {"ok": True, "total": len(incidents), "incidents": incidents}
 
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}

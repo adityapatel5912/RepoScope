@@ -9,6 +9,14 @@ on a separate marketplace.
 
 ### Added
 
+- **Churn, hotspots, bus factor, time machine & incident triage polish (Phase 10, V2.7).**
+  Comprehensive repository risk analysis combining bounded git analytics with AST branch complexity:
+  - Hotspot scoring: computes $H = \log_{10}(\text{churn} + 1) \times \text{complexity}$ across repository files with quadrant classification (Critical, Debt, Active, Stable).
+  - Bus factor analysis: identifies single-point-of-failure vulnerabilities when a single author accounts for $\ge 80\%$ of commits on multi-commit modules.
+  - Historical Time Machine: `GET /api/metrics/compare` analyzes diffs between commits/refs, reporting additions, deletions, modified files, and architectural drift callouts.
+  - Incident triage timeline: structured event tracking and root cause classification (`GET /api/tracking/incidents`) with severity-graded triage recommendations.
+  - Interactive TrackingPanel with mode switcher, quadrant summary cards, compare controls, and incident triage feed.
+
 - **Topological student onboarding curriculum and graph-graded challenges (Phase 9, V2.7).**
   Deterministic 4-tier onboarding curriculum derived from Tarjan's Strongly Connected Components (SCC)
   condensation and topological DAG layering:

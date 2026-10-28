@@ -77,3 +77,64 @@ def diff_changes(gh: dict, state: dict) -> dict:
         "issues":      gh.get("issues", []),
         "releases":    gh.get("releases", []),
     }
+
+
+def classify_incident_event(event_type: str, details: dict) -> dict:
+    """Classifies an incident event and computes severity and triage suggestion."""
+    ev = event_type.lower()
+    if "breaking" in ev or "api_break" in ev:
+        return {
+            "category": "breaking_change",
+            "severity": "high",
+            "triage": "Verify client consumer contracts and run API integration tests.",
+        }
+    elif "security" in ev or "vulnerability" in ev or "cve" in ev:
+        return {
+            "category": "security_vulnerability",
+            "severity": "critical",
+            "triage": "Isolate affected sink, patch vulnerable dependency, or sanitize input.",
+        }
+    elif "build" in ev or "syntax" in ev:
+        return {
+            "category": "build_failure",
+            "severity": "high",
+            "triage": "Check compileall or TypeScript compilation error output.",
+        }
+    elif "test" in ev or "regression" in ev:
+        return {
+            "category": "test_regression",
+            "severity": "medium",
+            "triage": "Identify failing assertion in recent commit diff.",
+        }
+    else:
+        return {
+            "category": "operational",
+            "severity": "low",
+            "triage": "Review telemetry and commit audit log.",
+        }
+
+
+def record_incident(event_type: str, details: dict) -> dict:
+    """Record an incident into the persistent repo state incident triage timeline."""
+    s = load_state()
+    incidents = s.get("incident_timeline", [])
+    classification = classify_incident_event(event_type, details)
+    record = {
+        "id": f"inc-{len(incidents) + 1}",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event_type": event_type,
+        "category": classification["category"],
+        "severity": classification["severity"],
+        "triage": classification["triage"],
+        "details": details,
+    }
+    incidents.insert(0, record)
+    s["incident_timeline"] = incidents[:100]
+    save_state(s)
+    return record
+
+
+def get_incidents(limit: int = 50) -> list[dict]:
+    """Retrieve recent incidents from the triage timeline."""
+    s = load_state()
+    return s.get("incident_timeline", [])[:limit]

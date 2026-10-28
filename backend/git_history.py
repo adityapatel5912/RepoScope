@@ -297,3 +297,182 @@ def churn_to_api(report: ChurnReport, graph: dict | None = None) -> dict:
         "files": entries,
         "total_files": len(entries),
     }
+
+
+def compute_ast_complexity(file_path: Path) -> int:
+    """Computes cyclomatic complexity proxy by counting branching nodes/tokens."""
+    if not file_path.is_file():
+        return 1
+    ext = file_path.suffix.lower()
+    try:
+        if ext == ".py":
+            import ast
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+            tree = ast.parse(content)
+            count = 1
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.If, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.With, ast.Match)):
+                    count += 1
+                elif isinstance(node, ast.BoolOp):
+                    count += max(0, len(node.values) - 1)
+            return count
+        elif ext in {".js", ".jsx", ".ts", ".tsx"}:
+            import re
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+            branches = len(re.findall(r"\b(if|else\s+if|for|while|switch|case|catch)\b", content))
+            logics = len(re.findall(r"(&&|\|\||\?)", content))
+            return max(1, branches + logics // 2)
+        else:
+            lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            return max(1, len([l for l in lines if l.strip()]) // 20)
+    except Exception:
+        return 1
+
+
+def compute_hotspots(repo_root: str | Path, limit: int = 100) -> dict:
+    """Computes bounded churn, AST complexity, hotspot quadrant scores, and bus factor risks."""
+    root = Path(repo_root)
+    churn_report = collect_churn(root)
+    if not churn_report.available:
+        return {
+            "ok": False,
+            "reason": churn_report.reason or "Git history unavailable",
+            "files": [],
+            "high_risk_hotspots": [],
+            "bus_factor_warnings": [],
+            "quadrant_summary": {"critical": 0, "debt": 0, "active": 0, "stable": 0},
+        }
+
+    import math
+    file_results = []
+    author_totals: dict[str, int] = defaultdict(int)
+
+    for path, churn in churn_report.files.items():
+        full_path = root / path
+        complexity = compute_ast_complexity(full_path)
+        churn_score = churn.churn_score
+        hotspot_score = round(math.log10(churn_score + 1) * complexity, 2)
+
+        top_author = churn.primary_author or "Unknown"
+        top_count = churn.authors.get(top_author, 0)
+        total_commits = max(1, churn.commits)
+        author_share = round(top_count / total_commits, 2)
+        bus_factor_risk = bool(author_share >= 0.8 and total_commits >= 2)
+
+        for a, cnt in churn.authors.items():
+            author_totals[a] += cnt
+
+        is_high_churn = churn_score >= 10
+        is_high_comp = complexity >= 10
+
+        if is_high_churn and is_high_comp:
+            quadrant = "critical"
+            risk_level = "critical" if hotspot_score >= 15 else "high"
+        elif not is_high_churn and is_high_comp:
+            quadrant = "debt"
+            risk_level = "medium"
+        elif is_high_churn and not is_high_comp:
+            quadrant = "active"
+            risk_level = "medium"
+        else:
+            quadrant = "stable"
+            risk_level = "low"
+
+        file_results.append({
+            "path": path,
+            "commits": churn.commits,
+            "lines_added": churn.lines_added,
+            "lines_deleted": churn.lines_deleted,
+            "churn_score": churn_score,
+            "complexity": complexity,
+            "hotspot_score": hotspot_score,
+            "primary_author": top_author,
+            "author_share": author_share,
+            "bus_factor_risk": bus_factor_risk,
+            "risk_level": risk_level,
+            "quadrant": quadrant,
+        })
+
+    file_results.sort(key=lambda x: x["hotspot_score"], reverse=True)
+
+    high_risk = [f for f in file_results if f["risk_level"] in ("critical", "high")][:10]
+    bus_warnings = [f for f in file_results if f["bus_factor_risk"]][:10]
+
+    quadrant_counts = {
+        "critical": len([f for f in file_results if f["quadrant"] == "critical"]),
+        "debt": len([f for f in file_results if f["quadrant"] == "debt"]),
+        "active": len([f for f in file_results if f["quadrant"] == "active"]),
+        "stable": len([f for f in file_results if f["quadrant"] == "stable"]),
+    }
+
+    return {
+        "ok": True,
+        "total_files": len(file_results),
+        "high_risk_hotspots": high_risk,
+        "bus_factor_warnings": bus_warnings,
+        "quadrant_summary": quadrant_counts,
+        "files": file_results[:50],
+    }
+
+
+def compare_refs(repo_root: str | Path, ref_a: str = "HEAD~10", ref_b: str = "HEAD") -> dict:
+    """Historical Time Machine: compare two commits/refs and summarize changes & architectural drift."""
+    root = Path(repo_root)
+    safe_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~^_-./")
+    if not all(c in safe_chars for c in ref_a) or not all(c in safe_chars for c in ref_b):
+        return {"ok": False, "error": "Invalid ref format"}
+
+    diff_out = _run_git(root, ["diff", "--name-status", ref_a, ref_b])
+    if diff_out is None and ref_a != "HEAD~1":
+        ref_a = "HEAD~1"
+        diff_out = _run_git(root, ["diff", "--name-status", ref_a, ref_b])
+
+    if diff_out is None:
+        return {
+            "ok": True,
+            "ref_a": ref_a,
+            "ref_b": ref_b,
+            "added_files": [],
+            "removed_files": [],
+            "modified_files": [],
+            "summary": "No git diff available.",
+            "architectural_drift": [],
+        }
+
+    added = []
+    removed = []
+    modified = []
+    for line in diff_out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        status = parts[0]
+        fpath = parts[-1]
+        if status.startswith("A"):
+            added.append(fpath)
+        elif status.startswith("D"):
+            removed.append(fpath)
+        else:
+            modified.append(fpath)
+
+    shortstat = _run_git(root, ["diff", "--shortstat", ref_a, ref_b]) or "0 files changed"
+
+    drift = []
+    if added:
+        drift.append(f"{len(added)} new file(s) introduced (e.g. {added[0]})")
+    if removed:
+        drift.append(f"{len(removed)} file(s) removed")
+    if len(modified) > 10:
+        drift.append(f"Cross-cutting refactor spanning {len(modified)} files")
+
+    return {
+        "ok": True,
+        "ref_a": ref_a,
+        "ref_b": ref_b,
+        "added_files": added,
+        "removed_files": removed,
+        "modified_files": modified,
+        "summary": shortstat.strip(),
+        "architectural_drift": drift,
+    }

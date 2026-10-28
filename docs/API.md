@@ -51,6 +51,9 @@ contracts that clients depend on, not every request model.
 | `POST` | `/api/onboard` | Student Mode path, quizzes, and Good First Issues. |
 | `GET` | `/api/onboard/curriculum` | Topological 4-tier onboarding curriculum with DAG metadata. |
 | `POST` | `/api/onboard/verify-challenge` | Graph-graded verification of tier challenges. |
+| `GET` | `/api/metrics/hotspots` | Bounded churn, AST complexity, and bus factor risks. |
+| `GET` | `/api/metrics/compare` | Time Machine revision diff and architectural drift. |
+| `GET` | `/api/tracking/incidents` | Incident triage timeline and severity classification. |
 
 Analysis routers live under `/api/analysis` and `/api/arch`; local mode uses
 `/api/local/*`. See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete route

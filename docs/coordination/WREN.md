@@ -569,3 +569,38 @@ Implement Phase 5, Verified chat citations directly on local `experimental`.
      - Graph-graded challenges verify answers directly against AST dependencies.
      - Progress persists across sessions via localStorage.
      - Visual shot captured: onboarding_tiers_panel.png.
+
+
+## Phase 10 — Churn, Hotspots, Bus Factor, Time Machine & Tracking/Incident Polish (V2.7)
+
+1. **Commit & Scope:**
+   - Branch: experimental
+   - Scope: Bounded git analytics, AST branch complexity, Hotspots formula H = log10(churn + 1) * complexity, bus factor single-point-of-failure detection, historical Time Machine compare (GET /api/metrics/compare), and incident triage timeline.
+
+2. **Files Created/Modified:**
+   - backend/git_history.py: Implemented compute_ast_complexity, compute_hotspots, and compare_refs with input sanitization.
+   - backend/repo_tracker.py: Implemented classify_incident_event, record_incident, and get_incidents for structured incident tracking.
+   - backend/main.py: Added GET /api/metrics/hotspots, GET /api/metrics/compare, and GET /api/tracking/incidents.
+   - backend/tests/test_metrics_hotspots.py: 5 unit and integration tests covering complexity, hotspots, compare, incidents, and API routes.
+   - frontend/src/api/features.ts: Added HotspotFile, HotspotsReport, CompareResult, IncidentRecord, getHotspots, compareRefs, getIncidents.
+   - frontend/src/components/TrackingPanel.tsx: Implemented quadrant summary, bus factor warnings, ranked hotspot list, Time Machine diff selector, and incident triage feed.
+   - frontend/src/components/SecurityPanel.tsx: Rendered TrackingPanel seamlessly inside tracking tab.
+   - frontend/tests/e2e/metrics-hotspots.spec.ts: L3 Playwright test verifying hotspots quadrant, bus factor alert, Time Machine compare, and incident triage.
+
+3. **Commands Run & Gate Results:**
+   - python -m pytest backend/tests/test_metrics_hotspots.py: 5 passed.
+   - python -m pytest backend/tests/test_git_history.py: 10 passed.
+   - python -m pytest -q: 560 passed, 1 skipped (0 failures).
+   - python -m compileall -q backend: 0 errors.
+   - python -m pip check: clean.
+   - npm --prefix frontend run build: clean (built in 13.58s).
+   - npx tsc --noEmit: 0 errors.
+   - npx playwright test tests/e2e/metrics-hotspots.spec.ts: 1 passed (6.8s).
+   - git diff --check: clean.
+
+4. **Self-Verification Verdict:**
+   - PASS.
+     - Hotspot scoring accurately combines churn and branch complexity.
+     - Single-author bus factor vulnerabilities surfaced with warning pills.
+     - Time Machine summarizes file diffs and architectural drift.
+     - Visual shot captured: metrics_hotspots_panel.png.

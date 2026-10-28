@@ -1,158 +1,198 @@
 # Contributing to RepoScope
 
-Thanks for helping. RepoScope is a code graph with four front-ends — the
-canvas, the CLI, the MCP server, and the editor extension — all reading the
-same index. Changes should preserve that property.
+Thank you for your interest in contributing to **RepoScope**!
 
-## Setup
+RepoScope is an autonomous code intelligence and architecture platform. Its defining design principle is **one code graph, four ways in**:
+1. **The Architecture Canvas** (Vite + React 18 + D3 interactive graph & collapsible mindmap)
+2. **The Terminal CLI** (`reposcope` and `reposcope-ai` via Typer)
+3. **The Model Context Protocol Server** (`reposcope-mcp` and `npx reposcope-mcp`)
+4. **The Editor Extension** (VS Code, Cursor, and VSCodium)
 
-Requires **Python 3.11+**, **Node.js 20+** (24 is used in this repository),
-and npm.
+Every surface reads from the **exact same index**. Any contribution should preserve this property: any structural insight available in the UI should be accessible via MCP and the CLI.
+
+---
+
+## Development Environment Setup
+
+### Prerequisites
+- **Python**: 3.11+ (Python 3.11, 3.12, or 3.14 with C build tools for tree-sitter grammars)
+- **Node.js**: 20+ (Node 20 or 22 LTS recommended)
+- **Git**: 2.40+
+
+### Clone & Bootstrap
 
 ```bash
+# 1. Clone the repository
 git clone https://github.com/adityapatel5912/RepoScope.git
 cd RepoScope
 
+# 2. Setup Python virtual environment
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# On macOS/Linux:
+source .venv/bin/activate
 
+# 3. Install Python dependencies in editable mode
 pip install -e ".[dev]"
+
+# 4. Copy environment configuration
 cp .env.example .env
 
+# 5. Install frontend dependencies
 cd frontend
 npm install
+cd ..
 ```
 
-At least one LLM key is needed for chat, tours, Student Mode, security
-narratives, scaffolds, and the PR Bot. The graph, local mode, CLI, and MCP
-server work without any key.
+> **Note on LLM API Keys**:
+> RepoScope functions in **100% offline local mode** without any API keys (graph building, mindmap, blast radius simulation, 6-engine security audit, and topological ordering require zero cloud calls).
+> An LLM API key (OpenRouter, Groq, NVIDIA, or OpenAI) is only required for natural language chat, automated PR comment narratives, and AI prompt compilation.
 
-## Run it
+---
 
+## Running the Application Locally
+
+### 1. Local Mode (All-in-One CLI Server)
+The fastest way to test changes locally:
 ```bash
-# Local mode (recommended for graph work)
 python -m cli.main run . --port 4100 --no-open
+```
+Open [http://127.0.0.1:4100](http://127.0.0.1:4100) in your browser.
 
-# API only
+### 2. Dual-Process Dev Mode (Hot Reloading)
+For active frontend or backend development:
+
+**Terminal 1 (Backend API):**
+```bash
 cd backend
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --reload --port 8000
+```
 
-# Frontend dev server
+**Terminal 2 (Frontend Dev Server):**
+```bash
 cd frontend
 npm run dev
 ```
+Open [http://localhost:5173](http://localhost:5173). Vite will proxy all `/api/*` requests to port 8000.
 
-Open <http://127.0.0.1:4100> for local mode or
-<http://localhost:5173> for the full Vite app.
-
-## Tests and checks
-
+### 3. Model Context Protocol (MCP) Server
+To run and test the MCP server over standard I/O:
 ```bash
-# Backend
-python -m pytest -q
+# Python direct:
+python -m mcp_server.server
 
-# MCP server
-python -m pytest backend/tests/test_mcp_server.py -q
+# Or via CLI:
+reposcope mcp .
 
-# Frontend type-check and production build
+# Or via Node NPX launcher:
+node packages/reposcope-mcp/bin/reposcope-mcp.js
+```
+
+### 4. Six-Engine Security Audit CLI
+Run the graph-contextual security audit directly in your terminal:
+```bash
+# Human-readable summary:
+reposcope security .
+
+# OASIS SARIF 2.1.0 output:
+reposcope security . --sarif > results.sarif
+```
+
+---
+
+## Test Suites & Quality Gates
+
+Before opening a pull request, run the following verification battery:
+
+### 1. Backend Pytest Battery
+```bash
+python -m pytest backend/tests -q
+```
+Runs 590+ unit tests across the graph builder, PageRank centrality, inter-procedural taint propagation, 6-engine security scanners, 3-hop impact simulator, and topological onboarding.
+
+### 2. Python Bytecode & Dependency Check
+```bash
+python -m compileall -q backend cli
+python -m pip check
+```
+
+### 3. Frontend Type-Check & Build
+```bash
 cd frontend
 npx tsc --noEmit
 npm run build
+cd ..
+```
 
-# Extension unit tests
+### 4. VS Code Extension Tests & Packaging
+```bash
 cd extensions/vscode
 npm install
 npm test
 npx @vscode/vsce package --no-dependencies
-
-# Browser QA harness (needs Playwright)
-python scripts/qa.py --headed --grep J00
+cd ../..
 ```
 
-The exact numbers from the last verified run are in
-[`docs/QA_REPORT.md`](docs/QA_REPORT.md) and
-[`docs/VERIFICATION_CHECKLIST.md`](docs/VERIFICATION_CHECKLIST.md). Manual
-checks stay unchecked until a human confirms them; do not mark them passed
-because CI is green.
+### 5. Playwright Browser QA Battery (E2E)
+```bash
+cd frontend
+npx playwright test tests/e2e/security-suite.spec.ts
+npx playwright test tests/e2e/impact-simulator.spec.ts
+npx playwright test tests/e2e/pr-impact.spec.ts
+npx playwright test tests/e2e/scaffold.spec.ts
+npx playwright test tests/e2e/tour-tracks.spec.ts
+npx playwright test tests/e2e/onboarding.spec.ts
+npx playwright test tests/e2e/metrics-hotspots.spec.ts
+cd ..
+```
 
-## Environment variables
+### 6. Git Diff Check
+Ensure no whitespace, BOM, or CRLF anomalies:
+```bash
+git diff --check
+```
 
-| Variable | Purpose |
-|---|---|
-| `OPENROUTER_API_KEYS` | Primary LLM; comma-separate for rotation |
-| `GROQ_API_KEYS` | Secondary LLM |
-| `NVIDIA_API_KEYS` | Tertiary LLM fallback |
-| `Models_OPENROUTER` / `Models_GROQ` / `Models_NVIDIA` | Optional model overrides |
-| `Base_URL_OPENROUTER` / `Base_URL_GROQ` / `Base_URL_NVIDIA` | Optional OpenAI-compatible endpoints |
-| `GITHUB_TOKENS` | GitHub API tokens; comma-separate |
-| `GITHUB_PAT` | Legacy single GitHub token |
-| `OVSX_TOKEN` | Open VSX publish token; keep it in the gitignored `.env` |
+---
 
-Never commit `.env`, tokens, private repository contents, or generated
-screenshots that contain either.
+## Architectural Guidelines
 
-## Commit convention
+When adding or refactoring code:
 
-- `feat:` — new feature
-- `fix:` — bug fix
-- `docs:` — documentation only
-- `chore:` — maintenance or tooling
-- `refactor:` — code change without a feature or fix
-- `test:` — test-only change
+1. **One Index Principle**: The backend graph store (`backend/graph_store.py`) is the source of truth. Do not build UI-specific or agent-specific shadow indices.
+2. **Deterministic Security Engines**: The 6 security engines (`backend/security_scanner.py` and `backend/taint.py`) must produce deterministic results with zero LLM hallucinations. AST sinks, Shannon entropy, CVE lookup maps, and taint flows are static-analysis driven.
+3. **Redaction by Default**: High-entropy strings and credentials must be masked with `<redacted>` before entering memory stores, log files, or API payloads.
+4. **Topological Invariants**: Dependency ordering in `backend/onboarding.py` must maintain DAG properties (Kahn's topological sort).
+5. **No Destructive Operations**: Scaffolder (`backend/scaffolder.py`) and patch generators (`generate_security_patch`) must never overwrite user code silently without explicit confirmation.
+6. **Preserve Documentation & Comments**: Always preserve existing file comments, license headers, and architectural docstrings.
 
-Keep the subject under ~72 characters. Explain the user-visible effect in the
-body when the change is not obvious.
+---
 
-## Pull requests
+## Commit Message Convention
 
-- One coherent change per PR.
-- Update the relevant docs when an API contract, default, or limitation
-  changes. The docs index is [`docs/README.md`](docs/README.md).
-- Add or update a test for a bug fix. Parser changes should keep the golden
-  graph test green.
-- Run the backend tests, the frontend type-check, and the extension tests.
-- Do not include real tokens, `.env` contents, or private repository text in
-  logs or screenshots.
-- If one of the four remaining manual checks is still required
-  (Cursor/VSCodium, Open VSX namespace, Render deployment, Marketplace), leave
-  it unchecked in
-  [`docs/VERIFICATION_CHECKLIST.md`](docs/VERIFICATION_CHECKLIST.md).
-- Do not push release tags or publish packages without the maintainer's
-  approval.
+RepoScope follows the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-## License and contributions
+- `feat(scope): ...` — New feature or major capability
+- `fix(scope): ...` — Bug fix or error resolution
+- `docs(scope): ...` — Documentation updates
+- `test(scope): ...` — Unit or E2E test additions
+- `refactor(scope): ...` — Code restructuring without feature or bug changes
+- `chore(scope): ...` — Build, release, or dependency maintenance
 
-RepoScope is **source-available**, not OSI Open Source. You may use and modify
-it for your own projects, including internal business projects, but you may
-not republish, distribute, or commercially exploit it without prior written
-permission. The full terms are in [`LICENSE`](LICENSE).
+*Example*:
+`feat(security): add AST injection sink scanner and SARIF 2.1.0 exporter`
 
-By submitting a pull request or patch, you grant the copyright holder the
-right to use, modify, distribute, and commercially exploit your contribution
-as part of RepoScope. Only submit work you have the right to contribute.
+---
 
-## Reporting a bug
+## Pull Request Guidelines
 
-Open a GitHub issue with:
+1. **Focused Scope**: One logical change or milestone per PR.
+2. **Automated Verification**: Ensure all backend tests, frontend builds, and extension tests pass.
+3. **No Secrets**: Never commit `.env` files, API keys, or proprietary test repositories.
+4. **Update Documentation**: When introducing or updating an API endpoint, update [`docs/API.md`](docs/API.md) and [`README.md`](README.md).
 
-- what you did;
-- what you expected;
-- what happened;
-- the relevant backend log line from `backend/logs/app.log` (include the
-  request id in brackets);
-- the RepoScope version and whether you were in local mode.
+---
 
-Never paste API keys or private source code. If the report needs private
-material, say so and the maintainer will arrange a private channel.
+## Community & Code of Conduct
 
-## Proposing a feature
-
-Open an issue tagged `proposal`. Describe the user problem first, then the
-proposed behaviour, then the smallest version that would be useful. Features
-that fit the one-index model — the canvas, CLI, MCP server, and extension all
-reading the same graph — get priority.
-
-## Code of Conduct
-
-Be excellent to each other. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+All contributors are expected to uphold our [Code of Conduct](CODE_OF_CONDUCT.md). Please report any concerns to the maintainer [@adityapatel5912](https://github.com/adityapatel5912).

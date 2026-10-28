@@ -273,6 +273,11 @@ function buildModuleGroups(paths: string[]): Map<string, string> {
     for (const child of node.children.values()) collect(child, groupPath);
   };
   const assign = (node: DirectoryTree): void => {
+    if (node === root) {
+      for (const file of node.files) groups.set(file, "");
+      for (const child of node.children.values()) assign(child);
+      return;
+    }
     if (node.total <= MAX_MODULE_FILES || node.children.size === 0) {
       collect(node, node.path);
       return;

@@ -1,7 +1,7 @@
 /**
  * mindmapLayout.ts
  * Pure tidy-tree layout computation using d3-hierarchy.
- * Computes exact (x, y) coordinates for nodes and smooth cubic bezier paths for connectors.
+ * Computes exact (x, y) coordinates for nodes and smooth rounded step paths for connectors.
  * Supports Top-to-Bottom (TB, default) and Left-to-Right (LR).
  */
 
@@ -14,20 +14,51 @@ import type {
   MindmapOrientation,
 } from "./mindmapTypes";
 
-function getNodeDimensions(node: MindmapNode): { width: number; height: number } {
+export function getNodeDimensions(node: MindmapNode): { width: number; height: number } {
   switch (node.kind) {
     case "root":
       return { width: 200, height: 56 };
     case "pillar":
-      return { width: 220, height: 74 };
+      return { width: 220, height: 76 };
     case "folder":
       return { width: 200, height: 48 };
     case "file":
-      return { width: 240, height: 68 };
+      // File card contains header, role badge, and action buttons row (IDE + Impact)
+      return { width: 240, height: 104 };
     case "symbol":
-      return { width: 210, height: 42 };
+      return { width: 210, height: 44 };
     default:
       return { width: 200, height: 52 };
+  }
+}
+
+/**
+ * Generates a clean orthogonal step path with rounded corners (like React Flow / GraphView).
+ */
+export function generateSmoothStepPath(
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+  orientation: MindmapOrientation = "LR",
+  radius = 12,
+): string {
+  if (orientation === "TB") {
+    const midY = Math.round((sy + ty) / 2);
+    if (Math.abs(sx - tx) < 4) {
+      return `M ${sx} ${sy} L ${tx} ${ty}`;
+    }
+    const r = Math.min(radius, Math.abs(midY - sy), Math.abs(tx - sx) / 2);
+    const dirX = tx > sx ? 1 : -1;
+    return `M ${sx} ${sy} L ${sx} ${midY - r} Q ${sx} ${midY} ${sx + dirX * r} ${midY} L ${tx - dirX * r} ${midY} Q ${tx} ${midY} ${tx} ${midY + r} L ${tx} ${ty}`;
+  } else {
+    const midX = Math.round((sx + tx) / 2);
+    if (Math.abs(sy - ty) < 4) {
+      return `M ${sx} ${sy} L ${tx} ${ty}`;
+    }
+    const r = Math.min(radius, Math.abs(midX - sx), Math.abs(ty - sy) / 2);
+    const dirY = ty > sy ? 1 : -1;
+    return `M ${sx} ${sy} L ${midX - r} ${sy} Q ${midX} ${sy} ${midX} ${sy + dirY * r} L ${midX} ${ty - dirY * r} Q ${midX} ${ty} ${midX + r} ${ty} L ${tx} ${ty}`;
   }
 }
 
@@ -53,11 +84,13 @@ export function computeMindmapLayout(
 
   const isTB = orientation === "TB";
 
-  // Spacing configuration
-  // TB: dx is sibling gap (horizontal), dy is depth gap (vertical)
-  // LR: dx is sibling gap (vertical), dy is depth gap (horizontal)
-  const siblingGap = isTB ? 250 : 72;
-  const depthGap = isTB ? 110 : 270;
+  // Spacing configuration:
+  // In TB mode: dx is horizontal sibling gap (270px for 240px cards -> 30px gap)
+  //             dy is vertical depth gap (160px)
+  // In LR mode: dx is vertical sibling gap (132px for 104px cards -> 28px gap: ZERO OVERLAP!)
+  //             dy is horizontal depth gap (320px for clean spacing)
+  const siblingGap = isTB ? 270 : 132;
+  const depthGap = isTB ? 160 : 320;
 
   const treeLayout = tree<MindmapNode>().nodeSize([siblingGap, depthGap]);
   treeLayout(rootHierarchy);
@@ -72,8 +105,19 @@ export function computeMindmapLayout(
     // Map d.x and d.y depending on orientation
     const rawX = d.x ?? 0;
     const rawY = d.y ?? 0;
-    const posX = isTB ? rawX : rawY;
-    const posY = isTB ? rawY : rawX;
+
+    let posX: number;
+    let posY: number;
+
+    if (isTB) {
+      // In TB mode: align row tops cleanly
+      posX = rawX;
+      posY = rawY;
+    } else {
+      // In LR mode: align column lefts cleanly so cards at each depth line up
+      posX = rawY;
+      posY = rawX;
+    }
 
     const layoutNode: LayoutNode = {
       id: d.data.id,
@@ -149,31 +193,28 @@ export function computeMindmapLayout(
   const totalWidth = Math.ceil(maxRight - minLeft + margin * 2);
   const totalHeight = Math.ceil(maxBottom - minTop + margin * 2);
 
-  // Generate connector links with smooth cubic beziers
+  // Generate connector links with clean rounded step curves
   const links: LayoutLink[] = [];
 
   for (const child of rawNodes) {
     if (!child.parent) continue;
     const parent = child.parent;
 
-    let sx = parent.x;
-    let sy = parent.y;
-    let tx = child.x;
-    let ty = child.y;
     let dPath = "";
-
     if (isTB) {
       // Connect parent bottom-center to child top-center
-      sy = parent.y + parent.height / 2;
-      ty = child.y - child.height / 2;
-      const midY = (sy + ty) / 2;
-      dPath = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
+      const sx = parent.x;
+      const sy = Math.round(parent.y + parent.height / 2);
+      const tx = child.x;
+      const ty = Math.round(child.y - child.height / 2);
+      dPath = generateSmoothStepPath(sx, sy, tx, ty, "TB");
     } else {
       // Connect parent right-center to child left-center
-      sx = parent.x + parent.width / 2;
-      tx = child.x - child.width / 2;
-      const midX = (sx + tx) / 2;
-      dPath = `M ${sx} ${sy} C ${midX} ${sy}, ${midX} ${ty}, ${tx} ${ty}`;
+      const sx = Math.round(parent.x + parent.width / 2);
+      const sy = parent.y;
+      const tx = Math.round(child.x - child.width / 2);
+      const ty = child.y;
+      dPath = generateSmoothStepPath(sx, sy, tx, ty, "LR");
     }
 
     links.push({

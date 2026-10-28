@@ -120,6 +120,9 @@ export const MindMapNodeCard: React.FC<MindMapNodeCardProps> = memo(
     const handleCardClick = (e: React.MouseEvent) => {
       e.stopPropagation();
       onSelectNode(node);
+      if (hasChildren) {
+        onToggleExpand(node.id);
+      }
     };
 
     const handleExpandToggle = (e: React.MouseEvent) => {

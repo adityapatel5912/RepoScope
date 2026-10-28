@@ -80,6 +80,9 @@ on a separate marketplace.
 
 ### Fixed
 
+- **UI polish for citations, mind map, and graph directory grouping.**
+  Enhanced citation pill contrast in dark and Editorial cream themes. Fixed mind map layout spacing, card dimensions, smoothstep connector lines, and screen anchoring on expand/collapse so opening elements never zooms out or jumps. Fixed graph directory grouping to avoid collapsing repositories into a single root module.
+
 - **CI is hermetic and green on every gate.** Endpoint tests resolve a
   synthetic provider instead of depending on a developer `.env`; the unit job
   fetches full history so co-change tests measure real commits; the MCP stdio

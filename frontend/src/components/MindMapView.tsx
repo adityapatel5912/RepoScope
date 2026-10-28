@@ -239,7 +239,7 @@ export default function MindMapView({
 
     const pad = 64;
     const fitScale = Math.min(
-      1.1,
+      1.05,
       Math.max(0.25, Math.min((cw - pad) / layout.width, (ch - pad) / layout.height)),
     );
 
@@ -250,20 +250,22 @@ export default function MindMapView({
     setScale(fitScale);
   }, [layout.width, layout.height]);
 
-  // Fit view on first layout generation or orientation change
+  // Fit view on first layout generation only
   const initialFitDoneRef = useRef(false);
   useEffect(() => {
-    if (layout.nodes.length > 0) {
-      if (!initialFitDoneRef.current) {
-        fitView();
-        initialFitDoneRef.current = true;
-      }
+    if (layout.nodes.length > 0 && !initialFitDoneRef.current) {
+      fitView();
+      initialFitDoneRef.current = true;
     }
   }, [layout.nodes.length, fitView]);
 
-  // Re-fit when orientation changes
+  // Re-fit ONLY when orientation explicitly changes
+  const prevOrientationRef = useRef(orientation);
   useEffect(() => {
-    fitView();
+    if (prevOrientationRef.current !== orientation) {
+      prevOrientationRef.current = orientation;
+      fitView();
+    }
   }, [orientation, fitView]);
 
   // ── Search & auto-expand ancestors ──
@@ -304,7 +306,7 @@ export default function MindMapView({
     setCurrentMatchIndex(0);
   }, [searchResults, storageKey]);
 
-  // Center node in canvas
+  // Center node in canvas without changing user's zoom level
   const centerNode = useCallback(
     (nodeId: string) => {
       const node = layout.nodes.find((n) => n.id === nodeId);
@@ -380,9 +382,20 @@ export default function MindMapView({
     );
   }, [searchResults.matches.length]);
 
+  // Anchor node position ref so expanding/collapsing keeps the clicked node in place
+  const anchorNodeRef = useRef<{ id: string; screenX: number; screenY: number } | null>(null);
+
   // ── Expand / Collapse Handler ──
   const handleToggleExpand = useCallback(
     (id: string) => {
+      const node = layout.nodes.find((n) => n.id === id);
+      if (node && canvasContainerRef.current) {
+        anchorNodeRef.current = {
+          id,
+          screenX: pan.x + node.x * scale,
+          screenY: pan.y + node.y * scale,
+        };
+      }
       const next = new Set(expandedIds);
       if (next.has(id)) {
         next.delete(id);
@@ -391,8 +404,22 @@ export default function MindMapView({
       }
       updateExpanded(next);
     },
-    [expandedIds, updateExpanded],
+    [expandedIds, layout.nodes, pan.x, pan.y, scale, updateExpanded],
   );
+
+  // Preserve screen position of expanded/collapsed node so the canvas never jumps wildly
+  useEffect(() => {
+    if (!anchorNodeRef.current) return;
+    const anchor = anchorNodeRef.current;
+    anchorNodeRef.current = null;
+
+    const node = layout.nodes.find((n) => n.id === anchor.id);
+    if (!node) return;
+
+    const targetPanX = Math.round(anchor.screenX - node.x * scale);
+    const targetPanY = Math.round(anchor.screenY - node.y * scale);
+    setPan({ x: targetPanX, y: targetPanY });
+  }, [layout.nodes, scale]);
 
   const handleExpandAll = useCallback(() => {
     if (!payload?.root) return;
@@ -714,16 +741,39 @@ export default function MindMapView({
               height={layout.height}
               style={{ overflow: "visible" }}
             >
-              {layout.links.map((link) => (
-                <path
-                  key={link.id}
-                  d={link.d}
-                  fill="none"
-                  stroke="#141414"
-                  strokeWidth="1.5"
-                  strokeOpacity="0.35"
-                />
-              ))}
+              <defs>
+                <marker
+                  id="mindmap-arrow"
+                  viewBox="0 0 10 10"
+                  refX="6"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 2 L 8 5 L 0 8 z" fill="#94A3B8" />
+                </marker>
+              </defs>
+              {layout.links.map((link) => {
+                const isSelectedBranch =
+                  selectedNodeId &&
+                  (link.target.id === selectedNodeId ||
+                    link.source.id === selectedNodeId);
+                return (
+                  <path
+                    key={link.id}
+                    d={link.d}
+                    fill="none"
+                    stroke={isSelectedBranch ? "#F0503C" : "#94A3B8"}
+                    strokeWidth={isSelectedBranch ? "2" : "1.5"}
+                    strokeOpacity={isSelectedBranch ? "1" : "0.75"}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    markerEnd="url(#mindmap-arrow)"
+                    className="transition-colors duration-150"
+                  />
+                );
+              })}
             </svg>
 
             {/* Render Layout Nodes */}

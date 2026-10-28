@@ -50,26 +50,26 @@ export default function CitationPill({ citation, onCitationClick }: Props) {
         data-verified={isVerified}
         title={isVerified ? `Verified: ${citation.reason}` : `Unverified: ${citation.reason}`}
         className={`
-          inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 cursor-pointer
+          inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono transition-all duration-150 cursor-pointer shadow-sm
           ${
             isVerified
-              ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50 hover:border-emerald-400"
-              : "bg-amber-950/20 text-amber-300/80 border border-dashed border-amber-600/40 hover:bg-amber-900/30 hover:border-amber-500"
+              ? "bg-emerald-50 text-emerald-900 border border-emerald-500/60 hover:bg-emerald-100 hover:border-emerald-600"
+              : "bg-amber-50 text-amber-950 border border-dashed border-amber-500 hover:bg-amber-100 hover:border-amber-600"
           }
         `}
       >
         {isVerified ? (
           citation.reason === "snapped" ? (
-            <CornerDownRight size={12} className="text-emerald-400 shrink-0" aria-hidden="true" />
+            <CornerDownRight size={12} className="text-emerald-700 shrink-0" aria-hidden="true" />
           ) : (
-            <CheckCircle2 size={12} className="text-emerald-400 shrink-0" aria-hidden="true" />
+            <CheckCircle2 size={12} className="text-emerald-700 shrink-0" aria-hidden="true" />
           )
         ) : (
-          <AlertCircle size={12} className="text-amber-400 shrink-0" aria-hidden="true" />
+          <AlertCircle size={12} className="text-amber-700 shrink-0" aria-hidden="true" />
         )}
-        <span className="truncate max-w-[280px]">{displayText}</span>
+        <span className="truncate max-w-[280px] font-medium">{displayText}</span>
         {!isVerified && (
-          <span className="text-[10px] text-amber-400/70 font-sans uppercase tracking-wider ml-0.5">
+          <span className="text-[10px] bg-amber-200/80 text-amber-900 font-sans font-bold uppercase tracking-wider px-1 py-0.5 rounded ml-0.5">
             unverified
           </span>
         )}
@@ -96,8 +96,8 @@ export default function CitationPill({ citation, onCitationClick }: Props) {
             <span
               className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold shrink-0 ${
                 isVerified
-                  ? "bg-emerald-500/20 text-emerald-300"
-                  : "bg-amber-500/20 text-amber-300"
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                  : "bg-amber-100 text-amber-900 border border-amber-300"
               }`}
             >
               {isVerified ? `${Math.round(citation.confidence * 100)}% verified` : "unverified"}
@@ -108,7 +108,7 @@ export default function CitationPill({ citation, onCitationClick }: Props) {
             {citation.symbol && (
               <span className="block">
                 <span className="text-text-muted">Symbol: </span>
-                <span className="font-mono text-accent-emerald">{citation.symbol}</span>
+                <span className="font-mono text-accent-emerald font-semibold">{citation.symbol}</span>
               </span>
             )}
             {citation.node_id && (
@@ -124,7 +124,7 @@ export default function CitationPill({ citation, onCitationClick }: Props) {
           </span>
 
           {citation.preview ? (
-            <span className="block p-2 rounded bg-bg-base/80 border border-border-subtle text-[11px] font-mono text-text-muted overflow-x-auto max-h-36 whitespace-pre">
+            <span className="block p-2 rounded bg-bg-base/80 border border-border-subtle text-[11px] font-mono text-text-primary overflow-x-auto max-h-36 whitespace-pre">
               {citation.preview}
             </span>
           ) : (

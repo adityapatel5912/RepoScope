@@ -218,52 +218,75 @@ Traditional AI coding assistants waste 90–99% of their context window reading 
 
 ## Visual Feature Gallery
 
-The following visual gallery showcases key surfaces of RepoScope v2.8.0, captured across our Playwright validation battery. For the complete, high-resolution visual index, see [`docs/SHOTS_GALLERY.md`](docs/SHOTS_GALLERY.md).
+The following visual gallery showcases key surfaces of RepoScope v2.8.0, captured across our Playwright validation battery at **2x Retina resolution** (`deviceScaleFactor: 2`) with strict component-focused framing. For the complete high-resolution visual index, see [`docs/SHOTS_GALLERY.md`](docs/SHOTS_GALLERY.md).
 
-### 1. Six-Engine Graph-Contextual Security Suite
-The security dashboard displays deterministic findings categorized across all 6 engines, inter-procedural taint propagation flow diagrams, and syntax-verified unified diff patch remediation.
+### 1. Interactive Architecture Graph Canvas
+Dynamic visualizer rendering symbol-level nodes, import edges, architectural layer categorizations (Client/UI, Backend/API, Storage/Data, External/Integrations, Compute/Workers), and a real-time React Flow mini-map.
+
+![Interactive Architecture Graph Canvas](docs/screenshots/v2/gallery/graph_interactive_view.png)
+
+### 2. Student Onboarding Mode (Active Workspace)
+TopBar student mode indicator glowing emerald green with pulsating badge. Displays the Kahn DAG topological learning path in the sidebar alongside highlighted entry points on the main architecture canvas.
+
+![Student Mode Active View](docs/screenshots/v2/gallery/student_mode_active.png)
+
+### 3. Verified Chat Citations with AST Hover Inspection
+Conversational AI Assistant with anti-hallucination guardrails. Verified symbols receive green badges (`backend/main.py:20`) with instant hover preview tooltips revealing exact line ranges, symbol signatures, and confidence metrics, while unverified symbols are flagged with caution badges.
+
+![Chat Verified Citations](docs/screenshots/v2/gallery/chat_verified_citations.png)
+
+### 4. Nine-Agent MCP Harness Configurator Modal
+Seamless one-click integration modal configuring RepoScope MCP across 9 major AI coding environments: Claude Code, Cursor, VS Code, Codex CLI, Kiro, Antigravity, Windsurf, Cline, and OpenCode. Previews `.mcp.json` configs and agent skills without modifying user files without consent.
+
+![Agent Harness Configurator Modal](docs/screenshots/v2/gallery/agent_harness_modal.png)
+
+### 5. Six-Engine Graph-Contextual Security Suite
+The security dashboard displays deterministic findings categorized across all 6 engines (Taint, Secrets, CVEs, Injections, Configs, Auth), inter-procedural taint propagation flow diagrams, and syntax-verified unified diff patch remediation.
 
 ![Security Suite Panel](docs/screenshots/v2/gallery/security_suite_panel.png)
 
-### 2. Explainable 3-Hop Blast Radius Simulator
+### 6. Explainable 3-Hop Blast Radius Simulator
 Simulates the downstream propagation of proposed code changes across direct dependents (Hop 1), transitive consumers (Hop 2), and application boundary endpoints (Hop 3), surfacing affected test suites before commits.
 
 ![Impact Simulator Panel](docs/screenshots/v2/gallery/impact_simulator_panel.png)
 
-### 3. Symbol-Level PR Impact & Contract Diff
+### 7. Symbol-Level PR Impact & Contract Diff
 Deep AST inspection comparing base and head revisions to identify breaking function and class signatures, caller blast radius, and automated PR review comment generation.
 
 ![PR Impact Symbols Panel](docs/screenshots/v2/gallery/pr_impact_symbols_panel.png)
 
-### 4. Hotspots, Bus Factor & Churn Time Machine
+### 8. Hotspots, Bus Factor & Churn Time Machine
 Correlating PageRank graph centrality with commit churn and Shannon entropy author diversity to pinpoint architectural single points of failure.
 
 ![Metrics & Hotspots Panel](docs/screenshots/v2/gallery/metrics_hotspots_panel.png)
 
-### 5. Topological Onboarding & Interactive Katas
+### 9. Topological Onboarding & Interactive Katas
 Kahn's topological sort organizing repository dependencies into progressive learning tiers (Foundations, Business Logic, Application Boundaries) with interactive verification katas.
 
 ![Onboarding Tiers Panel](docs/screenshots/v2/gallery/onboarding_tiers_panel.png)
 
-### 6. Architectural Guided Tours & Universal Chat Action Cards
-Directed codebase tour tracks with voice narration, synchronized graph auto-focusing, and intelligent conversational chat action cards.
+### 10. Architectural Guided Tours
+Step-by-step codebase walkthroughs across 4 specialized execution tracks (`Request Lifecycle`, `Data Flow`, `Blast Radius`, and `Onboarding Guide`). Includes step navigation controls, node highlights, and one-click export to standard VS Code `.tour` JSON.
 
 ![Tour Tracks Panel](docs/screenshots/v2/gallery/tour_tracks_panel.png)
 
+### 11. Universal Conversational Action Cards
+Contextual action buttons embedded directly into the conversational assistant stream. Allows engineers to launch tours, trigger audits, or simulate blast radii directly from AI responses without navigating submenus.
+
 ![Chat Action Cards](docs/screenshots/v2/gallery/chat_tour_action_card.png)
 
-### 7. Interactive Architecture Scaffolder
-Scaffolds standard production architectures (Clean Architecture, Ports & Adapters, Modular Monolith) with live file tree inspection and CLI execution commands.
+### 12. Executable Clean Architecture Scaffolder
+Scaffolds standard production architectures (Clean Architecture, Ports & Adapters, Modular Monolith) with live file tree inspection, boilerplate code preview, and CLI execution commands.
 
 ![Scaffolder Modal](docs/screenshots/v2/gallery/scaffold_modal_code.png)
 
-### 8. Reverse Prompt Compiler
-Compiles repository subgraphs into 4 deterministic prompting modalities (`context`, `rebuild`, `spec`, and `feature`) for AI coding agents.
+### 13. Four-Mode Reverse Prompt Compiler (Feature Slice)
+Compiles repository subgraphs into 4 deterministic prompting modalities (`context`, `rebuild`, `spec`, and `feature`) for AI coding agents. Slices deterministic 2-Hop Interface Closures with contract tables and token budget estimation.
 
 ![Reverse Prompt Compiler](docs/screenshots/v2/gallery/rp_feature_mode.png)
 
-### 9. Hierarchical MindMap V2
-Collapsible D3 hierarchy providing dynamic Left-to-Right and Top-to-Bottom structural navigation with instant cluster search.
+### 14. Hierarchical MindMap V2
+Collapsible D3 hierarchy providing dynamic Left-to-Right and Top-to-Bottom structural navigation with instant cluster search and category grouping.
 
 ![MindMap V2](docs/screenshots/v2/gallery/mm_v2_first_paint.png)
 

@@ -324,10 +324,21 @@ def detect_stack(graph: Dict[str, Any], root: str | None) -> Dict[str, Any]:
 class ReversePromptCompiler:
     """Deterministic compiler that emits rebuild, feature, spec, and context prompts."""
 
-    def __init__(self, graph: Dict[str, Any], local_path: str | None = None):
+    def __init__(
+        self,
+        graph: Dict[str, Any],
+        local_path: str | None = None,
+        repo_name: str | None = None,
+    ):
         self.graph = graph or {}
         self.local_path = local_path
-        self.repo_name = os.path.basename(local_path.rstrip("/\\")) if local_path else "Repository"
+        if repo_name:
+            clean_name = repo_name.split("/")[-1].strip()
+            self.repo_name = clean_name or "Repository"
+        elif local_path:
+            self.repo_name = os.path.basename(local_path.rstrip("/\\")) or "Repository"
+        else:
+            self.repo_name = "Repository"
 
     def compile(
         self,
@@ -418,9 +429,19 @@ class ReversePromptCompiler:
                 lines.append(f"> - `{' -> '.join(c)}`")
             lines.append("")
 
-        for i, path in enumerate(build_order, 1):
+        non_source = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".xlsx", ".xls", ".csv", ".zip", ".tar", ".gz", ".lock"}
+        source_order = [p for p in build_order if not any(p.lower().endswith(ext) for ext in non_source)]
+        asset_files = [p for p in build_order if any(p.lower().endswith(ext) for ext in non_source)]
+
+        for i, path in enumerate(source_order, 1):
             lines.append(f"{i}. `{path}`")
         lines.append("")
+
+        if asset_files:
+            lines.append("### Static Assets & Mock Data")
+            for a in asset_files[:20]:
+                lines.append(f"- `{a}`")
+            lines.append("")
 
         if api_routes:
             lines.append("## 3. API Surface & Routes")
@@ -464,13 +485,22 @@ class ReversePromptCompiler:
     def _compile_feature(self, target_node_id: str | None) -> Tuple[str, List[Dict[str, str]], List[str]]:
         warnings: List[str] = []
         if not target_node_id:
-            # Fallback to the first available non-root file node
-            candidates = [
+            # Pick the first non-config, real source code file candidate
+            non_feature_exts = (".gitignore", ".env", ".png", ".pdf", ".csv", ".xlsx", ".lock")
+            source_exts = (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java")
+            code_candidates = [
+                n.get("id") for n in self.graph.get("nodes", [])
+                if n.get("type") in ("file", "function", "class")
+                and not any(n.get("label", "").lower().endswith(ext) for ext in non_feature_exts)
+                and any(n.get("label", "").lower().endswith(ext) for ext in source_exts)
+            ]
+            candidates = code_candidates or [
                 n.get("id") for n in self.graph.get("nodes", [])
                 if n.get("type") in ("file", "function", "class") and n.get("id") != "root"
             ]
             if candidates:
-                target_node_id = candidates[0]
+                priority = [c for c in candidates if any(p in c.lower() for p in ("main", "app", "server", "index"))]
+                target_node_id = priority[0] if priority else candidates[0]
                 warnings.append(f"No target_node_id specified; defaulted to '{target_node_id}'.")
             else:
                 return (
@@ -684,6 +714,19 @@ class ReversePromptCompiler:
         for f in files_list:
             fpath = f.get("path", "")
             fcontent = f.get("skeleton") or f.get("content") or ""
+            if not fcontent and f.get("symbols"):
+                sym_lines = []
+                for s in f.get("symbols", []):
+                    if isinstance(s, dict):
+                        kind = s.get("type") or s.get("kind") or "symbol"
+                        name = s.get("name") or s.get("label") or ""
+                        line = s.get("line")
+                        line_info = f" (line {line})" if line else ""
+                        sym_lines.append(f"{kind} {name}{line_info}")
+                    elif isinstance(s, str):
+                        sym_lines.append(s)
+                fcontent = "\n".join(sym_lines)
+
             export_files.append({"path": fpath, "content": fcontent})
             lines.append(f"## File: `{fpath}`")
             if f.get("role"):

@@ -50,39 +50,38 @@ SCAFFOLD_JSON = json.dumps({
 })
 
 
-def test_scaffold_returns_valid_scaffold(client, tiny_repo, monkeypatch):
-    monkeypatch.setattr(main, "ask_llm", lambda *a, **k: f"```json\n{SCAFFOLD_JSON}\n```")
+def test_scaffold_returns_valid_scaffold(client, tiny_repo):
     res = client.post("/api/scaffold")
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["ok"] is True
-    assert data["project_type"] == "python-cli"
-    assert len(data["files"]) == 3
+    assert "python" in data["project_type"]
+    assert len(data["files"]) >= 3
     assert {"path", "content", "purpose"} <= set(data["files"][0].keys())
     assert isinstance(data["file_tree"], list)
     assert isinstance(data["top_nodes"], list)
 
 
-def test_scaffold_rejects_garbage_llm_output(client, tiny_repo, monkeypatch):
-    monkeypatch.setattr(main, "ask_llm", lambda *a, **k: "I cannot do that")
-    res = client.post("/api/scaffold")
-    assert res.status_code == 502
-    assert "invalid scaffold" in res.json()["detail"].lower()
+def test_validate_scaffold_rejects_garbage_output():
+    from main import _validate_scaffold
+    with pytest.raises(ValueError):
+        _validate_scaffold("I cannot do that")
+    with pytest.raises(ValueError):
+        _validate_scaffold({"project_type": "broken", "files": []})
 
 
-def test_scaffold_sanitizes_paths(client, tiny_repo, monkeypatch):
-    evil = json.dumps({
+def test_validate_scaffold_sanitizes_paths():
+    from main import _validate_scaffold
+    evil = {
         "project_type": "evil",
         "file_tree": ["../etc/passwd"],
         "files": [
             {"path": "../../etc/passwd", "content": "root", "purpose": "escape"},
             {"path": "ok.py", "content": "x = 1\n", "purpose": "fine"},
         ],
-    })
-    monkeypatch.setattr(main, "ask_llm", lambda *a, **k: evil)
-    res = client.post("/api/scaffold")
-    assert res.status_code == 200
-    paths = [f["path"] for f in res.json()["files"]]
+    }
+    sanitized = _validate_scaffold(evil)
+    paths = [f["path"] for f in sanitized["files"]]
     assert paths == ["ok.py"]
 
 

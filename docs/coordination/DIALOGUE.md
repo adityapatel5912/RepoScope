@@ -823,3 +823,26 @@ Wren completed Phase 6 (Four-mode reverse-prompt compiler) directly on local `ex
   - `git diff --check`: clean
 - Adversarial self-verification verdict: **PASS** (deterministic byte-identical output, topological sort with SCC cycles surfaced, 2-hop feature closure, spec bundle templates, context pack token estimation, backward-compatible {prompt} shape, additive /api/reverse-prompt route, and interactive four-mode UI).
 - Ready for Phase 7: `feat(scaffold): generate executable multi-file starter kits`.
+
+---
+
+## 2026-10-28 - Wren - Phase 7 completed and self-verified PASS
+
+Wren completed Phase 7 (Executable multi-file starter kits) directly on local `experimental`:
+- Implemented `backend/scaffolder.py` with multi-stack starter kit generator (12–20 runnable files for Python FastAPI, TypeScript, and generic stacks).
+- Added `POST /api/scaffold` and `POST /api/scaffold/download-zip` with strict path traversal validation (`sanitize_rel_path`), preserving dotfiles (`.env.example`, `.claude/CLAUDE.md`, `.agents/AGENTS.md`) and rejecting traversal escapes.
+- Added terminal bootstrap command generation (`npx reposcope-mcp scaffold --from <slug> --out ./app`).
+- Updated `frontend/src/components/ScaffoldModal.tsx` with terminal bootstrap command banner, one-click copy, token estimate badge, file count badge, language indicators, and safe ZIP download.
+- Full author gate is green:
+  - `python -m pytest -q`: 548 passed, 1 skipped
+  - `python -m compileall -q backend`: clean
+  - `python -m pip check`: clean
+  - `npm --prefix frontend run build`: pass (8.90s)
+  - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: 0 errors
+  - `npx playwright test tests/e2e/scaffold.spec.ts`: 1 passed (13.1s)
+  - `npx playwright test tests/e2e/reverse-prompt.spec.ts`: 1 passed
+  - `npx playwright test tests/e2e/citations.spec.ts`: 1 passed
+  - `npx playwright test tests/e2e/mindmap.spec.ts`: 3 passed
+  - `git diff --check`: clean
+- Adversarial self-verification verdict: **PASS** (zero secret leakage on `.env.example`, path traversal strictly rejected, compileall validated syntax, safe zip streaming).
+- Captured visual shots: `scaffold_modal_readme.png`, `scaffold_modal_code.png`, `scaffold_modal_copied_cmd.png`.

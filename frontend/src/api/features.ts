@@ -210,6 +210,7 @@ export interface ScaffoldFile {
   path: string;
   content: string;
   purpose: string;
+  language?: string;
 }
 
 export interface Scaffold {
@@ -219,6 +220,9 @@ export interface Scaffold {
   files: ScaffoldFile[];
   entry_files?: string[];
   top_nodes?: string[];
+  warnings?: string[];
+  token_estimate?: number;
+  bootstrap_command?: string;
 }
 
 function isScaffold(d: unknown): d is Scaffold {
@@ -231,8 +235,22 @@ function isScaffold(d: unknown): d is Scaffold {
   );
 }
 
-export function generateScaffold(): Promise<Scaffold> {
-  return postJson("/api/scaffold", {}, isScaffold, LLM_TIMEOUT_MS);
+export function generateScaffold(mode: "preview" | "zip" | "command" = "preview"): Promise<Scaffold> {
+  return postJson("/api/scaffold", { mode }, isScaffold, LLM_TIMEOUT_MS);
+}
+
+export async function downloadScaffoldZip(): Promise<Blob> {
+  const r = await fetch("/api/scaffold/download-zip", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...aiHeaders(),
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`Zip download failed: ${r.statusText}`);
+  }
+  return await r.blob();
 }
 
 // ── Student Onboarding Mode (learning path + quizzes + Good First Issues) ──

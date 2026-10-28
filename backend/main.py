@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse, Response
 from pydantic import BaseModel
 
 from ai_byok import PROVIDERS, resolve_provider
@@ -38,6 +38,7 @@ from pr_impact import build_pr_impact, fetch_pr, post_pr_comment
 from repo_loader import load_repo
 from repo_tracker import diff_changes, load_state, mark_checked
 from reverse_prompt_compiler import ReversePromptCompiler
+from scaffolder import Scaffolder
 from runtime_config import ask_llm
 from security_scanner import (
     check_dependency_cves, detect_breaking_commit, scan_pr_patch, scan_repo_files,
@@ -287,6 +288,9 @@ class ReversePromptReq(BaseModel):
     target_node_id: Optional[str] = None
     budget: Optional[int] = None
     format: Optional[str] = "json"
+
+class ScaffoldReq(BaseModel):
+    mode: Optional[str] = "preview"
 
 
 # ── SSE helpers ────────────────────────────────────────────────────────────
@@ -771,7 +775,8 @@ async def reverse_prompt(
 
     try:
         graph = await asyncio.to_thread(build_graph_from_repo, local_path)
-        compiler = ReversePromptCompiler(graph, local_path)
+        repo_name = state.get("repo")
+        compiler = ReversePromptCompiler(graph, local_path, repo_name)
         result = await asyncio.to_thread(
             compiler.compile,
             mode=req.mode or "context",
@@ -796,102 +801,78 @@ async def reverse_prompt(
 
 @app.post("/api/scaffold")
 async def scaffold(
+    req: Optional[ScaffoldReq] = None,
     x_ai_provider: Optional[str] = Header(None),
     x_ai_key: Optional[str] = Header(None),
     x_ai_model: Optional[str] = Header(None),
     x_ai_base_url: Optional[str] = Header(None),
 ):
-    """Generate a CodeCrafters-style starter scaffold from the loaded repo.
-
-    Context sent to the LLM is deliberately shallow: README excerpt (4000
-    chars) + depth-1 file tree + graph layers/top nodes + first 100 lines of
-    at most 2 entry files. The full codebase is never sent.
+    """Generate a CodeCrafters-style starter scaffold from the loaded repo across
+    preview, zip, or command modes.
     """
     req_id = str(uuid.uuid4())[:8]
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    if req is None:
+        req = ScaffoldReq()
+
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+
+    try:
+        graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+        repo_name = state.get("repo")
+        scaffolder = Scaffolder(graph, local_path, repo_name)
+        clean_mode = (req.mode or "preview").lower().strip()
+
+        if clean_mode == "zip":
+            zip_bytes = await asyncio.to_thread(scaffolder.generate_zip_bytes)
+            filename = f"reposcope-scaffold-{scaffolder.repo_name.lower()}.zip"
+            return Response(
+                content=zip_bytes,
+                media_type="application/zip",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+        result = await asyncio.to_thread(scaffolder.generate, mode=clean_mode)
+        log.info(
+            "[%s] scaffold OK mode=%s type=%s files=%d",
+            req_id,
+            clean_mode,
+            result.get("project_type"),
+            len(result.get("files", [])),
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("[%s] scaffold FAILED: %s", req_id, e)
+        raise HTTPException(500, f"Failed to generate scaffold: {e}")
+
+
+@app.post("/api/scaffold/download-zip")
+async def scaffold_download_zip():
+    """Stream application/zip of the generated scaffold archive."""
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
         raise HTTPException(400, "No repo loaded. Load a repo first.")
     try:
         graph = await asyncio.to_thread(build_graph_from_repo, local_path)
-
-        # Connectivity ranking — same score the graph pyramid uses
-        # (incoming*2 + outgoing) — Row 1 "most-imported" nodes.
-        forward, reverse = build_adjacency(graph)
-        file_nodes = [n for n in graph.get("nodes", []) if n.get("type") == "file"]
-
-        def _score(n: dict) -> int:
-            return len(reverse.get(n["id"], [])) * 2 + len(forward.get(n["id"], []))
-
-        ranked = sorted(file_nodes, key=_score, reverse=True)
-        top_nodes = [n.get("label", "") for n in ranked[:8] if n.get("label")]
-        layers = {
-            f"rank_{i + 1}": [n.get("label", "") for n in ranked[i::6][:6]]
-            for i in range(2)
-        }
-
-        readme = (state.get("readme") or "")[:4000]
-        depth1 = _shallow_tree(local_path)
-        entry_files, entry_blocks = await asyncio.to_thread(
-            _entry_file_blocks, graph, local_path
+        repo_name = state.get("repo")
+        scaffolder = Scaffolder(graph, local_path, repo_name)
+        zip_bytes = await asyncio.to_thread(scaffolder.generate_zip_bytes)
+        filename = f"reposcope-scaffold-{scaffolder.repo_name.lower()}.zip"
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
-
-        parts = [
-            f"PROJECT TYPE HINT (from summary): {graph.get('summary', 'unknown')}",
-            f"\n--- README (first 4000 chars) ---\n{readme or '(no README)'}",
-            f"\n--- FILE TREE (depth 1) ---\n" + "\n".join(depth1),
-            f"\n--- TOP NODES (most-imported, Row 1) ---\n" + "\n".join(top_nodes),
-            f"\n--- GRAPH LAYERS (sample) ---\n" + json.dumps(layers, indent=1),
-        ]
-        for blk in entry_blocks:
-            parts.append(
-                f"\n--- ENTRY FILE {blk['path']} (first 100 lines) ---\n{blk['preview']}"
-            )
-        user_prompt = "\n".join(parts)
-
-        raw = await asyncio.to_thread(
-            ask_llm, SCAFFOLD_SYSTEM_PROMPT, user_prompt, "", provider, 8192
-        )
-        try:
-            data = _extract_json_object(raw)
-        except (ValueError, json.JSONDecodeError) as exc:
-            # Free/reasoning models truncate mid-JSON or emit stray commas.
-            # 1) One repair round-trip with the model's own broken output.
-            log.warning("[%s] scaffold JSON invalid (%s) — repair round", req_id, exc)
-            try:
-                raw = await asyncio.to_thread(
-                    ask_llm,
-                    "You output only strictly valid JSON. No fences, no commentary, "
-                    "no trailing commas.",
-                    "The following was supposed to be a single valid JSON scaffold "
-                    "object but is malformed. Fix it and output ONLY the corrected "
-                    "JSON object.\n\n" + raw[:6000],
-                    "", provider, 8192,
-                )
-                data = _extract_json_object(raw)
-            except (ValueError, json.JSONDecodeError):
-                # 2) Deterministic salvage: close truncated strings/brackets.
-                data = salvage_truncated_json(raw)
-                if data is None:
-                    raise HTTPException(
-                        502, "Model returned an invalid scaffold twice. Try again."
-                    )
-        scaffold = _validate_scaffold(data)
-        scaffold["entry_files"] = entry_files
-        scaffold["top_nodes"] = top_nodes
-        scaffold["ok"] = True
-        log.info("[%s] scaffold OK type=%s files=%d", req_id,
-                 scaffold["project_type"], len(scaffold["files"]))
-        return scaffold
     except HTTPException:
         raise
-    except ValueError as e:
-        log.error("[%s] scaffold INVALID: %s", req_id, e)
-        raise HTTPException(502, f"Model returned an invalid scaffold ({e}). Try again.")
     except Exception as e:
-        log.error("[%s] scaffold FAILED: %s", req_id, e)
-        raise HTTPException(500, "Failed to generate scaffold. Is an LLM key configured?")
+        log.error("scaffold download-zip FAILED: %s", e)
+        raise HTTPException(500, f"Failed to generate scaffold zip: {e}")
 
 
 @app.post("/api/tour/generate")

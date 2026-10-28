@@ -450,4 +450,52 @@ Implement Phase 5, Verified chat citations directly on local `experimental`.
      - Zero secrets, `.env`, or PAT references in diff or tests.
 
 6. **Next Open Decision:**
-   - Proceed to Phase 7: `feat(scaffold): generate executable multi-file starter kits`.
+   - Completed Phase 6 and committed to `experimental` and `main` at `04a2d69`.
+
+---
+
+### Phase 7 Self-Verification (2026-10-28)
+
+1. **Commit Subject:** `feat(scaffold): generate executable multi-file starter kits`
+2. **Surfaces Implemented & Modified:**
+   - `backend/scaffolder.py`:
+     - Deterministic multi-file starter kit generator (12–20 files) derived from the analyzed repo's detected stack (Python FastAPI/CLI, TypeScript React/Node, or generic fallback).
+     - Strict path traversal validation via `sanitize_rel_path`, rejecting escapes (`..`, absolute paths, Windows drive letters) while preserving dotfiles (`.env.example`, `.claude/CLAUDE.md`, `.agents/AGENTS.md`, `.gitignore`).
+     - Terminal bootstrap command generation (`npx reposcope-mcp scaffold --from <slug> --out ./app`).
+     - Zero secret leakage for `.env.example`: extracts key names only and populates `<placeholder>` values; never reads `.env` files.
+     - In-memory safe zip streaming with zipfile and deterministic file timestamps.
+   - `backend/main.py`:
+     - Updated `POST /api/scaffold` accepting optional `ScaffoldReq(mode="preview"|"zip"|"command")`.
+     - Added `POST /api/scaffold/download-zip` streaming `application/zip` directly.
+   - `backend/tests/test_scaffolder.py` & `backend/tests/test_feature_5_scaffold.py`:
+     - 18 comprehensive tests covering determinism, modes, path traversal rejection, zip roundtripping, placeholder-only env templates, generic fallback, and compileall syntax verification.
+   - `frontend/src/api/features.ts`:
+     - Updated `Scaffold` and `ScaffoldFile` interfaces with `language`, `token_estimate`, `bootstrap_command`, and `downloadScaffoldZip`.
+   - `frontend/src/components/ScaffoldModal.tsx`:
+     - Terminal bootstrap command banner with one-click copy and feedback.
+     - Token estimate badge (`~1,858 tokens`) and file count badge.
+     - Language indicator badges per file.
+     - Safe ZIP download integration with backend streaming and client fallback.
+   - `frontend/tests/e2e/scaffold.spec.ts`:
+     - L3 Playwright test verifying starter kit generation, preview tree navigation, code preview updates, command copy, and zip download with zero console errors.
+
+3. **Commands Run & Gate Results:**
+   - `python -m pytest -q backend/tests/test_feature_5_scaffold.py backend/tests/test_scaffolder.py`: 18 passed.
+   - `python -m pytest -q`: 548 passed, 1 skipped.
+   - `python -m compileall -q backend`: 0 errors.
+   - `python -m pip check`: clean.
+   - `npm --prefix frontend run build`: clean (built in 8.90s).
+   - `npm --prefix frontend exec -- tsc --noEmit -p frontend/tsconfig.json`: 0 errors.
+   - `npx playwright test tests/e2e/scaffold.spec.ts`: 1 passed (13.1s).
+   - `npx playwright test tests/e2e/reverse-prompt.spec.ts`: 1 passed.
+   - `npx playwright test tests/e2e/citations.spec.ts`: 1 passed.
+   - `npx playwright test tests/e2e/mindmap.spec.ts`: 3 passed.
+   - `git diff --check`: clean (0 errors, no trailing whitespace).
+
+4. **Self-Verification Verdict:**
+   - **PASS**.
+     - Generates 12–20 runnable files for Python FastAPI, TypeScript, and generic stacks.
+     - Path traversal strictly rejected; dotfiles safely preserved.
+     - No real secrets exposed; `.env.example` has placeholder keys only.
+     - Syntax checked and validated via `compileall`.
+     - Visual shots captured: `scaffold_modal_readme.png`, `scaffold_modal_code.png`, `scaffold_modal_copied_cmd.png`.

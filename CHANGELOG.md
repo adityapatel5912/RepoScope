@@ -9,6 +9,21 @@ on a separate marketplace.
 
 ### Added
 
+- **Executable multi-file starter kit scaffolder (Phase 7, V2.6).**
+  Deterministic multi-file starter kit generator producing 12–20 runnable files
+  derived from the repository's detected stack (Python FastAPI/CLI, TypeScript React/Node,
+  or generic fallback):
+  - Emits real starter templates (`main.py`, `app/api.py`, `app/models.py`, `app/services.py`,
+    `app/config.py`, `pyproject.toml`, `Makefile`, `tests/test_api.py`, `README.md`, `SCAFFOLD.md`,
+    `.claude/CLAUDE.md`, `.agents/AGENTS.md`, and `.gitignore`).
+  - Terminal bootstrap command generation (`npx reposcope-mcp scaffold --from <slug> --out ./app`).
+  - Safe zip archive stream via `POST /api/scaffold/download-zip` and `POST /api/scaffold` with
+    strict path traversal protections (`sanitize_rel_path`) that cleanly reject escapes while
+    preserving dotfiles (`.env.example`, `.claude/CLAUDE.md`, `.agents/AGENTS.md`).
+  - Zero-secret-leakage guarantees for `.env.example` emitting placeholder keys only.
+  - Interactive UI modal with token estimates, file badges, terminal bootstrap banner with
+    one-click copy, language indicators, and direct ZIP download.
+
 - **Four-mode reverse-prompt compiler (Phase 6, V2.6).**
   Replaced the single generic reverse-prompt with a deterministic compiler emitting
   four blueprint modes directly from the knowledge graph:

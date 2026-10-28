@@ -733,3 +733,66 @@ Deterministic four-mode blueprint compiler that emits agent-ready build prompts 
 - Backward compatibility: `prompt` string is identical to `content` for legacy callers expecting `{"prompt": "..."}`.
 - Deterministic: identical graph inputs produce byte-identical outputs with zero random IDs or timestamps.
 - `POST /api/reverse-prompt` is an additive alias for `POST /api/repo/reverse-prompt`.
+
+---
+
+## Executable Multi-File Scaffolder (Phase 7, V2.6)
+
+### `POST /api/scaffold`
+
+Generates a CodeCrafters-style deterministic starter scaffold (12–20 files) derived directly from the analyzed repository's detected stack and architecture.
+
+**Request body (JSON, optional):**
+```json
+{
+  "mode": "preview"
+}
+```
+
+- `mode`: `"preview"` (default, returns file tree and starter files JSON), `"zip"` (returns binary `application/zip`), or `"command"` (returns terminal bootstrap command).
+
+**Response (200 OK — `preview` mode):**
+```json
+{
+  "ok": true,
+  "project_type": "python-fastapi",
+  "file_tree": [
+    ".agents/AGENTS.md",
+    ".claude/CLAUDE.md",
+    ".env.example",
+    ".gitignore",
+    "Makefile",
+    "README.md",
+    "SCAFFOLD.md",
+    "app/__init__.py",
+    "app/api.py",
+    "app/config.py",
+    "app/models.py",
+    "app/services.py",
+    "main.py",
+    "pyproject.toml",
+    "tests/__init__.py",
+    "tests/test_api.py"
+  ],
+  "files": [
+    {
+      "path": "main.py",
+      "content": "...",
+      "purpose": "Application entrypoint and server runner",
+      "language": "python"
+    }
+  ],
+  "entry_files": ["main.py", "app/api.py"],
+  "top_nodes": ["main.py", "app/api.py"],
+  "warnings": [],
+  "token_estimate": 1858,
+  "bootstrap_command": "npx reposcope-mcp scaffold --from my-org/my-repo --out ./app"
+}
+```
+
+### `POST /api/scaffold/download-zip`
+
+Streams an `application/zip` archive containing the generated starter kit. Includes safe file creation with sanitized relative paths, deterministic file contents, and strict path traversal validation.
+
+- Security guarantee: `.env.example` contains only placeholder values (`KEY=<placeholder>`); real secret values are never read or emitted.
+- Path traversal protection: rejects `..`, absolute paths, and Windows drive letters via `sanitize_rel_path`.

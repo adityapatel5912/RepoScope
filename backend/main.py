@@ -260,7 +260,10 @@ class CommitReq(BaseModel):
     files: list[str] = []
 
 class TourReq(BaseModel):
-    topic: str
+    topic: Optional[str] = "overview"
+    track: Optional[str] = None
+    target_node_id: Optional[str] = None
+    max_stops: Optional[int] = 12
 
 class ImpactReq(BaseModel):
     target: str
@@ -877,32 +880,78 @@ async def scaffold_download_zip():
 
 @app.post("/api/tour/generate")
 async def tour_generate(
-    req: TourReq,
+    req: Optional[TourReq] = None,
     x_ai_provider: Optional[str] = Header(None),
     x_ai_key: Optional[str] = Header(None),
     x_ai_model: Optional[str] = Header(None),
     x_ai_base_url: Optional[str] = Header(None),
 ):
+    """Generate an architectural tour across 4 deterministic tracks:
+    request_lifecycle, data_flow, change_impact, or onboarding.
+    """
     req_id = str(uuid.uuid4())[:8]
-    log.info("[%s] tour/generate topic=%s", req_id, req.topic)
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    if req is None:
+        req = TourReq()
+    log.info("[%s] tour/generate topic=%s track=%s", req_id, req.topic, req.track)
+    try:
+        provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    except Exception:
+        provider = None
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
         raise HTTPException(400, "No repo loaded. Load a repo first.")
     try:
-        # Offload the (sync) graph build + LLM calls so the event loop stays free
+        from tour_generator import build_tour
         graph = await asyncio.to_thread(build_graph_from_repo, local_path)
-        tour = await asyncio.to_thread(build_tour, graph, req.topic, 12, provider)
+        tour = await asyncio.to_thread(
+            build_tour,
+            graph,
+            req.topic or "",
+            req.max_stops or 12,
+            provider,
+            req.track,
+            req.target_node_id,
+        )
     except HTTPException:
         raise
     except Exception as e:
         log.error("[%s] tour/generate FAILED: %s", req_id, e)
         raise HTTPException(500, str(e))
-    if "error" in tour:
+    if "error" in tour and not tour.get("available", True):
         raise HTTPException(404, tour["error"])
-    log.info("[%s] tour/generate OK steps=%s", req_id, tour.get("total_steps"))
+    log.info("[%s] tour/generate OK track=%s steps=%s", req_id, tour.get("track"), tour.get("total_steps"))
     return tour
+
+
+@app.get("/api/tour/export")
+async def tour_export(
+    track: Optional[str] = "request_lifecycle",
+    topic: Optional[str] = "",
+    target_node_id: Optional[str] = None,
+):
+    """Export tour as standard VS Code CodeTour JSON format."""
+    state = load_state()
+    local_path = state.get("local_path")
+    if not local_path:
+        raise HTTPException(400, "No repo loaded. Load a repo first.")
+    try:
+        from tour_generator import build_tour, export_codetour
+        graph = await asyncio.to_thread(build_graph_from_repo, local_path)
+        tour = await asyncio.to_thread(build_tour, graph, topic or "", 15, None, track, target_node_id)
+        repo_name = state.get("repo") or "RepoScope"
+        codetour_data = export_codetour(tour, repo_name)
+        filename = f"reposcope-{track or 'tour'}.tour"
+        return Response(
+            content=json.dumps(codetour_data, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("tour/export FAILED: %s", e)
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/tts")
@@ -1274,6 +1323,15 @@ async def chat_stream(
             local_path = state.get("local_path")
             citations = verify_citations_in_text(answer, repo_root=local_path, graph=ctx)
             yield _sse("citations", {"type": "citations", "citations": citations})
+
+            # Universal Chat Actions: emit interactive action cards for matching intents
+            try:
+                from chat_actions import detect_chat_actions
+                chat_actions = detect_chat_actions(q.message, graph=ctx, current_mode=q.mode)
+                if chat_actions:
+                    yield _sse("actions", {"type": "actions", "actions": chat_actions})
+            except Exception as act_err:
+                log.warning("[%s] chat actions detection warning: %s", req_id, act_err)
 
             yield _sse("done", {"ok": True, "req_id": req_id})
             log.info("[%s] stream complete", req_id)

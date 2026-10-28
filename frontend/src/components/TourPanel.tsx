@@ -6,16 +6,17 @@
  */
 import { useEffect, useRef, useState } from "react";
 import {
-  generateTour, synthesizeSpeech, playSpeechAudio, speakBrowser, stopSpeechAudio,
+  generateTour, getCodeTourExportUrl, synthesizeSpeech, playSpeechAudio, speakBrowser, stopSpeechAudio,
   type Tour,
 } from "../api/features";
 import { toast } from "./Toasts";
 import { SkeletonCard } from "./Skeleton";
-import { Map, X, ChevronLeft, ChevronRight, Play, Square, Volume2 } from "lucide-react";
+import { Map, X, ChevronLeft, ChevronRight, Play, Square, Volume2, Download } from "lucide-react";
 
 export interface TourRequest {
   topic: string;
   ts: number;
+  track?: string;
 }
 
 /** Full tour progress, consumed by the graph for badges + progress bar. */
@@ -42,6 +43,7 @@ const TYPE_BADGE: Record<string, string> = {
 
 export default function TourPanel({ onHighlightNode, onTourState, request }: Props) {
   const [topic, setTopic]       = useState("");
+  const [selectedTrack, setSelectedTrack] = useState<"request_lifecycle" | "data_flow" | "change_impact" | "onboarding">("request_lifecycle");
   const [tour, setTour]         = useState<Tour | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading]   = useState(false);
@@ -67,25 +69,27 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
     });
   };
 
-  const generate = async (override?: string) => {
-    const t = (override ?? topic).trim();
-    if (!t || loading) return;
+  const generate = async (overrideTopic?: string, overrideTrack?: string) => {
+    const t = (overrideTopic ?? topic).trim();
+    const trackToUse = overrideTrack ?? selectedTrack;
+    if (loading) return;
     if (t.length > 100) {
-      setError('Tour topic must be 100 characters or fewer');
+      setError("Tour topic must be 100 characters or fewer");
       return;
     }
     const reqId = ++requestIdRef.current;
     stopPlayback();   // kill any narration from a previous tour
-    setTopic(t);
+    if (overrideTopic !== undefined) setTopic(t);
+    if (overrideTrack) setSelectedTrack(overrideTrack as any);
     setLoading(true);
     setError(null);
     try {
-      const data = await generateTour(t);
+      const data = await generateTour({ topic: t || trackToUse, track: trackToUse });
       if (reqId !== requestIdRef.current) return;  // stale
       setTour(data);
       setCurrentStep(0);
       emitState(data, 0);
-      toast.success(`Tour ready: ${data.total_steps} steps`);
+      toast.success(`Tour ready (${data.track_label ?? trackToUse}): ${data.total_steps} steps`);
     } catch (e: unknown) {
       if (reqId !== requestIdRef.current) return;  // stale
       const msg = e instanceof Error ? e.message : "Failed to generate tour";
@@ -194,9 +198,11 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
   // Cancel any audio when the panel unmounts
   useEffect(() => () => stopPlayback(), []);
 
-  // External request (e.g. "Start tour from here" in the node drawer)
+  // External request (e.g. "Start tour from here" or chat action chip)
   useEffect(() => {
-    if (request?.topic) generate(request.topic);
+    if (request?.topic) {
+      void generate(request.topic, request.track);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.ts]);
 
@@ -205,23 +211,61 @@ export default function TourPanel({ onHighlightNode, onTourState, request }: Pro
   return (
     <div className="card p-4 flex flex-col gap-3 overflow-hidden min-w-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between min-w-0">
+      <div className="flex items-center justify-between min-w-0 gap-2">
         <h3 className="label-caps flex items-center gap-1.5 truncate">
           <Map size={12} className="text-accent-cyan shrink-0" />
           Code Tour
         </h3>
-        {tour && (
-          <button
-            onClick={stop}
-            title="Stop tour"
-            aria-label="Stop tour"
-            className="w-6 h-6 flex items-center justify-center rounded-md
-              text-text-muted hover:text-text-primary hover:bg-bg-panel-hover
-              transition-all duration-150"
+        <div className="flex items-center gap-1 shrink-0">
+          <a
+            href={getCodeTourExportUrl(tour?.track ?? selectedTrack)}
+            download={`reposcope-${tour?.track ?? selectedTrack}.tour`}
+            className="btn-ghost !text-[10px] !py-0.5 !px-1.5 flex items-center gap-1 text-text-muted hover:text-accent-cyan"
+            title="Export tour as VS Code CodeTour file"
           >
-            <X size={12} />
+            <Download size={10} />
+            <span>.tour</span>
+          </a>
+          {tour && (
+            <button
+              onClick={stop}
+              title="Stop tour"
+              aria-label="Stop tour"
+              className="w-6 h-6 flex items-center justify-center rounded-md
+                text-text-muted hover:text-text-primary hover:bg-bg-panel-hover
+                transition-all duration-150"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Four Track Tabs ── */}
+      <div className="flex rounded-lg bg-bg-panel-alt p-1 border border-border-subtle gap-1 text-2xs">
+        {(
+          [
+            { id: "request_lifecycle", label: "Request" },
+            { id: "data_flow", label: "Data Flow" },
+            { id: "change_impact", label: "Impact" },
+            { id: "onboarding", label: "Onboard" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => {
+              setSelectedTrack(t.id);
+              void generate(topic, t.id);
+            }}
+            className={`flex-1 py-1 px-1 rounded-md text-[10px] font-semibold transition-all ${
+              selectedTrack === t.id
+                ? "bg-accent-cyan text-white shadow-sm"
+                : "text-text-muted hover:text-text-primary"
+            }`}
+          >
+            {t.label}
           </button>
-        )}
+        ))}
       </div>
 
       {/* ── Input row ── */}

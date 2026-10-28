@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { CitationItem } from "./api/client";
+import type { CitationItem, ChatAction } from "./api/client";
 import TopBar, { type ViewMode } from "./components/TopBar";
 import LeftPanel from "./components/LeftPanel";
 import GraphCanvas from "./components/GraphView";
 import MindMapView from "./components/MindMapView";
 import ChatPanel from "./components/ChatPanel";
 import StatusBar from "./components/StatusBar";
-import Toasts from "./components/Toasts";
+import Toasts, { toast } from "./components/Toasts";
 import ShortcutsModal from "./components/ShortcutsModal";
 import EditorSettings from "./components/EditorSettings";
 import HarnessModal from "./components/HarnessModal";
@@ -364,6 +364,29 @@ export default function App() {
     }
   }, [handleOpenInEditor]);
 
+  const handleChatAction = useCallback((act: ChatAction) => {
+    if (act.kind === "tour") {
+      setTourRequest({ topic: act.track ?? "request_lifecycle", ts: Date.now() });
+      toast.success(`Starting ${act.title}`);
+    } else if (act.kind === "impact") {
+      setImpactRequest({ target: act.target ?? "main.py", ts: Date.now() });
+      toast.success(`Simulating impact for ${act.target ?? "main.py"}`);
+    } else if (act.kind === "onboarding") {
+      setStudentMode(true);
+      toast.success("Switched to Student Onboarding Mode");
+    } else if (act.kind === "metrics") {
+      setMode("tracking");
+      toast.success("Switched to Repository Metrics & Churn");
+    } else if (act.kind === "security") {
+      setMode("incident");
+      toast.success("Switched to Security & Incident Triage");
+    } else if (act.kind === "scaffold") {
+      window.dispatchEvent(new CustomEvent("reposcope:open-scaffold"));
+    } else if (act.kind === "reverse_prompt") {
+      window.dispatchEvent(new CustomEvent("reposcope:open-reverse-prompt"));
+    }
+  }, []);
+
   // ── Live graph (local mode) ───────────────────────────────────────────────
   //
   // The backend watches the repository and pushes a fresh `context` event
@@ -607,6 +630,7 @@ export default function App() {
                   prefillMessage={prefill}
                   onPrefillConsumed={() => setPrefill(undefined)}
                   onCitationClick={handleCitationClick}
+                  onActionClick={handleChatAction}
                 />
               </div>
             </section>

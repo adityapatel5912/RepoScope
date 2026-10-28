@@ -16,12 +16,25 @@ export interface TourStep {
   file: string;
   line: number;
   explanation: string;
+  reason?: string;
 }
 
 export interface Tour {
+  ok?: boolean;
   topic: string;
+  track?: string;
+  track_label?: string;
+  why_this_order?: string;
+  available?: boolean;
   total_steps: number;
   steps: TourStep[];
+}
+
+export interface TourOptions {
+  topic?: string;
+  track?: "request_lifecycle" | "data_flow" | "change_impact" | "onboarding" | string;
+  target_node_id?: string;
+  max_stops?: number;
 }
 
 export interface ImpactNode {
@@ -111,8 +124,13 @@ async function postJson<T>(
   return data as T;
 }
 
-export function generateTour(topic: string): Promise<Tour> {
-  return postJson("/api/tour/generate", { topic }, isTour, LLM_TIMEOUT_MS);
+export function generateTour(optsOrTopic: string | TourOptions): Promise<Tour> {
+  const body = typeof optsOrTopic === "string" ? { topic: optsOrTopic } : optsOrTopic;
+  return postJson("/api/tour/generate", body, isTour, LLM_TIMEOUT_MS);
+}
+
+export function getCodeTourExportUrl(track = "request_lifecycle"): string {
+  return `/api/tour/export?track=${encodeURIComponent(track)}&format=codetour`;
 }
 
 export function analyzeImpact(target: string, maxDepth = 3): Promise<Impact> {

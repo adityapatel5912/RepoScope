@@ -1704,6 +1704,18 @@ function GraphInner({
     }
   }, [scaffoldBusy]);
 
+  // Universal event listeners for chat-triggered actions
+  useEffect(() => {
+    const onOpenScaffold = () => { void runScaffold(); };
+    const onOpenRP = () => { void runReversePrompt(); };
+    window.addEventListener("reposcope:open-scaffold", onOpenScaffold);
+    window.addEventListener("reposcope:open-reverse-prompt", onOpenRP);
+    return () => {
+      window.removeEventListener("reposcope:open-scaffold", onOpenScaffold);
+      window.removeEventListener("reposcope:open-reverse-prompt", onOpenRP);
+    };
+  }, [runScaffold, runReversePrompt]);
+
   const minimapColor = useMemo(() => {
     return (n: Node) => {
       const d = n.data as LayerNodeData;

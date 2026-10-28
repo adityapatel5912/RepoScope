@@ -499,3 +499,40 @@ Implement Phase 5, Verified chat citations directly on local `experimental`.
      - No real secrets exposed; `.env.example` has placeholder keys only.
      - Syntax checked and validated via `compileall`.
      - Visual shots captured: `scaffold_modal_readme.png`, `scaffold_modal_code.png`, `scaffold_modal_copied_cmd.png`.
+
+
+## Phase 8 — Four Guided Tour Tracks & Universal Chat Action Cards (V2.7)
+
+1. **Commit & Scope:**
+   - Branch: experimental
+   - Scope: Four deterministic guided tour tracks (request_lifecycle, data_flow, change_impact, onboarding), VS Code CodeTour .tour export, universal chat action cards/chips via SSE actions events, and decoupled custom event navigation.
+
+2. **Files Created/Modified:**
+   - backend/chat_actions.py: Intent detection for tour, onboarding, metrics, impact, security, scaffold, and reverse-prompt with actionable payloads.
+   - backend/tour_generator.py: Rewritten with 4 deterministic guided tracks + AST-based explanation fallback when AI provider is unconfigured + export_codetour().
+   - backend/main.py: Updated tour_generate, added GET /api/tour/export?format=codetour, and updated chat_stream to emit yield _sse('actions', ...).
+   - backend/tests/test_tour_tracks.py: Unit and integration tests for tracks and .tour export.
+   - frontend/src/api/client.ts: Added ChatAction interface and onActions handler to SSE stream.
+   - frontend/src/api/features.ts: Added TourStep, Tour, TourOptions, generateTour, and getCodeTourExportUrl.
+   - frontend/src/components/ChatPanel.tsx: Added Action Cards bar below assistant messages with icons and click dispatchers.
+   - frontend/src/components/TourPanel.tsx: 4 track tabs, step breadcrumbs, and CodeTour .tour export link.
+   - frontend/src/App.tsx: Wired handleChatAction to central panel switching and custom event triggers.
+   - frontend/src/components/GraphView.tsx: Added event listeners for reposcope:open-scaffold and reposcope:open-reverse-prompt.
+   - frontend/tests/e2e/tour-tracks.spec.ts: E2E test verifying tabs, step navigation, and export link.
+
+3. **Commands Run & Gate Results:**
+   - python -m pytest backend/tests/test_tour_tracks.py backend/tests/test_feature_3_voice.py: 8 passed.
+   - python -m pytest -q: 551 passed, 1 skipped (0 failures).
+   - python -m compileall -q backend: 0 errors.
+   - python -m pip check: clean.
+   - npm --prefix frontend run build: clean (built in 31.55s).
+   - npx tsc --noEmit: 0 errors.
+   - npx playwright test tests/e2e/tour-tracks.spec.ts: 1 passed (13.5s).
+   - git diff --check: clean.
+
+4. **Self-Verification Verdict:**
+   - PASS.
+     - 4 deterministic tour tracks functional without LLM dependency.
+     - CodeTour .tour export compatible with VS Code CodeTour extension.
+     - Action cards trigger direct navigation to tours, onboarding, security, etc. from chat.
+     - Visual shots captured: tour_tracks_panel.png, chat_tour_action_card.png.

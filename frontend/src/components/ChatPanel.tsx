@@ -4,10 +4,13 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { streamChat } from "../api/client";
-import type { ContextPayload, CitationItem } from "../api/client";
+import type { ContextPayload, CitationItem, ChatAction } from "../api/client";
 import CitationPill from "./CitationPill";
 import { toast } from "./Toasts";
-import { Send, Copy, Check, Mic, MicOff, User } from "lucide-react";
+import {
+  Send, Copy, Check, Mic, MicOff, User, Map, GraduationCap,
+  Radio, GitBranch, ShieldAlert, Zap, Wand2,
+} from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -15,6 +18,7 @@ interface Message {
   ts: number;
   done?: boolean;
   citations?: CitationItem[];
+  actions?: ChatAction[];
 }
 
 interface DebugEvent {
@@ -35,6 +39,7 @@ interface Props {
   prefillMessage?: string;
   onPrefillConsumed?: () => void;
   onCitationClick?: (citation: CitationItem) => void;
+  onActionClick?: (action: ChatAction) => void;
 }
 
 // FILE 2 — six example prompts for the empty state (2×3 grid)
@@ -294,9 +299,31 @@ function EmptyChat({ repoName, onPick }: { repoName: string; onPick: (p: string)
   );
 }
 
+
+function renderActionIcon(kind: string) {
+  switch (kind) {
+    case "tour":
+      return <Map size={12} className="text-accent-cyan" />;
+    case "onboarding":
+      return <GraduationCap size={12} className="text-accent-amber" />;
+    case "metrics":
+      return <Radio size={12} className="text-accent-cyan" />;
+    case "impact":
+      return <GitBranch size={12} className="text-accent-rose" />;
+    case "security":
+      return <ShieldAlert size={12} className="text-accent-rose" />;
+    case "scaffold":
+      return <Zap size={12} className="text-accent-amber" />;
+    case "reverse_prompt":
+      return <Wand2 size={12} className="text-accent-violet" />;
+    default:
+      return <Zap size={12} className="text-accent-cyan" />;
+  }
+}
+
 export default function ChatPanel({
   mode, repo, disabled, onContext, onTracking, onToken, onEvent,
-  debugMode, prefillMessage, onPrefillConsumed, onCitationClick,
+  debugMode, prefillMessage, onPrefillConsumed, onCitationClick, onActionClick,
 }: Props) {
   const [msgs, setMsgs]         = useState<Message[]>([]);
   const [input, setInput]       = useState("");
@@ -376,6 +403,18 @@ export default function ChatPanel({
           });
           addDebug("citations", `${citations.length} citations verified`);
           onEvent("citations");
+        },
+        onActions: (actions) => {
+          setMsgs((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last) {
+              copy[copy.length - 1] = { ...last, actions };
+            }
+            return copy;
+          });
+          addDebug("actions", `${actions.length} action cards emitted`);
+          onEvent("actions");
         },
         onDone: () => {
           setMsgs((m) => {
@@ -558,6 +597,24 @@ export default function ChatPanel({
                       </span>
                     ) : null}
                   </div>
+                  {m.actions && m.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-border-subtle/50">
+                      {m.actions.map((act, actIdx) => (
+                        <button
+                          key={actIdx}
+                          onClick={() => onActionClick?.(act)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold
+                            bg-bg-panel border border-border-subtle hover:border-accent-cyan
+                            text-text-primary hover:text-accent-cyan shadow-sm hover:shadow
+                            transition-all duration-150"
+                          title={act.description}
+                        >
+                          <span className="shrink-0">{renderActionIcon(act.kind)}</span>
+                          <span className="truncate">{act.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {m.done && m.text && <CopyBtn text={m.text} />}
                 </div>
               </div>

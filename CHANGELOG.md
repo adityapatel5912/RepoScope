@@ -9,6 +9,15 @@ on a separate marketplace.
 
 ### Added
 
+- **Four deterministic guided tour tracks and universal chat action cards (Phase 8, V2.7).**
+  Four deterministic code exploration tracks derived from the knowledge graph:
+  - `request_lifecycle`: Traces the path from public HTTP entrypoints down to handlers and models.
+  - `data_flow`: Follows the ingestion and transformation pipelines through stateful stores and schema definitions.
+  - `change_impact`: Walks high-churn and blast-radius clusters highlighting regression-prone regions.
+  - `onboarding`: Curates a gentle, dependency-ordered first-pass reading list for new contributors.
+  - VS Code CodeTour export: `GET /api/tour/export?format=codetour` emits standard `.tour` JSON ready for the CodeTour extension.
+  - Universal Chat Action Cards: SSE streaming emits structured `actions` payloads matching user intent (tour, onboarding, metrics, impact, security, scaffold, reverse-prompt) rendered as interactive chips directly beneath assistant responses.
+
 - **Executable multi-file starter kit scaffolder (Phase 7, V2.6).**
   Deterministic multi-file starter kit generator producing 12–20 runnable files
   derived from the repository's detected stack (Python FastAPI/CLI, TypeScript React/Node,

@@ -43,8 +43,10 @@ contracts that clients depend on, not every request model.
 | `GET` | `/api/repo/check` | Poll GitHub for changes. |
 | `GET` | `/api/repo/file` | File content for the viewer. |
 | `GET` | `/api/repo/demos` | Available demo repositories. |
-| `POST` | `/api/chat/stream` | SSE answer with citations. |
+| `POST` | `/api/chat/stream` | SSE answer with citations and actionable chips. |
 | `GET` | `/api/citation/verify` | Verify citation against AST symbol table and disk. |
+| `POST` | `/api/tour/generate` | Generate guided tour for one of 4 tracks. |
+| `GET` | `/api/tour/export` | Export CodeTour `.tour` formatted JSON. |
 | `POST` | `/api/impact/analyze` | Blast radius and impact narrative. |
 | `POST` | `/api/onboard` | Student Mode path, quizzes, and Good First Issues. |
 

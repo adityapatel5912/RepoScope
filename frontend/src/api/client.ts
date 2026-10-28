@@ -190,11 +190,23 @@ export interface CitationItem {
   preview: string;
 }
 
+export interface ChatAction {
+  kind: "tour" | "onboarding" | "metrics" | "impact" | "security" | "scaffold" | "reverse_prompt" | string;
+  title: string;
+  description?: string;
+  track?: string;
+  level?: number;
+  view?: string;
+  target?: string;
+  icon?: string;
+}
+
 export interface SSECallbacks {
   onContext:   (d: ContextPayload) => void;
   onToken:     (t: string) => void;
   onTracking:  (d: unknown) => void;
   onCitations?: (citations: CitationItem[]) => void;
+  onActions?:  (actions: ChatAction[]) => void;
   onDone:      () => void;
   onError?:    (msg: string) => void;
 }
@@ -253,6 +265,10 @@ export async function streamChat(
         else if (event === "citations") {
           const parsed = JSON.parse(data);
           cb.onCitations?.(parsed.citations ?? []);
+        }
+        else if (event === "actions") {
+          const parsed = JSON.parse(data);
+          cb.onActions?.(parsed.actions ?? []);
         }
         else if (event === "done")     cb.onDone();
         else if (event === "error")    cb.onError?.(JSON.parse(data).message ?? "Unknown error");

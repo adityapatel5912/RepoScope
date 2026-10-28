@@ -10,7 +10,7 @@ import {
 } from "../api/features";
 import { toast } from "./Toasts";
 import { SkeletonCard } from "./Skeleton";
-import { Zap, X, ChevronDown, GitPullRequest, Copy, Check, ClipboardCopy, Download, AlertTriangle, FileCode } from "lucide-react";
+import { Zap, X, ChevronDown, GitPullRequest, Copy, Check, ClipboardCopy, Download, AlertTriangle, FileCode, Globe } from "lucide-react";
 
 export interface ImpactRequest {
   target: string;
@@ -417,55 +417,131 @@ export default function ImpactPanel({ repo, onHighlightImpact, request }: Props)
             {impact.narrative}
           </p>
 
-          {/* Stats chips */}
-          <div className="flex gap-1.5 flex-wrap mb-2.5">
-            <span className="px-2 py-0.5 rounded bg-accent-rose/10 text-accent-rose text-2xs font-mono">
-              ● {impact.direct_impacts.length} direct
-            </span>
-            <span className="px-2 py-0.5 rounded bg-accent-amber/10 text-accent-amber text-2xs font-mono">
-              ● {impact.transitive_impacts.length} transitive
-            </span>
-          </div>
-
-          {/* Direct impacts */}
-          {impact.direct_impacts.length > 0 && (
-            <details open className="mb-1.5 group">
-              <summary className="
-                flex items-center gap-1 cursor-pointer select-none
-                text-2xs font-semibold uppercase tracking-wider text-accent-rose/80 py-1
-              ">
-                <ChevronDown size={11} className="transition-transform group-open:rotate-180" />
-                Direct impacts
-              </summary>
-              <ul className="list-none p-0 m-1 max-h-40 overflow-y-auto">
-                {impact.direct_impacts.slice(0, 20).map((d) => (
-                  <li key={d.id} className="py-0.5 text-2xs leading-snug text-text-muted truncate min-w-0" title={`${d.file || d.id} · ${d.label}`}>
-                    <code className="text-accent-cyan font-mono">{d.file || d.id}</code>
-                    {" "}· {d.label}
-                  </li>
-                ))}
-              </ul>
-            </details>
+          {/* Mathematical Score Breakdown */}
+          {impact.score_breakdown && (
+            <div className="mb-2.5 p-2 rounded-lg bg-bg-panel-alt/60 border border-border-hairline flex flex-col gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary flex items-center justify-between">
+                <span>Score Breakdown</span>
+                <span className="font-mono text-accent-amber font-bold">{impact.score_breakdown.raw_score} pts</span>
+              </span>
+              <div className="grid grid-cols-2 gap-1 text-[10px]">
+                <div className="p-1.5 rounded bg-bg-panel border border-border-subtle flex justify-between items-center">
+                  <span className="text-text-muted">Direct (×3)</span>
+                  <span className="font-mono font-bold text-accent-rose">{impact.score_breakdown.direct_callers}</span>
+                </div>
+                <div className="p-1.5 rounded bg-bg-panel border border-border-subtle flex justify-between items-center">
+                  <span className="text-text-muted">Transitive (×1.5)</span>
+                  <span className="font-mono font-bold text-accent-amber">{impact.score_breakdown.transitive_callers}</span>
+                </div>
+                <div className="p-1.5 rounded bg-bg-panel border border-border-subtle flex justify-between items-center">
+                  <span className="text-text-muted">APIs (×4)</span>
+                  <span className="font-mono font-bold text-accent-cyan">{impact.score_breakdown.api_boundaries}</span>
+                </div>
+                <div className="p-1.5 rounded bg-bg-panel border border-border-subtle flex justify-between items-center">
+                  <span className="text-text-muted">Test Gaps (×2)</span>
+                  <span className="font-mono font-bold text-accent-rose">{impact.score_breakdown.test_gaps}</span>
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Transitive impacts */}
-          {impact.transitive_impacts.length > 0 && (
-            <details className="mb-1.5 group">
-              <summary className="
-                flex items-center gap-1 cursor-pointer select-none
-                text-2xs font-semibold uppercase tracking-wider text-accent-amber/80 py-1
-              ">
-                <ChevronDown size={11} className="transition-transform group-open:rotate-180" />
-                Transitive impacts
-              </summary>
-              <ul className="list-none p-0 m-1 max-h-40 overflow-y-auto">
-                {impact.transitive_impacts.slice(0, 20).map((t) => (
-                  <li key={t.id} className="py-0.5 text-2xs leading-snug text-text-muted truncate min-w-0" title={`${t.file || t.id} · ${t.label}`}>
-                    <code className="text-accent-cyan font-mono">{t.file || t.id}</code>
-                    {" "}· {t.label}
+          {/* 3-Hop Simulation Tree */}
+          <div className="flex flex-col gap-1.5 mb-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              3-Hop Blast Radius Tree
+            </span>
+            {(impact.hops || [
+              { hop: 1, label: "Direct Impacts (Hop 1)", nodes: impact.direct_impacts },
+              { hop: 2, label: "Secondary Dependents (Hop 2)", nodes: impact.transitive_impacts.slice(0, Math.ceil(impact.transitive_impacts.length / 2)) },
+              { hop: 3, label: "Deep Transitive (Hop 3)", nodes: impact.transitive_impacts.slice(Math.ceil(impact.transitive_impacts.length / 2)) },
+            ]).map((hop) => (
+              <details key={hop.hop} open={hop.hop <= 2} className="group border border-border-hairline rounded-lg p-1.5 bg-bg-panel-alt/30">
+                <summary className="flex items-center justify-between cursor-pointer select-none text-[11px] font-semibold py-0.5">
+                  <span className="flex items-center gap-1.5 text-text-primary">
+                    <ChevronDown size={12} className="transition-transform group-open:rotate-180 text-text-muted" />
+                    <span>{hop.label}</span>
+                  </span>
+                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                    hop.hop === 1 ? "bg-accent-rose/15 text-accent-rose" :
+                    hop.hop === 2 ? "bg-accent-amber/15 text-accent-amber" :
+                    "bg-accent-cyan/15 text-accent-cyan"
+                  }`}>
+                    {hop.nodes.length}
+                  </span>
+                </summary>
+                {hop.nodes.length > 0 ? (
+                  <ul className="list-none p-0 m-1 max-h-36 overflow-y-auto space-y-1">
+                    {hop.nodes.map((n) => (
+                      <li
+                        key={n.id}
+                        onClick={() => onHighlightImpact?.(impact.target.id, hop.hop === 1 ? [n.id] : [], hop.hop > 1 ? [n.id] : [])}
+                        className="py-1 px-1.5 rounded hover:bg-bg-panel-hover cursor-pointer text-2xs leading-snug text-text-muted truncate min-w-0 transition-colors flex items-center justify-between gap-1 group/item"
+                        title={`Click to focus node: ${n.file || n.id}`}
+                      >
+                        <span className="truncate">
+                          <code className="text-accent-cyan font-mono text-[10px]">{n.file ? n.file.split("/").pop() : n.id}</code>
+                          {" "}· {n.label}
+                        </span>
+                        <span className="text-[9px] text-text-muted opacity-0 group-hover/item:opacity-100 font-mono">focus</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[10px] text-text-muted m-1 italic">No nodes reached at this hop depth.</p>
+                )}
+              </details>
+            ))}
+          </div>
+
+          {/* API Boundaries Exposed */}
+          {impact.api_boundaries && impact.api_boundaries.length > 0 && (
+            <div className="mb-2 p-2 rounded-lg bg-accent-cyan/10 border border-accent-cyan/30 text-[10px] flex flex-col gap-1">
+              <span className="font-bold text-accent-cyan flex items-center gap-1">
+                <Globe size={11} />
+                API Boundaries Exposed ({impact.api_boundaries.length})
+              </span>
+              <ul className="list-none p-0 m-0 space-y-0.5 max-h-24 overflow-y-auto">
+                {impact.api_boundaries.map((b) => (
+                  <li key={b.id} className="font-mono text-text-primary text-[10px] truncate">
+                    {b.label} <span className="text-text-muted font-sans">({b.file})</span>
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* Downstream Test Gaps */}
+          {impact.test_gaps && impact.test_gaps.length > 0 && (
+            <div className="mb-2 p-2 rounded-lg bg-accent-amber/10 border border-accent-amber/30 text-[10px] flex flex-col gap-1">
+              <span className="font-bold text-accent-amber flex items-center gap-1">
+                <AlertTriangle size={11} />
+                Downstream Test Gaps ({impact.test_gaps.length})
+              </span>
+              <ul className="list-disc pl-3.5 m-0 text-text-muted space-y-0.5 max-h-20 overflow-y-auto">
+                {impact.test_gaps.slice(0, 4).map((g, idx) => (
+                  <li key={idx} className="truncate">
+                    <span className="font-mono text-text-primary">{g.label || g.file}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Propagation Evidence Paths */}
+          {impact.explanation_paths && impact.explanation_paths.length > 0 && (
+            <details className="mb-2 group border border-border-hairline rounded-lg p-1.5 bg-bg-panel-alt/30">
+              <summary className="flex items-center gap-1 cursor-pointer select-none text-[10px] font-semibold text-text-muted uppercase tracking-wider py-0.5">
+                <ChevronDown size={11} className="transition-transform group-open:rotate-180" />
+                Propagation Paths ({impact.explanation_paths.length})
+              </summary>
+              <div className="flex flex-col gap-1 mt-1 max-h-32 overflow-y-auto text-[10px]">
+                {impact.explanation_paths.slice(0, 5).map((exp, idx) => (
+                  <div key={idx} className="p-1 rounded bg-bg-panel border border-border-hairline font-mono text-[9px] text-text-muted">
+                    <div className="text-text-primary truncate">{exp.path.join(" → ")}</div>
+                    <div className="text-accent-amber text-[8px]">{exp.reason}</div>
+                  </div>
+                ))}
+              </div>
             </details>
           )}
 

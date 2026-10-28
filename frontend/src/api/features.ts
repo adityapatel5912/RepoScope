@@ -44,10 +44,39 @@ export interface ImpactNode {
   file: string;
 }
 
+export interface ImpactHop {
+  hop: number;
+  label: string;
+  nodes: ImpactNode[];
+  edges?: Array<{ source: string; target: string; type?: string }>;
+}
+
+export interface ImpactScoreBreakdown {
+  direct_callers: number;
+  transitive_callers: number;
+  api_boundaries: number;
+  test_gaps: number;
+  raw_score?: number;
+  normalized_score?: number;
+}
+
+export interface ImpactExplanationPath {
+  target: string;
+  hop: number;
+  path: string[];
+  reason: string;
+}
+
 export interface Impact {
   target: ImpactNode;
+  max_depth?: number;
   direct_impacts: ImpactNode[];
   transitive_impacts: ImpactNode[];
+  hops?: ImpactHop[];
+  score_breakdown?: ImpactScoreBreakdown;
+  api_boundaries?: ImpactNode[];
+  test_gaps?: Array<{ id?: string; label?: string; file?: string; detail: string }>;
+  explanation_paths?: ImpactExplanationPath[];
   risk_score: number;
   risk_level: "low" | "medium" | "high" | "critical";
   suggested_tests: string[];

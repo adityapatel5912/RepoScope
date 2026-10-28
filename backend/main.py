@@ -981,7 +981,10 @@ async def tts(
     """
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] tts chars=%d", req_id, len(req.text))
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    try:
+        provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    except Exception:
+        provider = None
     try:
         result = await synthesize(req.text, provider)
         result["ok"] = True
@@ -1003,7 +1006,10 @@ async def impact_analyze(
 ):
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] impact/analyze target=%s depth=%s", req_id, req.target, req.max_depth)
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    try:
+        provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    except Exception:
+        provider = None
     state = load_state()
     local_path = state.get("local_path")
     if not local_path:
@@ -1373,7 +1379,10 @@ async def chat_stream(
 ):
     req_id = str(uuid.uuid4())[:8]
     log.info("[%s] chat/stream mode=%s repo=%s provider=%s", req_id, q.mode, q.repo, x_ai_provider or "default")
-    provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    try:
+        provider = resolve_provider(x_ai_provider, x_ai_key, x_ai_model, x_ai_base_url)
+    except Exception:
+        provider = None
 
     async def event_generator():
         try:

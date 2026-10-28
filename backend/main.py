@@ -53,6 +53,7 @@ from sarif import flags_to_sarif
 from taint import scan_repository as scan_taint
 from tour_generator import build_tour
 from tts_service import synthesize
+from version import __version__
 
 START_TIME = time.time()
 
@@ -460,7 +461,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "reposcope-api",
-        "version": "2.0.0",
+        "version": __version__,
         "schema_version": _graph_schema_version(),
         "graph": _graph_health_snapshot(),
         "uptime_seconds": uptime,

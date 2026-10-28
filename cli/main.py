@@ -282,12 +282,51 @@ def mcp(
     raise typer.Exit(code=mcp_main(argv))
 
 
+# ── reposcope security ──────────────────────────────────────────────────────
+
+@app.command()
+def security(
+    path: str = typer.Argument(".", help="The repository to scan."),
+    sarif: bool = typer.Option(False, "--sarif", help="Output OASIS SARIF 2.1.0 format."),
+) -> None:
+    """Run the 6-Engine Graph-Contextual Security Suite on a repository."""
+    _configure_stdio()
+    root = _resolve_repo(path)
+    _ensure_backend_on_path()
+    from security_scanner import scan_repo_files
+    from taint import scan_repository as scan_taint
+    from sarif import flags_to_sarif_json
+
+    flags = scan_repo_files(str(root))
+    try:
+        t_flags = scan_taint(root)
+        flags.extend(t_flags)
+    except Exception:
+        pass
+
+    if sarif:
+        typer.echo(flags_to_sarif_json(flags))
+        return
+
+    typer.secho(f"RepoScope 6-Engine Security Suite — {root}", fg=typer.colors.CYAN, bold=True)
+    typer.secho(f"  findings   : {len(flags)}", fg=typer.colors.GREEN if not flags else typer.colors.YELLOW)
+    for f in flags[:15]:
+        sev_color = typer.colors.RED if f.get("severity") in ("critical", "high") else typer.colors.YELLOW
+        typer.secho(f"  [{f.get('severity', 'warning').upper()}] {f.get('engine', f.get('type'))} in {f.get('file')}:{f.get('line', 1)}", fg=sev_color)
+        typer.echo(f"    {f.get('detail')}")
+        typer.echo(f"    Tip: {f.get('suggestion')}")
+
+
 # ── reposcope version ───────────────────────────────────────────────────────
 
 @app.command()
 def version() -> None:
     """Print the RepoScope version."""
-    typer.echo("RepoScope 2.0.0 (local mode)")
+    try:
+        from version import __version__
+    except ImportError:
+        __version__ = "2.8.0"
+    typer.echo(f"RepoScope {__version__} (local mode)")
 
 
 def _free_port(host: str, port: int) -> int:

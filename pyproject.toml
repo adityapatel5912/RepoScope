@@ -21,7 +21,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reposcope"
-version = "2.0.0"
+version = "2.8.0"
 description = "RepoScope — a code graph for humans and agents, over one index."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -83,6 +83,7 @@ Issues = "https://github.com/adityapatel5912/RepoScope/issues"
 
 [project.scripts]
 reposcope = "cli.main:app"
+reposcope-ai = "cli.main:app"
 reposcope-mcp = "mcp_server.server:main"
 
 [tool.setuptools]
@@ -94,7 +95,9 @@ py-modules = [
     "ai_byok",
     "arch_rules",
     "byok_manager",
+    "chat_actions",
     "context_compressor",
+    "contract_diff",
     "git_history",
     "graph_analysis",
     "graph_builder",
@@ -113,13 +116,18 @@ py-modules = [
     "repo_loader",
     "repo_map",
     "repo_tracker",
+    "reverse_prompt_compiler",
     "runtime_config",
+    "sarif",
+    "scaffolder",
     "security_scanner",
     "skill_library",
     "sse",
+    "taint",
     "token_metrics",
     "tour_generator",
     "tts_service",
+    "version",
     "watcher",
 ]
 

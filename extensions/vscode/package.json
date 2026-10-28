@@ -2,7 +2,7 @@
   "name": "reposcope",
   "displayName": "RepoScope",
   "description": "The code graph, in your editor. Blast radius, callers, and a live architecture map - from the same index the RepoScope canvas draws.",
-  "version": "2.0.1",
+  "version": "2.8.0",
   "publisher": "adityapatel5912",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
@@ -12,8 +12,18 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Programming Languages", "Visualization", "Other"],
-  "keywords": ["code graph", "architecture", "blast radius", "mcp", "dependencies"],
+  "categories": [
+    "Programming Languages",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "code graph",
+    "architecture",
+    "blast radius",
+    "mcp",
+    "dependencies"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "onView:reposcope.graph",
